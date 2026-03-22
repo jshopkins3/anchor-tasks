@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In — Anchor Tasks</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: #09090b;
+      color: #e4e4e7;
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 16px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      animation: fadeUp 0.4s ease-out;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .logo-wrap {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .logo-wrap svg {
+      width: 28px;
+      height: 28px;
+      fill: none;
+      stroke: #fff;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #71717a;
+      margin-bottom: 32px;
+    }
+    #g-signin-btn {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .error-msg {
+      display: none;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #fca5a5;
+      margin-top: 16px;
+    }
+    .error-msg.show { display: block; }
+    .loading-msg {
+      display: none;
+      font-size: 13px;
+      color: #a1a1aa;
+      margin-top: 12px;
+    }
+    .loading-msg.show { display: block; }
+    .footer {
+      margin-top: 32px;
+      font-size: 11px;
+      color: #3f3f46;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="logo-wrap">
+      <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    </div>
+    <h1>ANCHOR TASKS</h1>
+    <p class="subtitle">Sign in with your team Google account</p>
+
+    <div id="g-signin-btn"></div>
+    <div id="loading" class="loading-msg">Verifying your account...</div>
+    <div id="error" class="error-msg"></div>
+
+    <div class="footer">Anchor Tasks &bull; Authorized team members only</div>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async></script>
+  <script>
+    let CLIENT_ID = "";
+
+    async function init() {
+      waitForGIS();
+    }
+
+    function waitForGIS() {
+      if (typeof google !== "undefined" && google.accounts) {
+        setupGoogleSignIn();
+      } else {
+        setTimeout(waitForGIS, 100);
+      }
+    }
+
+    function setupGoogleSignIn() {
+      fetch("/api/auth-config")
+        .then(r => r.json())
+        .then(cfg => {
+          CLIENT_ID = cfg.clientId;
+          if (!CLIENT_ID) {
+            showError("OAuth not configured yet. Please contact your administrator.");
+            return;
+          }
+          google.accounts.id.initialize({
+            client_id: CLIENT_ID,
+            callback: handleCredentialResponse,
+            auto_select: true,
+            itp_support: true
+          });
+          google.accounts.id.renderButton(
+            document.getElementById("g-signin-btn"),
+            { theme: "filled_black", size: "large", width: 320, text: "signin_with", shape: "pill" }
+          );
+        })
+        .catch(() => showError("Could not load sign-in configuration."));
+    }
+
+    async function handleCredentialResponse(response) {
+      const loading = document.getElementById("loading");
+      const error = document.getElementById("error");
+      error.classList.remove("show");
+      loading.classList.add("show");
+
+      try {
+        const res = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: response.credential })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          loading.textContent = "Welcome, " + data.user.name + "! Redirecting...";
+          setTimeout(() => { window.location.href = "/"; }, 500);
+        } else if (res.status === 403) {
+          loading.classList.remove("show");
+          showError(data.error || "Your email is not authorized. Contact John Hopkins for access.");
+        } else {
+          loading.classList.remove("show");
+          showError(data.error || "Authentication failed. Please try again.");
+        }
+      } catch (e) {
+        loading.classList.remove("show");
+        showError("Network error. Please check your connection and try again.");
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById("error");
+      el.textContent = msg;
+      el.classList.add("show");
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "anchor-tasks",
+  "version": "1.0.0",
+  "description": "Anchor Tasks — team task & project tracker (MD-backed)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}
