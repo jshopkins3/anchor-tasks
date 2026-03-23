@@ -174,6 +174,27 @@ function writeProjects(projects) {
   fs.writeFileSync(PROJECTS_FILE, md, "utf8");
 }
 
+/* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
+function projectDetailPath(id) {
+  return path.join(DATA_DIR, `project-${id}.json`);
+}
+
+function readProjectDetail(id) {
+  const fp = projectDetailPath(id);
+  if (!fs.existsSync(fp)) return { notes: "", ethos: "", docs: [] };
+  try { return JSON.parse(fs.readFileSync(fp, "utf8")); }
+  catch { return { notes: "", ethos: "", docs: [] }; }
+}
+
+function writeProjectDetail(id, detail) {
+  fs.writeFileSync(projectDetailPath(id), JSON.stringify(detail, null, 2), "utf8");
+}
+
+function deleteProjectDetail(id) {
+  const fp = projectDetailPath(id);
+  if (fs.existsSync(fp)) fs.unlinkSync(fp);
+}
+
 /* ─── Auth bypass paths ──────────────────────────────────────────────── */
 const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico"];
 
@@ -337,7 +358,59 @@ const server = http.createServer(async (req, res) => {
       const filtered = projects.filter(p => p.id !== id);
       if (filtered.length === projects.length) return json(res, 404, { error: "Project not found" });
       writeProjects(filtered);
+      deleteProjectDetail(id);
       return json(res, 200, { ok: true });
+    }
+
+    /* ── PROJECT DETAIL API (notes, ethos, docs) ───────────────────── */
+    const detailMatch = urlPath.match(/^\/api\/projects\/([a-f0-9]+)\/detail$/);
+    if (detailMatch && req.method === "GET") {
+      const id = detailMatch[1];
+      return json(res, 200, readProjectDetail(id));
+    }
+
+    if (detailMatch && req.method === "PATCH") {
+      const id = detailMatch[1];
+      const body = JSON.parse(await readBody(req));
+      const detail = readProjectDetail(id);
+      if (body.notes !== undefined) detail.notes = String(body.notes).substring(0, 5000);
+      if (body.ethos !== undefined) detail.ethos = String(body.ethos).substring(0, 2000);
+      if (body.docs !== undefined && Array.isArray(body.docs)) {
+        detail.docs = body.docs.slice(0, 50).map(d => ({
+          name: String(d.name || "").substring(0, 200),
+          url: String(d.url || "").substring(0, 500),
+          notes: String(d.notes || "").substring(0, 500),
+        }));
+      }
+      writeProjectDetail(id, detail);
+      return json(res, 200, detail);
+    }
+
+    /* ── PROJECT DETAIL: add/remove single doc ─────────────────────── */
+    const docMatch = urlPath.match(/^\/api\/projects\/([a-f0-9]+)\/docs$/);
+    if (docMatch && req.method === "POST") {
+      const id = docMatch[1];
+      const body = JSON.parse(await readBody(req));
+      const detail = readProjectDetail(id);
+      if (!detail.docs) detail.docs = [];
+      detail.docs.push({
+        name: String(body.name || "").substring(0, 200),
+        url: String(body.url || "").substring(0, 500),
+        notes: String(body.notes || "").substring(0, 500),
+      });
+      writeProjectDetail(id, detail);
+      return json(res, 201, detail);
+    }
+
+    if (docMatch && req.method === "DELETE") {
+      const id = docMatch[1];
+      const body = JSON.parse(await readBody(req));
+      const detail = readProjectDetail(id);
+      if (detail.docs && typeof body.index === "number") {
+        detail.docs.splice(body.index, 1);
+        writeProjectDetail(id, detail);
+      }
+      return json(res, 200, detail);
     }
 
     /* ── Static files / SPA fallback ───────────────────────────────── */

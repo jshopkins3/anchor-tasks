@@ -229,6 +229,54 @@
     }
     .filter-btn:hover { border-color: #52525b; color: #e4e4e7; }
     .filter-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+
+    /* ── Project detail view ─────────────────────────────────────── */
+    .detail-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #71717a; font-size: 13px; cursor: pointer;
+      background: none; border: none; font-family: inherit;
+      margin-bottom: 16px; padding: 4px 0;
+    }
+    .detail-back:hover { color: #a1a1aa; }
+    .detail-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 24px; gap: 16px;
+    }
+    .detail-info { flex: 1; }
+    .detail-title {
+      font-size: 22px; font-weight: 700; color: #fff;
+      letter-spacing: -0.02em; margin-bottom: 4px;
+    }
+    .detail-desc { font-size: 14px; color: #a1a1aa; margin-bottom: 12px; }
+    .detail-owner { font-size: 12px; color: #71717a; }
+    .detail-owner span { color: #a1a1aa; }
+    .detail-stats-row {
+      display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .detail-stat {
+      background: #18181b; border: 1px solid #27272a; border-radius: 10px;
+      padding: 12px 18px; min-width: 100px; text-align: center;
+    }
+    .detail-stat .stat-value { font-size: 20px; }
+
+    .detail-progress-bar {
+      background: #27272a; border-radius: 6px; height: 8px;
+      margin: 16px 0 24px; overflow: hidden;
+    }
+    .detail-progress-fill {
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      height: 100%; border-radius: 6px; transition: width .3s ease;
+    }
+
+    .detail-section-label {
+      font-size: 13px; font-weight: 600; color: #71717a;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .project-card-link {
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -251,6 +299,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="tasks">Tasks</div>
     <div class="tab" data-tab="projects">Projects</div>
+    <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
   </div>
 
   <div class="main">
@@ -295,6 +344,12 @@
 
         <div id="project-list"></div>
       </div>
+    </div>
+
+    <!-- ── Project Detail section ─────────────────────────────── -->
+    <div class="section" id="sec-detail">
+      <button class="detail-back" onclick="closeDetail()">&larr; Back to Projects</button>
+      <div id="detail-content"></div>
     </div>
 
   </div>
@@ -454,19 +509,24 @@
       const active = projects.filter(p => !p.archived);
       const archived = projects.filter(p => p.archived);
 
-      el.innerHTML = [...active, ...archived].map(p => `
+      el.innerHTML = [...active, ...archived].map(p => {
+        const taskCount = tasks.filter(t => t.project === p.name).length;
+        const activeCount = tasks.filter(t => t.project === p.name && !t.done).length;
+        return `
         <div class="project-item">
-          <div class="project-dot ${p.archived ? "archived" : ""}"></div>
-          <div class="project-body">
+          <div class="project-dot ${p.archived ? "archived" : ""} project-card-link" onclick="openDetail('${p.id}')"></div>
+          <div class="project-body project-card-link" onclick="openDetail('${p.id}')">
             <div class="project-name ${p.archived ? "archived" : ""}">${esc(p.name)}</div>
             ${p.description ? `<div class="project-desc">${esc(p.description)}</div>` : ""}
+            <div class="project-desc">${taskCount} task${taskCount !== 1 ? "s" : ""}${activeCount ? ` (${activeCount} active)` : ""}</div>
           </div>
           <div class="project-actions">
+            <button onclick="openDetail('${p.id}')">View</button>
             <button onclick="toggleProject('${p.id}')">${p.archived ? "Restore" : "Archive"}</button>
             <button onclick="deleteProject('${p.id}')">Delete</button>
           </div>
-        </div>
-      `).join("");
+        </div>`;
+      }).join("");
     }
 
     function renderProjectDropdown() {
@@ -578,6 +638,271 @@
       await fetch(`/api/projects/${id}`, { method: "DELETE" });
       await loadProjects();
       renderAll();
+    }
+
+    /* ── Project Detail ─────────────────────────────────────── */
+    let activeProjectId = null;
+    let projectDetail = { notes: "", ethos: "", docs: [] };
+
+    async function openDetail(id) {
+      activeProjectId = id;
+      // Load detail data
+      try {
+        const res = await fetch(`/api/projects/${id}/detail`);
+        projectDetail = await res.json();
+      } catch { projectDetail = { notes: "", ethos: "", docs: [] }; }
+      // Show the detail tab and switch to it
+      document.getElementById("tab-detail").style.display = "";
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+      document.getElementById("tab-detail").classList.add("active");
+      document.getElementById("sec-detail").classList.add("active");
+      renderDetail();
+    }
+
+    function closeDetail() {
+      activeProjectId = null;
+      document.getElementById("tab-detail").style.display = "none";
+      // Go back to projects tab
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+      document.querySelector('[data-tab="projects"]').classList.add("active");
+      document.getElementById("sec-projects").classList.add("active");
+    }
+
+    function renderDetail() {
+      const p = projects.find(p => p.id === activeProjectId);
+      if (!p) { closeDetail(); return; }
+
+      const projTasks = tasks.filter(t => t.project === p.name);
+      const activeTasks = projTasks.filter(t => !t.done);
+      const completedTasks = projTasks.filter(t => t.done);
+      const total = projTasks.length;
+      const doneCount = completedTasks.length;
+      const pct = total ? Math.round((doneCount / total) * 100) : 0;
+      const urgent = projTasks.filter(t => !t.done && (t.priority === "high" || t.priority === "urgent")).length;
+
+      // Sort active tasks
+      const priOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+      activeTasks.sort((a, b) => {
+        const pa = priOrder[a.priority] ?? 2;
+        const pb = priOrder[b.priority] ?? 2;
+        if (pa !== pb) return pa - pb;
+        if (a.due && b.due) return a.due.localeCompare(b.due);
+        if (a.due) return -1;
+        if (b.due) return 1;
+        return 0;
+      });
+
+      const projectOpts = projects.filter(pr => !pr.archived);
+      const taskRow = t => `
+        <li>
+          <div class="task-item">
+            <button class="task-check ${t.done ? "done" : ""}" onclick="toggleTask('${t.id}'); renderDetail()"></button>
+            <div class="task-body">
+              <div class="task-title ${t.done ? "done" : ""}">${esc(t.title)}</div>
+              <div class="task-meta">
+                ${t.priority && t.priority !== "normal" ? `<span class="task-tag pri-${t.priority}">${t.priority}</span>` : ""}
+                ${t.assignee ? `<span class="task-tag assignee-tag">${esc(t.assignee)}</span>` : ""}
+                ${t.due ? `<span class="task-tag due">${t.due}</span>` : ""}
+              </div>
+            </div>
+            <button class="task-edit" onclick="openEdit('${t.id}'); renderDetail()" title="Edit">&#9998;</button>
+            <button class="task-delete" onclick="deleteTask('${t.id}'); renderDetail()" title="Delete">&times;</button>
+          </div>
+          ${editingTaskId === t.id ? `
+          <div class="edit-drawer">
+            <div class="full">
+              <label>Title</label>
+              <input id="ed-title-${t.id}" value="${esc(t.title)}" />
+            </div>
+            <div>
+              <label>Assignee</label>
+              <input id="ed-assignee-${t.id}" value="${esc(t.assignee)}" placeholder="Name..." />
+            </div>
+            <div>
+              <label>Due Date</label>
+              <input id="ed-due-${t.id}" type="date" value="${t.due || ""}" />
+            </div>
+            <div>
+              <label>Priority</label>
+              <select id="ed-pri-${t.id}">
+                <option value="low" ${t.priority==="low"?"selected":""}>Low</option>
+                <option value="normal" ${t.priority==="normal"?"selected":""}>Normal</option>
+                <option value="high" ${t.priority==="high"?"selected":""}>High</option>
+                <option value="urgent" ${t.priority==="urgent"?"selected":""}>Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label>Project</label>
+              <select id="ed-proj-${t.id}">
+                <option value="">None</option>
+                ${projectOpts.map(pr => `<option value="${esc(pr.name)}" ${t.project===pr.name?"selected":""}>${esc(pr.name)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="edit-actions">
+              <button class="btn-cancel" onclick="closeEdit(); renderDetail()">Cancel</button>
+              <button class="btn-save" onclick="saveEdit('${t.id}').then(()=>renderDetail())">Save</button>
+            </div>
+          </div>` : ""}
+        </li>`;
+
+      document.getElementById("detail-content").innerHTML = `
+        <div class="card">
+          <div class="detail-header">
+            <div class="detail-info">
+              <div class="detail-title">${esc(p.name)}</div>
+              ${p.description ? `<div class="detail-desc">${esc(p.description)}</div>` : ""}
+              <div class="detail-owner">Owner: <span>${esc(p.owner || "Unassigned")}</span></div>
+            </div>
+            <div class="detail-stats-row">
+              <div class="detail-stat">
+                <div class="stat-label">Active</div>
+                <div class="stat-value">${activeTasks.length}</div>
+              </div>
+              <div class="detail-stat">
+                <div class="stat-label">Done</div>
+                <div class="stat-value">${doneCount}</div>
+              </div>
+              <div class="detail-stat">
+                <div class="stat-label">High Pri</div>
+                <div class="stat-value">${urgent}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-progress-bar">
+            <div class="detail-progress-fill" style="width: ${pct}%"></div>
+          </div>
+          <div style="font-size:12px; color:#71717a; margin-top:-18px; margin-bottom:20px;">${pct}% complete (${doneCount}/${total})</div>
+        </div>
+
+        <div class="card" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div>
+            <div class="detail-section-label">Project Notes</div>
+            <textarea id="detail-notes" rows="5" style="width:100%;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;" placeholder="Project details, scope, goals...">${esc(projectDetail.notes || "")}</textarea>
+          </div>
+          <div>
+            <div class="detail-section-label">Ethos / Guiding Principles</div>
+            <textarea id="detail-ethos" rows="5" style="width:100%;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;" placeholder="Team values, decision principles...">${esc(projectDetail.ethos || "")}</textarea>
+          </div>
+          <div style="grid-column:1/-1; display:flex; justify-content:flex-end;">
+            <button class="btn-save" onclick="saveDetailMeta()">Save Notes</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="detail-section-label">Documents & Resources</div>
+          <div id="detail-docs-list">
+            ${(projectDetail.docs || []).map((d, i) => `
+              <div class="task-item">
+                <div class="task-body">
+                  <div class="task-title">${d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:underline;">${esc(d.name || d.url)}</a>` : esc(d.name)}</div>
+                  ${d.notes ? `<div class="task-meta"><span class="task-tag">${esc(d.notes)}</span></div>` : ""}
+                </div>
+                <button class="task-delete" onclick="removeDoc(${i})" title="Remove">&times;</button>
+              </div>
+            `).join("") || '<div class="empty">No documents yet</div>'}
+          </div>
+          <div class="add-row" style="margin-top:12px; margin-bottom:0;">
+            <input class="inp-title" id="detail-doc-name" placeholder="Document name..." />
+            <input class="inp-title" id="detail-doc-url" placeholder="URL (optional)" />
+            <input class="inp-sm" id="detail-doc-notes" placeholder="Notes..." />
+            <button class="btn-add" onclick="addDoc()">Add Doc</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="detail-section-label">Add Task to ${esc(p.name)}</div>
+          <div class="add-row">
+            <input class="inp-title" id="detail-task-title" placeholder="New task..." />
+            <input class="inp-sm" id="detail-task-assignee" placeholder="Assign to..." />
+            <input class="inp-sm" id="detail-task-due" type="date" />
+            <select class="inp-sm" id="detail-task-priority">
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+            <button class="btn-add" onclick="addDetailTask()">Add</button>
+          </div>
+
+          <div class="detail-section-label">Active Tasks (${activeTasks.length})</div>
+          <ul class="task-list">
+            ${activeTasks.length ? activeTasks.map(taskRow).join("") : '<div class="empty">No active tasks</div>'}
+          </ul>
+
+          ${completedTasks.length ? `
+          <div class="detail-section-label" style="margin-top:20px">Completed (${completedTasks.length})</div>
+          <ul class="task-list">
+            ${completedTasks.map(taskRow).join("")}
+          </ul>` : ""}
+        </div>
+      `;
+
+      // Enter key on detail add
+      const titleInput = document.getElementById("detail-task-title");
+      if (titleInput) {
+        titleInput.addEventListener("keydown", e => { if (e.key === "Enter") addDetailTask(); });
+        titleInput.focus();
+      }
+    }
+
+    async function saveDetailMeta() {
+      const notes = document.getElementById("detail-notes").value;
+      const ethos = document.getElementById("detail-ethos").value;
+      await fetch(`/api/projects/${activeProjectId}/detail`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes, ethos })
+      });
+      projectDetail.notes = notes;
+      projectDetail.ethos = ethos;
+    }
+
+    async function addDoc() {
+      const name = document.getElementById("detail-doc-name").value.trim();
+      const url = document.getElementById("detail-doc-url").value.trim();
+      const notes = document.getElementById("detail-doc-notes").value.trim();
+      if (!name && !url) return;
+
+      const res = await fetch(`/api/projects/${activeProjectId}/docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name || url, url, notes })
+      });
+      projectDetail = await res.json();
+      renderDetail();
+    }
+
+    async function removeDoc(index) {
+      const res = await fetch(`/api/projects/${activeProjectId}/docs`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index })
+      });
+      projectDetail = await res.json();
+      renderDetail();
+    }
+
+    async function addDetailTask() {
+      const p = projects.find(p => p.id === activeProjectId);
+      if (!p) return;
+      const title = document.getElementById("detail-task-title").value.trim();
+      if (!title) return;
+      const assignee = document.getElementById("detail-task-assignee").value.trim();
+      const due = document.getElementById("detail-task-due").value;
+      const priority = document.getElementById("detail-task-priority").value;
+
+      await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, assignee, due, priority, project: p.name })
+      });
+
+      await loadTasks();
+      renderAll();
+      renderDetail();
     }
 
     async function logout() {
