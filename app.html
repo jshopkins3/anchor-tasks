@@ -763,6 +763,18 @@
               <div class="detail-title">${esc(p.name)}</div>
               ${p.description ? `<div class="detail-desc">${esc(p.description)}</div>` : ""}
               <div class="detail-owner">Owner: <span>${esc(p.owner || "Unassigned")}</span></div>
+              <div style="margin-top:10px;">
+                ${projectDetail.folderId
+                  ? `<a href="${esc(projectDetail.folderUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:#27272a;border:1px solid #3f3f46;color:#60a5fa;border-radius:8px;padding:6px 14px;font-size:12px;text-decoration:none;font-weight:600;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                      Open Drive Folder
+                    </a>`
+                  : `<button onclick="createDriveFolder()" style="display:inline-flex;align-items:center;gap:6px;background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                      Create Drive Folder
+                    </button>`
+                }
+              </div>
             </div>
             <div class="detail-stats-row">
               <div class="detail-stat">
@@ -817,8 +829,9 @@
             <input class="inp-title" id="detail-doc-name" placeholder="Document name..." />
             <input class="inp-title" id="detail-doc-url" placeholder="URL (optional)" />
             <input class="inp-sm" id="detail-doc-notes" placeholder="Notes..." />
-            <button class="btn-add" onclick="addDoc()">Add Doc</button>
+            <button class="btn-add" onclick="addDoc()">Add Link</button>
             <button class="btn-add" style="background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;" onclick="openDrivePicker()">Pick from Drive</button>
+            ${projectDetail.folderId ? '<button class="btn-add" style="background:#27272a;border:1px solid #3f3f46;color:#4ade80;" onclick="uploadToDriveFolder()">Upload to Drive</button>' : ''}
           </div>
         </div>
 
@@ -898,14 +911,14 @@
       });
     }
 
-    // Get access token via GIS token client
+    // Get access token via GIS token client (drive.file = create/manage app-created files)
     function getAccessToken() {
       return new Promise((resolve, reject) => {
         if (driveAccessToken) { resolve(driveAccessToken); return; }
         if (!googleClientId) { reject(new Error("No client ID")); return; }
         const tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
-          scope: "https://www.googleapis.com/auth/drive.readonly",
+          scope: "https://www.googleapis.com/auth/drive",
           callback: (resp) => {
             if (resp.error) { reject(new Error(resp.error)); return; }
             driveAccessToken = resp.access_token;
@@ -914,6 +927,40 @@
         });
         tokenClient.requestAccessToken();
       });
+    }
+
+    // Create a Google Drive folder for a project
+    async function createDriveFolder() {
+      const p = projects.find(p => p.id === activeProjectId);
+      if (!p) return;
+      try {
+        const token = await getAccessToken();
+        const resp = await fetch("https://www.googleapis.com/drive/v3/files", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Anchor Tasks: " + p.name,
+            mimeType: "application/vnd.google-apps.folder",
+          }),
+        });
+        if (!resp.ok) throw new Error("Drive API error: " + resp.status);
+        const folder = await resp.json();
+        // Save folder ID and URL to project detail
+        projectDetail.folderId = folder.id;
+        projectDetail.folderUrl = "https://drive.google.com/drive/folders/" + folder.id;
+        await fetch(`/api/projects/${activeProjectId}/detail`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folderId: folder.id, folderUrl: projectDetail.folderUrl }),
+        });
+        renderDetail();
+      } catch (e) {
+        console.error("Create folder error:", e);
+        alert("Could not create Drive folder. Make sure the Google Drive API is enabled.");
+      }
     }
 
     async function openDrivePicker() {
@@ -925,10 +972,15 @@
           .setIncludeFolders(true)
           .setSelectFolderEnabled(false);
 
+        // If project has a Drive folder, scope picker to it
+        if (projectDetail.folderId) {
+          view.setParent(projectDetail.folderId);
+        }
+
         const picker = new google.picker.PickerBuilder()
           .setOAuthToken(token)
           .addView(view)
-          .addView(new google.picker.DocsView().setMimeTypes("application/pdf"))
+          .addView(new google.picker.DocsView())
           .setCallback(drivePickerCallback)
           .setTitle("Attach a file from Google Drive")
           .build();
@@ -937,6 +989,56 @@
         console.error("Drive Picker error:", e);
         alert("Could not open Google Drive picker. Make sure the Picker API is enabled in Google Cloud Console.");
       }
+    }
+
+    // Upload a file to the project's Drive folder (from local machine)
+    async function uploadToDriveFolder() {
+      if (!projectDetail.folderId) {
+        alert("Create a Drive folder for this project first.");
+        return;
+      }
+      const input = document.createElement("input");
+      input.type = "file";
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        try {
+          const token = await getAccessToken();
+          const metadata = {
+            name: file.name,
+            parents: [projectDetail.folderId],
+          };
+          const form = new FormData();
+          form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+          form.append("file", file);
+
+          const resp = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + token },
+            body: form,
+          });
+          if (!resp.ok) throw new Error("Upload failed: " + resp.status);
+          const uploaded = await resp.json();
+
+          // Add to project docs
+          await fetch(`/api/projects/${activeProjectId}/docs`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: uploaded.name,
+              url: uploaded.webViewLink || ("https://drive.google.com/file/d/" + uploaded.id),
+              notes: "Uploaded to Drive folder",
+            }),
+          });
+          const res = await fetch(`/api/projects/${activeProjectId}/detail`);
+          projectDetail = await res.json();
+          renderDetail();
+        } catch (e) {
+          console.error("Upload error:", e);
+          alert("Upload failed: " + e.message);
+        }
+      };
+      input.click();
     }
 
     async function drivePickerCallback(data) {
