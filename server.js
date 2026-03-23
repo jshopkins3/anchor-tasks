@@ -10,6 +10,7 @@ const BASE = __dirname;
 const DATA_DIR = path.join(BASE, "data");
 const TASKS_FILE = path.join(DATA_DIR, "tasks.md");
 const PROJECTS_FILE = path.join(DATA_DIR, "projects.md");
+const GOALS_FILE = path.join(DATA_DIR, "goals.json");
 
 const MIME = {
   ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
@@ -30,6 +31,9 @@ if (!fs.existsSync(TASKS_FILE)) {
 }
 if (!fs.existsSync(PROJECTS_FILE)) {
   fs.writeFileSync(PROJECTS_FILE, `# Projects\n\n## Active\n\n## Archived\n`, "utf8");
+}
+if (!fs.existsSync(GOALS_FILE)) {
+  fs.writeFileSync(GOALS_FILE, JSON.stringify([], null, 2), "utf8");
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
@@ -125,6 +129,10 @@ function parseTasks() {
       priority: parts[4] || "normal",
       project: parts[5] || "",
       status: parts[6] || "",
+      personal: parts[7] === "true",
+      urgent: parts[8] === "true",
+      important: parts[9] === "true",
+      linkedGoal: parts[10] || "",
       done,
     });
   }
@@ -134,7 +142,7 @@ function parseTasks() {
 function writeTasks(tasks) {
   const active = tasks.filter(t => !t.done);
   const completed = tasks.filter(t => t.done);
-  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""}`;
+  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""} | ${t.personal ? "true" : "false"} | ${t.urgent ? "true" : "false"} | ${t.important ? "true" : "false"} | ${t.linkedGoal || ""}`;
   const md = [
     "# Tasks", "",
     "## Active", ...active.map(fmt), "",
@@ -173,6 +181,16 @@ function writeProjects(projects) {
     "## Archived", ...archived.map(fmt), "",
   ].join("\n");
   fs.writeFileSync(PROJECTS_FILE, md, "utf8");
+}
+
+/* ─── Goals engine ────────────────────────────────────────────────────── */
+function readGoals() {
+  try { return JSON.parse(fs.readFileSync(GOALS_FILE, "utf8")); }
+  catch { return []; }
+}
+
+function writeGoals(goals) {
+  fs.writeFileSync(GOALS_FILE, JSON.stringify(goals, null, 2), "utf8");
 }
 
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
@@ -286,6 +304,10 @@ const server = http.createServer(async (req, res) => {
         priority: ["low", "normal", "high", "urgent"].includes(body.priority) ? body.priority : "normal",
         project: String(body.project || "").substring(0, 100),
         status: String(body.status || "").substring(0, 50),
+        personal: !!body.personal,
+        urgent: !!body.urgent,
+        important: !!body.important,
+        linkedGoal: String(body.linkedGoal || "").substring(0, 50),
         done: false,
       };
       if (!task.title) return json(res, 400, { error: "Title required" });
@@ -307,6 +329,10 @@ const server = http.createServer(async (req, res) => {
       if (body.project !== undefined) tasks[idx].project = String(body.project).substring(0, 100);
       if (body.done !== undefined) tasks[idx].done = !!body.done;
       if (body.status !== undefined) tasks[idx].status = String(body.status).substring(0, 50);
+      if (body.personal !== undefined) tasks[idx].personal = !!body.personal;
+      if (body.urgent !== undefined) tasks[idx].urgent = !!body.urgent;
+      if (body.important !== undefined) tasks[idx].important = !!body.important;
+      if (body.linkedGoal !== undefined) tasks[idx].linkedGoal = String(body.linkedGoal).substring(0, 50);
       writeTasks(tasks);
       return json(res, 200, { task: tasks[idx] });
     }
@@ -416,6 +442,56 @@ const server = http.createServer(async (req, res) => {
         writeProjectDetail(id, detail);
       }
       return json(res, 200, detail);
+    }
+
+    /* ── GOALS API ──────────────────────────────────────────────── */
+    if (urlPath === "/api/goals" && req.method === "GET") {
+      const goals = readGoals();
+      return json(res, 200, { goals });
+    }
+
+    if (urlPath === "/api/goals" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const goals = readGoals();
+      const goal = {
+        id: generateId(),
+        title: String(body.title || "").substring(0, 200),
+        description: String(body.description || "").substring(0, 1000),
+        targetDate: String(body.targetDate || "").substring(0, 10),
+        category: ["personal", "professional"].includes(body.category) ? body.category : "professional",
+        progress: Math.min(100, Math.max(0, parseInt(body.progress) || 0)),
+        linkedTasks: Array.isArray(body.linkedTasks) ? body.linkedTasks.map(id => String(id).substring(0, 20)) : [],
+      };
+      if (!goal.title) return json(res, 400, { error: "Title required" });
+      goals.push(goal);
+      writeGoals(goals);
+      return json(res, 201, { goal });
+    }
+
+    const goalMatch = urlPath.match(/^\/api\/goals\/([a-f0-9]+)$/);
+    if (goalMatch && req.method === "PATCH") {
+      const id = goalMatch[1];
+      const body = JSON.parse(await readBody(req));
+      const goals = readGoals();
+      const idx = goals.findIndex(g => g.id === id);
+      if (idx === -1) return json(res, 404, { error: "Goal not found" });
+      if (body.title !== undefined) goals[idx].title = String(body.title).substring(0, 200);
+      if (body.description !== undefined) goals[idx].description = String(body.description).substring(0, 1000);
+      if (body.targetDate !== undefined) goals[idx].targetDate = String(body.targetDate).substring(0, 10);
+      if (body.category !== undefined && ["personal", "professional"].includes(body.category)) goals[idx].category = body.category;
+      if (body.progress !== undefined) goals[idx].progress = Math.min(100, Math.max(0, parseInt(body.progress) || 0));
+      if (body.linkedTasks !== undefined && Array.isArray(body.linkedTasks)) goals[idx].linkedTasks = body.linkedTasks.map(id => String(id).substring(0, 20));
+      writeGoals(goals);
+      return json(res, 200, { goal: goals[idx] });
+    }
+
+    if (goalMatch && req.method === "DELETE") {
+      const id = goalMatch[1];
+      const goals = readGoals();
+      const filtered = goals.filter(g => g.id !== id);
+      if (filtered.length === goals.length) return json(res, 404, { error: "Goal not found" });
+      writeGoals(filtered);
+      return json(res, 200, { ok: true });
     }
 
     /* ── Static files / SPA fallback ───────────────────────────────── */

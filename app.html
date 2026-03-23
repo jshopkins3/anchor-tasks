@@ -378,6 +378,161 @@
     .board-empty {
       text-align: center; padding: 20px; color: #3f3f46; font-size: 12px;
     }
+
+    /* ── Move-to-project button on board cards ──────────────── */
+    .board-card-actions {
+      display: flex; gap: 4px; margin-top: 6px;
+    }
+    .board-card-move {
+      background: none; border: 1px solid #3f3f46; color: #71717a;
+      border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;
+      font-family: inherit;
+    }
+    .board-card-move:hover { color: #a78bfa; border-color: #a78bfa; }
+
+    /* ── Personal tag ───────────────────────────────────────── */
+    .task-tag.personal-tag { background: rgba(139,92,246,.12); color: #c4b5fd; font-size: 11px; }
+    .board-card-tag.personal { background: rgba(139,92,246,.12); color: #c4b5fd; }
+
+    /* ── Move popover ───────────────────────────────────────── */
+    .move-popover {
+      position: absolute; z-index: 100;
+      background: #1f1f23; border: 1px solid #3f3f46; border-radius: 8px;
+      padding: 8px; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    }
+    .move-popover select {
+      background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7;
+      border-radius: 6px; padding: 6px 10px; font-size: 12px;
+      font-family: inherit; outline: none; width: 100%;
+    }
+    .move-popover select:focus { border-color: #3b82f6; }
+
+    /* ── Goals section ─────────────────────────────────────── */
+    .goal-card {
+      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      padding: 20px; margin-bottom: 16px;
+      border-left: 3px solid transparent;
+    }
+    .goal-card.cat-personal { border-left-color: #a78bfa; }
+    .goal-card.cat-professional { border-left-color: #3b82f6; }
+    .goal-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .goal-title { font-size: 16px; font-weight: 700; color: #fff; }
+    .goal-category {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .goal-category.personal { background: rgba(167,139,246,.15); color: #a78bfa; }
+    .goal-category.professional { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .goal-desc { font-size: 13px; color: #a1a1aa; margin-bottom: 10px; }
+    .goal-target { font-size: 12px; color: #71717a; margin-bottom: 8px; }
+    .goal-progress-bar {
+      background: #27272a; border-radius: 6px; height: 8px;
+      overflow: hidden; margin-bottom: 4px;
+    }
+    .goal-progress-fill {
+      background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+      height: 100%; border-radius: 6px; transition: width .3s ease;
+    }
+    .goal-progress-label { font-size: 11px; color: #71717a; }
+    .goal-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .goal-actions button {
+      background: none; border: 1px solid #3f3f46; color: #71717a;
+      border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+      font-family: inherit;
+    }
+    .goal-actions button:hover { color: #e4e4e7; border-color: #52525b; }
+    .goal-linked-tasks { margin-top: 12px; }
+    .goal-linked-tasks .detail-section-label { margin-bottom: 6px; }
+    .goal-linked-task {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; font-size: 12px; color: #a1a1aa;
+    }
+    .goal-linked-task .task-check { width: 14px; height: 14px; border-radius: 3px; }
+    .goal-linked-task-title { flex: 1; }
+    .goal-linked-task-title.done { text-decoration: line-through; color: #52525b; }
+    .goal-unlink {
+      background: none; border: none; color: #3f3f46; cursor: pointer;
+      font-size: 14px; padding: 2px;
+    }
+    .goal-unlink:hover { color: #ef4444; }
+
+    .goal-form {
+      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      padding: 20px; margin-bottom: 16px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .goal-form label {
+      font-size: 11px; color: #71717a; text-transform: uppercase;
+      letter-spacing: 0.04em; display: block; margin-bottom: 3px;
+    }
+    .goal-form input, .goal-form select, .goal-form textarea {
+      background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7;
+      border-radius: 6px; padding: 6px 10px; font-size: 13px;
+      font-family: inherit; outline: none; width: 100%;
+    }
+    .goal-form input:focus, .goal-form select:focus, .goal-form textarea:focus { border-color: #3b82f6; }
+    .goal-form .full { grid-column: 1 / -1; }
+
+    /* ── Eisenhower Matrix ──────────────────────────────────── */
+    .matrix-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .matrix-quadrant {
+      background: #111113; border: 1px solid #27272a; border-radius: 12px;
+      padding: 16px; min-height: 200px;
+    }
+    .matrix-quadrant.q-do { border-color: rgba(239,68,68,.3); }
+    .matrix-quadrant.q-schedule { border-color: rgba(59,130,246,.3); }
+    .matrix-quadrant.q-delegate { border-color: rgba(245,158,11,.3); }
+    .matrix-quadrant.q-eliminate { border-color: rgba(113,113,122,.3); }
+
+    .matrix-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px; padding-bottom: 10px;
+      border-bottom: 1px solid #27272a;
+    }
+    .matrix-title {
+      font-size: 13px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .q-do .matrix-title { color: #f87171; }
+    .q-schedule .matrix-title { color: #60a5fa; }
+    .q-delegate .matrix-title { color: #fbbf24; }
+    .q-eliminate .matrix-title { color: #71717a; }
+
+    .matrix-subtitle {
+      font-size: 10px; color: #52525b; font-weight: 400;
+      text-transform: none; letter-spacing: 0;
+    }
+    .matrix-count {
+      font-size: 11px; font-weight: 600; background: #27272a;
+      color: #a1a1aa; padding: 2px 8px; border-radius: 10px;
+    }
+    .matrix-drop-zone {
+      min-height: 40px;
+      border: 2px dashed transparent;
+      border-radius: 8px;
+      transition: border-color .15s, background .15s;
+    }
+    .matrix-drop-zone.drag-active {
+      border-color: #3b82f6;
+      background: rgba(59,130,246,.05);
+    }
+    .matrix-labels {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      margin-bottom: 4px;
+    }
+    .matrix-axis-label {
+      font-size: 11px; color: #52525b; text-align: center;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .matrix-row-labels {
+      display: flex; flex-direction: column; gap: 16px;
+      position: absolute; left: -20px; top: 50%; transform: translateY(-50%);
+    }
   </style>
 </head>
 <body>
@@ -400,6 +555,8 @@
   <div class="tabs">
     <div class="tab active" data-tab="tasks">Tasks</div>
     <div class="tab" data-tab="board">Board</div>
+    <div class="tab" data-tab="goals">Goals</div>
+    <div class="tab" data-tab="matrix">Matrix</div>
     <div class="tab" data-tab="projects">Projects</div>
     <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
   </div>
@@ -446,6 +603,33 @@
       <div class="board" id="board-container"></div>
     </div>
 
+    <!-- ── Goals section ──────────────────────────────────────── -->
+    <div class="section" id="sec-goals">
+      <div class="card">
+        <div class="card-header">
+          <h2>Personal &amp; Professional Goals</h2>
+          <button class="btn-add" onclick="showGoalForm()">+ New Goal</button>
+        </div>
+        <div id="goal-form-container"></div>
+        <div id="goals-list"></div>
+      </div>
+    </div>
+
+    <!-- ── Matrix section ─────────────────────────────────────── -->
+    <div class="section" id="sec-matrix">
+      <div class="board-toolbar">
+        <label>Filter by project:</label>
+        <select id="matrix-project-filter" onchange="renderMatrix()">
+          <option value="">All Projects</option>
+        </select>
+      </div>
+      <div style="text-align:center;margin-bottom:8px;">
+        <span class="matrix-axis-label" style="display:inline-block;width:50%;">Urgent</span>
+        <span class="matrix-axis-label" style="display:inline-block;width:50%;">Not Urgent</span>
+      </div>
+      <div class="matrix-grid" id="matrix-container"></div>
+    </div>
+
     <!-- ── Projects section ───────────────────────────────────── -->
     <div class="section" id="sec-projects">
       <div class="card">
@@ -473,9 +657,13 @@
     /* ── State ────────────────────────────────────────────────── */
     let tasks = [];
     let projects = [];
+    let goals = [];
     let user = null;
     let taskFilter = "active";
     let editingTaskId = null;
+    let editingGoalId = null;
+    let showingGoalForm = false;
+    let matrixDragTaskId = null;
 
     /* ── Init ─────────────────────────────────────────────────── */
     async function init() {
@@ -495,7 +683,7 @@
         googleClientId = cfg.clientId || "";
       } catch {}
 
-      await Promise.all([loadTasks(), loadProjects()]);
+      await Promise.all([loadTasks(), loadProjects(), loadGoals()]);
       renderAll();
       setupTabs();
       setupFilters();
@@ -522,11 +710,20 @@
       projects = data.projects || [];
     }
 
+    async function loadGoals() {
+      const res = await fetch("/api/goals");
+      const data = await res.json();
+      goals = data.goals || [];
+    }
+
     /* ── Rendering ────────────────────────────────────────────── */
     function renderAll() {
       renderStats();
       renderTasks();
       renderBoard();
+      renderGoals();
+      renderMatrix();
+      renderMatrixProjectFilter();
       renderProjects();
       renderProjectDropdown();
       renderBoardProjectFilter();
@@ -576,6 +773,7 @@
             <div class="task-body">
               <div class="task-title ${t.done ? "done" : ""}">${esc(t.title)}</div>
               <div class="task-meta">
+                ${t.personal ? `<span class="task-tag personal-tag">\u{1F3E0}</span>` : ""}
                 ${t.priority && t.priority !== "normal" ? `<span class="task-tag pri-${t.priority}">${t.priority}</span>` : ""}
                 ${t.assignee ? `<span class="task-tag assignee-tag">${esc(t.assignee)}</span>` : ""}
                 ${t.due ? `<span class="task-tag due">${t.due}</span>` : ""}
@@ -613,6 +811,13 @@
               <select id="ed-proj-${t.id}">
                 <option value="">None</option>
                 ${projectOpts.map(p => `<option value="${esc(p.name)}" ${t.project===p.name?"selected":""}>${esc(p.name)}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>Personal</label>
+              <select id="ed-personal-${t.id}">
+                <option value="false" ${!t.personal?"selected":""}>No</option>
+                <option value="true" ${t.personal?"selected":""}>Yes</option>
               </select>
             </div>
             <div class="edit-actions">
@@ -699,11 +904,13 @@
       const due = document.getElementById(`ed-due-${id}`).value;
       const priority = document.getElementById(`ed-pri-${id}`).value;
       const project = document.getElementById(`ed-proj-${id}`).value;
+      const personalEl = document.getElementById(`ed-personal-${id}`);
+      const personal = personalEl ? personalEl.value === "true" : false;
 
       await fetch(`/api/tasks/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, assignee, due, priority, project })
+        body: JSON.stringify({ title, assignee, due, priority, project, personal })
       });
 
       editingTaskId = null;
@@ -826,6 +1033,7 @@
             <div class="task-body">
               <div class="task-title ${t.done ? "done" : ""}">${esc(t.title)}</div>
               <div class="task-meta">
+                ${t.personal ? `<span class="task-tag personal-tag">\u{1F3E0}</span>` : ""}
                 ${t.priority && t.priority !== "normal" ? `<span class="task-tag pri-${t.priority}">${t.priority}</span>` : ""}
                 ${t.assignee ? `<span class="task-tag assignee-tag">${esc(t.assignee)}</span>` : ""}
                 ${t.due ? `<span class="task-tag due">${t.due}</span>` : ""}
@@ -862,6 +1070,13 @@
               <select id="ed-proj-${t.id}">
                 <option value="">None</option>
                 ${projectOpts.map(pr => `<option value="${esc(pr.name)}" ${t.project===pr.name?"selected":""}>${esc(pr.name)}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>Personal</label>
+              <select id="ed-personal-${t.id}">
+                <option value="false" ${!t.personal?"selected":""}>No</option>
+                <option value="true" ${t.personal?"selected":""}>Yes</option>
               </select>
             </div>
             <div class="edit-actions">
@@ -1275,9 +1490,13 @@
                ondragend="boardDragEnd(event)">
             <div class="board-card-title">${esc(t.title)}</div>
             <div class="board-card-tags">
+              ${t.personal ? `<span class="board-card-tag personal">\u{1F3E0}</span>` : ""}
               ${t.priority && t.priority !== "normal" ? `<span class="board-card-tag pri-${t.priority}">${t.priority}</span>` : ""}
               ${t.assignee ? `<span class="board-card-tag assignee">${esc(t.assignee)}</span>` : ""}
               ${t.due ? `<span class="board-card-tag due">${t.due}</span>` : ""}
+            </div>
+            <div class="board-card-actions">
+              <button class="board-card-move" onclick="event.stopPropagation(); showMovePopover('${t.id}', this)">Move to project</button>
             </div>
           </div>`;
       }
@@ -1414,6 +1633,343 @@
           renderTasks();
         });
       });
+    }
+
+    /* ── Move to Project popover (board cards) ──────────────── */
+    function showMovePopover(taskId, btn) {
+      // Remove existing popovers
+      document.querySelectorAll(".move-popover").forEach(p => p.remove());
+      const t = tasks.find(t => t.id === taskId);
+      if (!t) return;
+      const activeProjects = projects.filter(p => !p.archived);
+      const pop = document.createElement("div");
+      pop.className = "move-popover";
+      pop.innerHTML = `
+        <select onchange="moveTaskToProject('${taskId}', this.value); this.parentElement.remove();">
+          <option value="">-- Move to --</option>
+          <option value="__none__" ${!t.project ? "selected" : ""}>No Project</option>
+          ${activeProjects.map(p => `<option value="${esc(p.name)}" ${t.project === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
+        </select>
+      `;
+      btn.parentElement.appendChild(pop);
+      // Close on outside click
+      setTimeout(() => {
+        const close = (e) => { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener("click", close); } };
+        document.addEventListener("click", close);
+      }, 0);
+    }
+
+    async function moveTaskToProject(taskId, projectName) {
+      const project = projectName === "__none__" ? "" : projectName;
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project })
+      });
+      await loadTasks();
+      renderAll();
+    }
+
+    /* ── Goals ────────────────────────────────────────────────── */
+    function showGoalForm(goalId) {
+      editingGoalId = goalId || null;
+      showingGoalForm = true;
+      renderGoals();
+    }
+
+    function hideGoalForm() {
+      editingGoalId = null;
+      showingGoalForm = false;
+      renderGoals();
+    }
+
+    function renderGoals() {
+      const container = document.getElementById("goal-form-container");
+      const list = document.getElementById("goals-list");
+
+      // Form
+      if (showingGoalForm) {
+        const g = editingGoalId ? goals.find(g => g.id === editingGoalId) : null;
+        container.innerHTML = `
+          <div class="goal-form">
+            <div class="full">
+              <label>Title</label>
+              <input id="goal-title" value="${esc(g ? g.title : "")}" placeholder="Goal title..." />
+            </div>
+            <div class="full">
+              <label>Description</label>
+              <textarea id="goal-desc" rows="2" placeholder="Describe this goal...">${esc(g ? g.description : "")}</textarea>
+            </div>
+            <div>
+              <label>Target Date</label>
+              <input id="goal-target" type="date" value="${g ? g.targetDate : ""}" />
+            </div>
+            <div>
+              <label>Category</label>
+              <select id="goal-category">
+                <option value="professional" ${!g || g.category === "professional" ? "selected" : ""}>Professional</option>
+                <option value="personal" ${g && g.category === "personal" ? "selected" : ""}>Personal</option>
+              </select>
+            </div>
+            <div>
+              <label>Progress (0-100)</label>
+              <input id="goal-progress" type="number" min="0" max="100" value="${g ? g.progress : 0}" />
+            </div>
+            <div>
+              <label>Link Tasks</label>
+              <select id="goal-link-tasks" multiple style="min-height:60px;">
+                ${tasks.filter(t => !t.done).map(t => `<option value="${t.id}" ${g && g.linkedTasks && g.linkedTasks.includes(t.id) ? "selected" : ""}>${esc(t.title)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="full edit-actions">
+              <button class="btn-cancel" onclick="hideGoalForm()">Cancel</button>
+              <button class="btn-save" onclick="${editingGoalId ? `updateGoal('${editingGoalId}')` : 'createGoal()'}">${editingGoalId ? "Update" : "Create"}</button>
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = "";
+      }
+
+      // List
+      if (!goals.length) {
+        list.innerHTML = '<div class="empty">No goals yet. Set some targets!</div>';
+        return;
+      }
+
+      list.innerHTML = goals.map(g => {
+        const linkedTaskObjs = (g.linkedTasks || []).map(id => tasks.find(t => t.id === id)).filter(Boolean);
+        const doneLinked = linkedTaskObjs.filter(t => t.done).length;
+        const autoProgress = linkedTaskObjs.length ? Math.round((doneLinked / linkedTaskObjs.length) * 100) : g.progress;
+
+        return `
+        <div class="goal-card cat-${g.category}">
+          <div class="goal-header">
+            <div>
+              <div class="goal-title">${esc(g.title)}</div>
+              ${g.description ? `<div class="goal-desc">${esc(g.description)}</div>` : ""}
+            </div>
+            <span class="goal-category ${g.category}">${g.category}</span>
+          </div>
+          ${g.targetDate ? `<div class="goal-target">Target: ${g.targetDate}</div>` : ""}
+          <div class="goal-progress-bar">
+            <div class="goal-progress-fill" style="width:${autoProgress}%"></div>
+          </div>
+          <div class="goal-progress-label">${autoProgress}% complete${linkedTaskObjs.length ? ` (${doneLinked}/${linkedTaskObjs.length} tasks)` : ""}</div>
+          ${linkedTaskObjs.length ? `
+          <div class="goal-linked-tasks">
+            <div class="detail-section-label">Linked Tasks</div>
+            ${linkedTaskObjs.map(t => `
+              <div class="goal-linked-task">
+                <button class="task-check ${t.done ? "done" : ""}" onclick="toggleTask('${t.id}').then(()=>{loadGoals().then(renderGoals)})"></button>
+                <span class="goal-linked-task-title ${t.done ? "done" : ""}">${esc(t.title)}</span>
+                ${t.project ? `<span class="task-tag project-tag" style="font-size:10px;">${esc(t.project)}</span>` : ""}
+                <button class="goal-unlink" onclick="unlinkTask('${g.id}','${t.id}')" title="Unlink">&times;</button>
+              </div>
+            `).join("")}
+          </div>` : ""}
+          <div class="goal-actions">
+            <button onclick="showGoalForm('${g.id}')">Edit</button>
+            <button onclick="deleteGoal('${g.id}')">Delete</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    async function createGoal() {
+      const title = document.getElementById("goal-title").value.trim();
+      if (!title) return;
+      const description = document.getElementById("goal-desc").value.trim();
+      const targetDate = document.getElementById("goal-target").value;
+      const category = document.getElementById("goal-category").value;
+      const progress = parseInt(document.getElementById("goal-progress").value) || 0;
+      const sel = document.getElementById("goal-link-tasks");
+      const linkedTasks = Array.from(sel.selectedOptions).map(o => o.value);
+
+      await fetch("/api/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description, targetDate, category, progress, linkedTasks })
+      });
+
+      showingGoalForm = false;
+      await loadGoals();
+      renderGoals();
+    }
+
+    async function updateGoal(id) {
+      const title = document.getElementById("goal-title").value.trim();
+      if (!title) return;
+      const description = document.getElementById("goal-desc").value.trim();
+      const targetDate = document.getElementById("goal-target").value;
+      const category = document.getElementById("goal-category").value;
+      const progress = parseInt(document.getElementById("goal-progress").value) || 0;
+      const sel = document.getElementById("goal-link-tasks");
+      const linkedTasks = Array.from(sel.selectedOptions).map(o => o.value);
+
+      await fetch(`/api/goals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description, targetDate, category, progress, linkedTasks })
+      });
+
+      showingGoalForm = false;
+      editingGoalId = null;
+      await loadGoals();
+      renderGoals();
+    }
+
+    async function deleteGoal(id) {
+      await fetch(`/api/goals/${id}`, { method: "DELETE" });
+      await loadGoals();
+      renderGoals();
+    }
+
+    async function unlinkTask(goalId, taskId) {
+      const g = goals.find(g => g.id === goalId);
+      if (!g) return;
+      const linkedTasks = (g.linkedTasks || []).filter(id => id !== taskId);
+      await fetch(`/api/goals/${goalId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkedTasks })
+      });
+      await loadGoals();
+      renderGoals();
+    }
+
+    /* ── Eisenhower Matrix ───────────────────────────────────── */
+    function getMatrixQuadrant(t) {
+      let u = t.urgent;
+      let i = t.important;
+      // Default placement based on priority if not explicitly set
+      if (u === undefined || u === null) u = t.urgent;
+      if (i === undefined || i === null) i = t.important;
+      // If still not set, infer from priority
+      if (!u && !i && !t.urgent && !t.important) {
+        if (t.priority === "urgent") { u = true; i = true; }
+        else if (t.priority === "high") { u = false; i = true; }
+        else if (t.priority === "normal") { u = false; i = true; }
+        else { u = false; i = false; } // low
+      }
+      if (u && i) return "do";
+      if (!u && i) return "schedule";
+      if (u && !i) return "delegate";
+      return "eliminate";
+    }
+
+    function renderMatrixProjectFilter() {
+      const sel = document.getElementById("matrix-project-filter");
+      if (!sel) return;
+      const current = sel.value;
+      const active = projects.filter(p => !p.archived);
+      sel.innerHTML = `<option value="">All Projects</option>` +
+        active.map(p => `<option value="${esc(p.name)}" ${current === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("") +
+        `<option value="__none__" ${current === "__none__" ? "selected" : ""}>No Project</option>`;
+    }
+
+    function renderMatrix() {
+      const filterProject = document.getElementById("matrix-project-filter")?.value || "";
+
+      let filtered = tasks.filter(t => !t.done);
+      if (filterProject === "__none__") {
+        filtered = filtered.filter(t => !t.project);
+      } else if (filterProject) {
+        filtered = filtered.filter(t => t.project === filterProject);
+      }
+
+      const quadrants = { do: [], schedule: [], delegate: [], eliminate: [] };
+      for (const t of filtered) {
+        quadrants[getMatrixQuadrant(t)].push(t);
+      }
+
+      function matrixCard(t) {
+        const priBorder = t.priority !== "normal" ? ` pri-border-${t.priority}` : "";
+        return `
+          <div class="board-card${priBorder}" draggable="true"
+               data-task-id="${t.id}"
+               ondragstart="matrixDragStart(event, '${t.id}')"
+               ondragend="matrixDragEnd(event)">
+            <div class="board-card-title">${esc(t.title)}</div>
+            <div class="board-card-tags">
+              ${t.personal ? `<span class="board-card-tag personal">\u{1F3E0}</span>` : ""}
+              ${t.priority && t.priority !== "normal" ? `<span class="board-card-tag pri-${t.priority}">${t.priority}</span>` : ""}
+              ${t.project ? `<span class="board-card-tag" style="background:rgba(139,92,246,.1);color:#a78bfa;">${esc(t.project)}</span>` : ""}
+              ${t.assignee ? `<span class="board-card-tag assignee">${esc(t.assignee)}</span>` : ""}
+            </div>
+          </div>`;
+      }
+
+      const qConfig = [
+        { key: "do", cls: "q-do", title: "Do First", sub: "Urgent + Important", tasks: quadrants.do },
+        { key: "schedule", cls: "q-schedule", title: "Schedule", sub: "Important, Not Urgent", tasks: quadrants.schedule },
+        { key: "delegate", cls: "q-delegate", title: "Delegate", sub: "Urgent, Not Important", tasks: quadrants.delegate },
+        { key: "eliminate", cls: "q-eliminate", title: "Eliminate", sub: "Not Urgent, Not Important", tasks: quadrants.eliminate },
+      ];
+
+      document.getElementById("matrix-container").innerHTML = qConfig.map(q => `
+        <div class="matrix-quadrant ${q.cls}"
+             ondragover="matrixDragOver(event)" ondragleave="matrixDragLeave(event)"
+             ondrop="matrixDrop(event, '${q.key}')">
+          <div class="matrix-header">
+            <span class="matrix-title">${q.title}<br><span class="matrix-subtitle">${q.sub}</span></span>
+            <span class="matrix-count">${q.tasks.length}</span>
+          </div>
+          <div class="matrix-drop-zone">
+            ${q.tasks.length ? q.tasks.map(matrixCard).join("") : '<div class="board-empty">No tasks</div>'}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function matrixDragStart(e, taskId) {
+      matrixDragTaskId = taskId;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", taskId);
+      setTimeout(() => {
+        const el = document.querySelector(`.matrix-quadrant .board-card[data-task-id="${taskId}"]`);
+        if (el) el.classList.add("dragging");
+      }, 0);
+    }
+
+    function matrixDragEnd(e) {
+      document.querySelectorAll(".board-card.dragging").forEach(el => el.classList.remove("dragging"));
+      document.querySelectorAll(".matrix-drop-zone.drag-active").forEach(el => el.classList.remove("drag-active"));
+      matrixDragTaskId = null;
+    }
+
+    function matrixDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const zone = e.currentTarget.querySelector(".matrix-drop-zone");
+      if (zone) zone.classList.add("drag-active");
+    }
+
+    function matrixDragLeave(e) {
+      const zone = e.currentTarget.querySelector(".matrix-drop-zone");
+      if (zone) zone.classList.remove("drag-active");
+    }
+
+    async function matrixDrop(e, quadrant) {
+      e.preventDefault();
+      const taskId = e.dataTransfer.getData("text/plain") || matrixDragTaskId;
+      if (!taskId) return;
+      document.querySelectorAll(".matrix-drop-zone.drag-active").forEach(el => el.classList.remove("drag-active"));
+
+      let urgent = false, important = false;
+      if (quadrant === "do") { urgent = true; important = true; }
+      else if (quadrant === "schedule") { urgent = false; important = true; }
+      else if (quadrant === "delegate") { urgent = true; important = false; }
+      else { urgent = false; important = false; }
+
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urgent, important })
+      });
+
+      await loadTasks();
+      renderAll();
     }
 
     /* ── Util ─────────────────────────────────────────────────── */
