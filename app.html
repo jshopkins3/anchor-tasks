@@ -277,6 +277,107 @@
     .project-card-link {
       cursor: pointer;
     }
+
+    /* ── Kanban Board ──────────────────────────────────────────── */
+    .board-toolbar {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+    }
+    .board-toolbar select {
+      background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7;
+      border-radius: 8px; padding: 8px 12px; font-size: 13px;
+      font-family: inherit; outline: none;
+    }
+    .board-toolbar select:focus { border-color: #3b82f6; }
+    .board-toolbar label { font-size: 13px; color: #71717a; }
+
+    .board {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .board-column {
+      background: #111113;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 200px;
+    }
+    .board-column-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px; padding-bottom: 10px;
+      border-bottom: 1px solid #27272a;
+    }
+    .board-column-title {
+      font-size: 13px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .board-col-todo .board-column-title { color: #a1a1aa; }
+    .board-col-inprogress .board-column-title { color: #60a5fa; }
+    .board-col-done .board-column-title { color: #4ade80; }
+    .board-column-count {
+      font-size: 11px; font-weight: 600; background: #27272a;
+      color: #a1a1aa; padding: 2px 8px; border-radius: 10px;
+    }
+
+    .board-swimlane {
+      margin-bottom: 12px;
+    }
+    .board-swimlane-title {
+      font-size: 11px; font-weight: 600; color: #a78bfa;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 6px; padding: 2px 0;
+    }
+
+    .board-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      cursor: grab;
+      transition: border-color .15s, box-shadow .15s, opacity .15s;
+    }
+    .board-card:active { cursor: grabbing; }
+    .board-card:hover { border-color: #3f3f46; }
+    .board-card.dragging { opacity: 0.4; }
+    .board-card.drag-over { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+
+    .board-card-title {
+      font-size: 13px; color: #e4e4e7; margin-bottom: 6px;
+      line-height: 1.3;
+    }
+    .board-card-tags {
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .board-card-tag {
+      font-size: 10px; padding: 1px 6px; border-radius: 4px;
+      background: #27272a; color: #71717a;
+    }
+    .board-card-tag.pri-urgent { background: rgba(239,68,68,.15); color: #f87171; }
+    .board-card-tag.pri-high { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .board-card-tag.pri-low { color: #52525b; }
+    .board-card-tag.assignee { background: rgba(34,197,94,.1); color: #4ade80; }
+    .board-card-tag.due { background: rgba(59,130,246,.1); color: #60a5fa; }
+
+    .board-card.pri-border-urgent { border-left: 3px solid #ef4444; }
+    .board-card.pri-border-high { border-left: 3px solid #f59e0b; }
+    .board-card.pri-border-low { border-left: 3px solid #3f3f46; }
+
+    .board-drop-zone {
+      min-height: 40px;
+      border: 2px dashed transparent;
+      border-radius: 8px;
+      transition: border-color .15s, background .15s;
+    }
+    .board-drop-zone.drag-active {
+      border-color: #3b82f6;
+      background: rgba(59,130,246,.05);
+    }
+
+    .board-empty {
+      text-align: center; padding: 20px; color: #3f3f46; font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -298,6 +399,7 @@
   <!-- Tabs -->
   <div class="tabs">
     <div class="tab active" data-tab="tasks">Tasks</div>
+    <div class="tab" data-tab="board">Board</div>
     <div class="tab" data-tab="projects">Projects</div>
     <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
   </div>
@@ -331,6 +433,17 @@
 
         <ul class="task-list" id="task-list"></ul>
       </div>
+    </div>
+
+    <!-- ── Board section ─────────────────────────────────────── -->
+    <div class="section" id="sec-board">
+      <div class="board-toolbar">
+        <label>Filter by project:</label>
+        <select id="board-project-filter" onchange="renderBoard()">
+          <option value="">All Projects</option>
+        </select>
+      </div>
+      <div class="board" id="board-container"></div>
     </div>
 
     <!-- ── Projects section ───────────────────────────────────── -->
@@ -413,8 +526,10 @@
     function renderAll() {
       renderStats();
       renderTasks();
+      renderBoard();
       renderProjects();
       renderProjectDropdown();
+      renderBoardProjectFilter();
     }
 
     function renderStats() {
@@ -1097,6 +1212,179 @@
       await loadTasks();
       renderAll();
       renderDetail();
+    }
+
+    /* ── Kanban Board ─────────────────────────────────────────── */
+    let boardDragTaskId = null;
+
+    function renderBoardProjectFilter() {
+      const sel = document.getElementById("board-project-filter");
+      const current = sel.value;
+      const active = projects.filter(p => !p.archived);
+      sel.innerHTML = `<option value="">All Projects</option>` +
+        active.map(p => `<option value="${esc(p.name)}" ${current === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("") +
+        `<option value="__none__" ${current === "__none__" ? "selected" : ""}>No Project</option>`;
+    }
+
+    function renderBoard() {
+      const filterProject = document.getElementById("board-project-filter").value;
+
+      let filtered = tasks;
+      if (filterProject === "__none__") {
+        filtered = tasks.filter(t => !t.project);
+      } else if (filterProject) {
+        filtered = tasks.filter(t => t.project === filterProject);
+      }
+
+      // Categorize tasks into 3 columns
+      const todo = filtered.filter(t => !t.done && t.status !== "in_progress");
+      const inProgress = filtered.filter(t => !t.done && t.status === "in_progress");
+      const done = filtered.filter(t => t.done);
+
+      // Sort each column by priority then due date
+      const priOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+      const sortFn = (a, b) => {
+        const pa = priOrder[a.priority] ?? 2;
+        const pb = priOrder[b.priority] ?? 2;
+        if (pa !== pb) return pa - pb;
+        if (a.due && b.due) return a.due.localeCompare(b.due);
+        if (a.due) return -1;
+        if (b.due) return 1;
+        return 0;
+      };
+      todo.sort(sortFn);
+      inProgress.sort(sortFn);
+      done.sort(sortFn);
+
+      function groupByProject(taskList) {
+        const groups = {};
+        for (const t of taskList) {
+          const key = t.project || "No Project";
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(t);
+        }
+        return groups;
+      }
+
+      function renderCard(t) {
+        const priBorder = t.priority !== "normal" ? ` pri-border-${t.priority}` : "";
+        return `
+          <div class="board-card${priBorder}" draggable="true"
+               data-task-id="${t.id}"
+               ondragstart="boardDragStart(event, '${t.id}')"
+               ondragend="boardDragEnd(event)">
+            <div class="board-card-title">${esc(t.title)}</div>
+            <div class="board-card-tags">
+              ${t.priority && t.priority !== "normal" ? `<span class="board-card-tag pri-${t.priority}">${t.priority}</span>` : ""}
+              ${t.assignee ? `<span class="board-card-tag assignee">${esc(t.assignee)}</span>` : ""}
+              ${t.due ? `<span class="board-card-tag due">${t.due}</span>` : ""}
+            </div>
+          </div>`;
+      }
+
+      function renderColumn(taskList, colClass) {
+        if (!taskList.length) return `<div class="board-empty">No tasks</div>`;
+        const groups = groupByProject(taskList);
+        const keys = Object.keys(groups).sort();
+        return keys.map(key => `
+          <div class="board-swimlane">
+            ${keys.length > 1 || key !== "No Project" ? `<div class="board-swimlane-title">${esc(key)}</div>` : ""}
+            ${groups[key].map(renderCard).join("")}
+          </div>
+        `).join("");
+      }
+
+      document.getElementById("board-container").innerHTML = `
+        <div class="board-column board-col-todo"
+             ondragover="boardDragOver(event)" ondragleave="boardDragLeave(event)"
+             ondrop="boardDrop(event, 'todo')">
+          <div class="board-column-header">
+            <span class="board-column-title">To Do</span>
+            <span class="board-column-count">${todo.length}</span>
+          </div>
+          <div class="board-drop-zone">
+            ${renderColumn(todo, "todo")}
+          </div>
+        </div>
+        <div class="board-column board-col-inprogress"
+             ondragover="boardDragOver(event)" ondragleave="boardDragLeave(event)"
+             ondrop="boardDrop(event, 'in_progress')">
+          <div class="board-column-header">
+            <span class="board-column-title">In Progress</span>
+            <span class="board-column-count">${inProgress.length}</span>
+          </div>
+          <div class="board-drop-zone">
+            ${renderColumn(inProgress, "inprogress")}
+          </div>
+        </div>
+        <div class="board-column board-col-done"
+             ondragover="boardDragOver(event)" ondragleave="boardDragLeave(event)"
+             ondrop="boardDrop(event, 'done')">
+          <div class="board-column-header">
+            <span class="board-column-title">Done</span>
+            <span class="board-column-count">${done.length}</span>
+          </div>
+          <div class="board-drop-zone">
+            ${renderColumn(done, "done")}
+          </div>
+        </div>
+      `;
+    }
+
+    function boardDragStart(e, taskId) {
+      boardDragTaskId = taskId;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", taskId);
+      // Add dragging class after a tick so the browser captures the element first
+      setTimeout(() => {
+        const el = document.querySelector(`.board-card[data-task-id="${taskId}"]`);
+        if (el) el.classList.add("dragging");
+      }, 0);
+    }
+
+    function boardDragEnd(e) {
+      document.querySelectorAll(".board-card.dragging").forEach(el => el.classList.remove("dragging"));
+      document.querySelectorAll(".board-drop-zone.drag-active").forEach(el => el.classList.remove("drag-active"));
+      boardDragTaskId = null;
+    }
+
+    function boardDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const zone = e.currentTarget.querySelector(".board-drop-zone");
+      if (zone) zone.classList.add("drag-active");
+    }
+
+    function boardDragLeave(e) {
+      const zone = e.currentTarget.querySelector(".board-drop-zone");
+      if (zone) zone.classList.remove("drag-active");
+    }
+
+    async function boardDrop(e, column) {
+      e.preventDefault();
+      const taskId = e.dataTransfer.getData("text/plain") || boardDragTaskId;
+      if (!taskId) return;
+
+      document.querySelectorAll(".board-drop-zone.drag-active").forEach(el => el.classList.remove("drag-active"));
+
+      let patchData = {};
+      if (column === "done") {
+        patchData = { done: true, status: "" };
+      } else if (column === "in_progress") {
+        patchData = { done: false, status: "in_progress" };
+      } else {
+        // todo
+        patchData = { done: false, status: "" };
+      }
+
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchData)
+      });
+
+      await loadTasks();
+      renderAll();
     }
 
     async function logout() {

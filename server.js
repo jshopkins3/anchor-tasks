@@ -101,8 +101,8 @@ function verifyGoogleToken(idToken) {
 
 /* ─── MD Task/Project engine ─────────────────────────────────────────── */
 // Task format in MD:
-//   - [ ] {id} | {title} | {assignee} | {due} | {priority} | {project}
-//   - [x] {id} | {title} | {assignee} | {due} | {priority} | {project}
+//   - [ ] {id} | {title} | {assignee} | {due} | {priority} | {project} | {status}
+//   - [x] {id} | {title} | {assignee} | {due} | {priority} | {project} | {status}
 
 function generateId() {
   return crypto.randomBytes(4).toString("hex");
@@ -124,6 +124,7 @@ function parseTasks() {
       due: parts[3] || "",
       priority: parts[4] || "normal",
       project: parts[5] || "",
+      status: parts[6] || "",
       done,
     });
   }
@@ -133,7 +134,7 @@ function parseTasks() {
 function writeTasks(tasks) {
   const active = tasks.filter(t => !t.done);
   const completed = tasks.filter(t => t.done);
-  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project}`;
+  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""}`;
   const md = [
     "# Tasks", "",
     "## Active", ...active.map(fmt), "",
@@ -284,6 +285,7 @@ const server = http.createServer(async (req, res) => {
         due: String(body.due || "").substring(0, 10),
         priority: ["low", "normal", "high", "urgent"].includes(body.priority) ? body.priority : "normal",
         project: String(body.project || "").substring(0, 100),
+        status: String(body.status || "").substring(0, 50),
         done: false,
       };
       if (!task.title) return json(res, 400, { error: "Title required" });
@@ -304,6 +306,7 @@ const server = http.createServer(async (req, res) => {
       if (body.priority !== undefined && ["low", "normal", "high", "urgent"].includes(body.priority)) tasks[idx].priority = body.priority;
       if (body.project !== undefined) tasks[idx].project = String(body.project).substring(0, 100);
       if (body.done !== undefined) tasks[idx].done = !!body.done;
+      if (body.status !== undefined) tasks[idx].status = String(body.status).substring(0, 50);
       writeTasks(tasks);
       return json(res, 200, { task: tasks[idx] });
     }
