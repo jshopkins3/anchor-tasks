@@ -929,21 +929,25 @@
       });
     }
 
-    // Create a Google Drive folder for a project
+    // Shared Drive ID for Anchor Mortgage project folders
+    const SHARED_DRIVE_ID = "0AFFUGkQTfw0uUk9PVA";
+
+    // Create a Google Drive folder for a project (in the Shared Drive)
     async function createDriveFolder() {
       const p = projects.find(p => p.id === activeProjectId);
       if (!p) return;
       try {
         const token = await getAccessToken();
-        const resp = await fetch("https://www.googleapis.com/drive/v3/files", {
+        const resp = await fetch("https://www.googleapis.com/drive/v3/files?supportsAllDrives=true", {
           method: "POST",
           headers: {
             "Authorization": "Bearer " + token,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            name: "Anchor Tasks: " + p.name,
+            name: p.name,
             mimeType: "application/vnd.google-apps.folder",
+            parents: [SHARED_DRIVE_ID],
           }),
         });
         if (!resp.ok) throw new Error("Drive API error: " + resp.status);
@@ -977,10 +981,15 @@
           view.setParent(projectDetail.folderId);
         }
 
+        const sharedView = new google.picker.DocsView()
+          .setIncludeFolders(true)
+          .setEnableDrives(true);
+
         const picker = new google.picker.PickerBuilder()
           .setOAuthToken(token)
           .addView(view)
-          .addView(new google.picker.DocsView())
+          .addView(sharedView)
+          .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
           .setCallback(drivePickerCallback)
           .setTitle("Attach a file from Google Drive")
           .build();
@@ -1012,7 +1021,7 @@
           form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
           form.append("file", file);
 
-          const resp = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", {
+          const resp = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink&supportsAllDrives=true", {
             method: "POST",
             headers: { "Authorization": "Bearer " + token },
             body: form,
