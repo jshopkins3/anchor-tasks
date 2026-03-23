@@ -354,6 +354,8 @@
 
   </div>
 
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
   <script>
     /* ── State ────────────────────────────────────────────────── */
     let tasks = [];
@@ -372,6 +374,13 @@
           (user.picture ? `<img src="${esc(user.picture)}" alt="" />` : "") +
           `<span>${esc(user.name)}</span>`;
       } catch { window.location.href = "/login.html"; return; }
+
+      // Get Google Client ID for Drive Picker
+      try {
+        const cfgRes = await fetch("/api/auth-config");
+        const cfg = await cfgRes.json();
+        googleClientId = cfg.clientId || "";
+      } catch {}
 
       await Promise.all([loadTasks(), loadProjects()]);
       renderAll();
@@ -809,6 +818,7 @@
             <input class="inp-title" id="detail-doc-url" placeholder="URL (optional)" />
             <input class="inp-sm" id="detail-doc-notes" placeholder="Notes..." />
             <button class="btn-add" onclick="addDoc()">Add Doc</button>
+            <button class="btn-add" style="background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;" onclick="openDrivePicker()">Pick from Drive</button>
           </div>
         </div>
 
@@ -871,6 +881,79 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name || url, url, notes })
       });
+      projectDetail = await res.json();
+      renderDetail();
+    }
+
+    /* ── Google Drive Picker ──────────────────────────────────── */
+    let pickerApiLoaded = false;
+    let driveAccessToken = null;
+    let googleClientId = "";
+
+    // Load Picker API
+    function loadPickerApi() {
+      if (pickerApiLoaded) return Promise.resolve();
+      return new Promise((resolve) => {
+        gapi.load("picker", () => { pickerApiLoaded = true; resolve(); });
+      });
+    }
+
+    // Get access token via GIS token client
+    function getAccessToken() {
+      return new Promise((resolve, reject) => {
+        if (driveAccessToken) { resolve(driveAccessToken); return; }
+        if (!googleClientId) { reject(new Error("No client ID")); return; }
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: "https://www.googleapis.com/auth/drive.readonly",
+          callback: (resp) => {
+            if (resp.error) { reject(new Error(resp.error)); return; }
+            driveAccessToken = resp.access_token;
+            resolve(driveAccessToken);
+          },
+        });
+        tokenClient.requestAccessToken();
+      });
+    }
+
+    async function openDrivePicker() {
+      try {
+        await loadPickerApi();
+        const token = await getAccessToken();
+
+        const view = new google.picker.DocsView()
+          .setIncludeFolders(true)
+          .setSelectFolderEnabled(false);
+
+        const picker = new google.picker.PickerBuilder()
+          .setOAuthToken(token)
+          .addView(view)
+          .addView(new google.picker.DocsView().setMimeTypes("application/pdf"))
+          .setCallback(drivePickerCallback)
+          .setTitle("Attach a file from Google Drive")
+          .build();
+        picker.setVisible(true);
+      } catch (e) {
+        console.error("Drive Picker error:", e);
+        alert("Could not open Google Drive picker. Make sure the Picker API is enabled in Google Cloud Console.");
+      }
+    }
+
+    async function drivePickerCallback(data) {
+      if (data.action !== google.picker.Action.PICKED) return;
+      for (const doc of data.docs) {
+        await fetch(`/api/projects/${activeProjectId}/docs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: doc.name,
+            url: doc.url,
+            notes: `Drive: ${doc.mimeType || "file"}`,
+          })
+        });
+      }
+      // Reload detail
+      const res = await fetch(`/api/projects/${activeProjectId}/detail`);
       projectDetail = await res.json();
       renderDetail();
     }
