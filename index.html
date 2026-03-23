@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Board</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        h1 { text-align: center; color: #333; }
+        .board { display: flex; gap: 20px; overflow-x: auto; }
+        .column { flex: 1; min-width: 280px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .column h2 { margin-top: 0; padding-bottom: 10px; border-bottom: 2px solid #eee; font-size: 1.1em; }
+        .todo { border-top-color: #ff6b6b; }
+        .in-progress { border-top-color: #feca57; }
+        .done { border-top-color: #1dd1a1; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.9em; }
+        th { color: #666; font-weight: 500; }
+        .delegated-me { color: #5f27cd; font-weight: 500; }
+        .delegated-john { color: #ff6b6b; font-weight: 500; }
+        .legend { text-align: center; margin-top: 20px; color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>📋 Task Board</h1>
+    <div class="board">
+        <div class="column todo">
+            <h2>To Do</h2>
+            <table>
+                <tr><th>Task</th><th>Delegated To</th></tr>
+                <tr><td>Let Wes Fertig know whether 15 or 20% down is best</td><td class="delegated-john">john</td></tr>
+                <tr><td>Check Julius Fertig's other clients</td><td class="delegated-john">john</td></tr>
+                <tr><td>Foley loan status update</td><td class="delegated-john">john</td></tr>
+                <tr><td>Get condo approval docs needed</td><td class="delegated-john">john</td></tr>
+                <tr><td>Bauder closing timeline</td><td class="delegated-john">john</td></tr>
+                <tr><td>Make list of next steps for all loans in pipeline</td><td class="delegated-john">john</td></tr>
+                <tr><td>Finalize internal loan process checklist</td><td class="delegated-john">john</td></tr>
+                <tr><td>Build checklist for new condo rules and send out</td><td class="delegated-john">john</td></tr>
+                <tr><td>Sign up for IT support on Viato</td><td class="delegated-john">john</td></tr>
+                <tr><td>Finish the anchor app</td><td class="delegated-john">john</td></tr>
+                <tr><td>Balance anchor P&L</td><td class="delegated-john">john</td></tr>
+            </table>
+        </div>
+        <div class="column in-progress">
+            <h2>In Progress</h2>
+            <table>
+                <tr><th>Task</th><th>Delegated To</th></tr>
+                <tr><td colspan="2" style="text-align:center;color:#999">No tasks</td></tr>
+            </table>
+        </div>
+        <div class="column done">
+            <h2>Done</h2>
+            <table>
+                <tr><th>Task</th><th>Delegated To</th><th>Completed</th></tr>
+                <tr><td>Follow up on Yanula's application</td><td class="delegated-john">john</td><td>2026-03-22</td></tr>
+            </table>
+        </div>
+    </div>
+    <div class="legend">
+        <strong>Legend:</strong> john = John | me = Kestrel
+    </div>
+</body>
+</html>
