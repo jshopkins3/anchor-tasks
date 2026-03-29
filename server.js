@@ -16,6 +16,8 @@ const GCAL_TOKEN_FILE = path.join(DATA_DIR, "gcal-token.json");
 // Google Calendar config
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const GCAL_CALENDAR_ID = process.env.GCAL_CALENDAR_ID || "primary";
+const ANCHOR_GCAL_CALENDAR_ID = process.env.ANCHOR_GCAL_CALENDAR_ID ||
+  "c_973e23a22956e78db27d478e42e11cc3e472f97c6c1d6587291742f3e3029a4a@group.calendar.google.com";
 const GCAL_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
@@ -287,17 +289,12 @@ async function gcalDeleteEvent(eventId) {
   }
 }
 
-async function gcalGetTodayEvents() {
-  const accessToken = await getGCalAccessToken();
-  if (!accessToken) return null;
-  const now = new Date();
-  const y = now.getFullYear(), mo = now.getMonth(), d = now.getDate();
-  const timeMin = new Date(y, mo, d, 0, 0, 0).toISOString();
-  const timeMax = new Date(y, mo, d, 23, 59, 59).toISOString();
-  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(GCAL_CALENDAR_ID)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=20`;
+async function gcalFetchEvents(calendarId, timeMin, timeMax, source, accessToken, maxResults = 50) {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?` +
+    new URLSearchParams({ timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: String(maxResults) }).toString();
   try {
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!resp.ok) { console.error("[gcal] Events fetch failed:", resp.status); return null; }
+    if (!resp.ok) { console.error(`[gcal] Events fetch failed (${source}):`, resp.status); return []; }
     const data = await resp.json();
     return (data.items || []).map(ev => ({
       id: ev.id,
@@ -306,11 +303,38 @@ async function gcalGetTodayEvents() {
       end: ev.end?.dateTime || ev.end?.date || "",
       allDay: !ev.start?.dateTime,
       location: ev.location || "",
+      source,
     }));
   } catch (err) {
-    console.error("[gcal] Events error:", err.message);
-    return null;
+    console.error(`[gcal] Events error (${source}):`, err.message);
+    return [];
   }
+}
+
+async function gcalGetTodayEvents() {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  const now = new Date();
+  const y = now.getFullYear(), mo = now.getMonth(), d = now.getDate();
+  const timeMin = new Date(y, mo, d, 0, 0, 0).toISOString();
+  const timeMax = new Date(y, mo, d, 23, 59, 59).toISOString();
+  const [personal, anchor] = await Promise.all([
+    gcalFetchEvents(GCAL_CALENDAR_ID, timeMin, timeMax, "personal", accessToken, 20),
+    gcalFetchEvents(ANCHOR_GCAL_CALENDAR_ID, timeMin, timeMax, "anchor", accessToken, 20),
+  ]);
+  return [...personal, ...anchor].sort((a, b) => a.start.localeCompare(b.start));
+}
+
+async function gcalGetRangeEvents(startDate, endDate) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  const timeMin = new Date(startDate + "T00:00:00").toISOString();
+  const timeMax = new Date(endDate + "T23:59:59").toISOString();
+  const [personal, anchor] = await Promise.all([
+    gcalFetchEvents(GCAL_CALENDAR_ID, timeMin, timeMax, "personal", accessToken, 100),
+    gcalFetchEvents(ANCHOR_GCAL_CALENDAR_ID, timeMin, timeMax, "anchor", accessToken, 100),
+  ]);
+  return [...personal, ...anchor].sort((a, b) => a.start.localeCompare(b.start));
 }
 
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
@@ -635,6 +659,15 @@ const server = http.createServer(async (req, res) => {
     // Today's events
     if (urlPath === "/api/gcal-events" && req.method === "GET") {
       const events = await gcalGetTodayEvents();
+      if (events === null) return json(res, 200, { events: [], connected: false });
+      return json(res, 200, { events, connected: true });
+    }
+
+    // Range events (for calendar view)
+    if (urlPath === "/api/calendar-events" && req.method === "GET") {
+      const start = url.searchParams.get("start") || new Date().toISOString().substring(0, 10);
+      const end = url.searchParams.get("end") || start;
+      const events = await gcalGetRangeEvents(start, end);
       if (events === null) return json(res, 200, { events: [], connected: false });
       return json(res, 200, { events, connected: true });
     }
