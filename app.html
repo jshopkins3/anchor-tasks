@@ -978,6 +978,54 @@
     }
     .brief-priority-title { color: #e4e4e7; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .brief-priority-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+
+    /* ── Journal ─────────────────────────────────────────────── */
+    .journal-layout { display: grid; grid-template-columns: 220px 1fr; gap: 0; height: calc(100vh - 120px); overflow: hidden; }
+    .journal-sidebar { border-right: 1px solid #27272a; overflow-y: auto; padding: 12px 0; }
+    .journal-sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 0 14px 10px; }
+    .journal-therapy-btn { width: 100%; background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.3); color: #c084fc; border-radius: 6px; padding: 7px 12px; font-size: 12px; cursor: pointer; margin: 0 0 8px; text-align: left; }
+    .journal-therapy-btn:hover { background: rgba(168,85,247,.2); }
+    .journal-entry-item { padding: 10px 14px; cursor: pointer; border-left: 3px solid transparent; }
+    .journal-entry-item:hover { background: #1f1f23; }
+    .journal-entry-item.active { border-left-color: #3b82f6; background: #1f1f23; }
+    .journal-entry-date { font-size: 11px; color: #52525b; margin-bottom: 2px; }
+    .journal-entry-title { font-size: 13px; color: #e4e4e7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .journal-entry-preview { font-size: 11px; color: #71717a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .journal-editor { overflow-y: auto; padding: 24px 32px; }
+    .journal-editor-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .journal-date-label { font-size: 14px; color: #71717a; }
+    .journal-title-input { background: transparent; border: none; border-bottom: 1px solid #27272a; color: #e4e4e7; font-size: 20px; font-weight: 600; width: 100%; padding: 4px 0; outline: none; }
+    .journal-title-input:focus { border-bottom-color: #3b82f6; }
+    .journal-body-input { width: 100%; background: transparent; border: none; color: #d4d4d8; font-size: 14px; line-height: 1.7; resize: none; outline: none; font-family: inherit; min-height: 400px; }
+    .journal-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+    .journal-save-btn { background: #3b82f6; color: #fff; border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; }
+    .journal-save-btn:hover { background: #2563eb; }
+    .journal-delete-btn { background: none; border: 1px solid #3f3f46; color: #71717a; border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+    .journal-delete-btn:hover { border-color: #ef4444; color: #ef4444; }
+    .journal-saved-msg { font-size: 12px; color: #34d399; }
+
+    /* ── Email section ───────────────────────────────────────── */
+    .email-layout { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 120px); overflow: hidden; }
+    .email-list-pane { border-right: 1px solid #27272a; overflow-y: auto; }
+    .email-list-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #27272a; position: sticky; top: 0; background: #09090b; z-index: 1; }
+    .email-row { padding: 12px 16px; border-bottom: 1px solid #1f1f23; cursor: pointer; }
+    .email-row:hover { background: #18181b; }
+    .email-row.active { background: #1f1f23; border-left: 3px solid #3b82f6; }
+    .email-row.unread .email-row-subject { font-weight: 600; color: #e4e4e7; }
+    .email-row-from { font-size: 12px; color: #71717a; margin-bottom: 2px; display: flex; justify-content: space-between; }
+    .email-row-subject { font-size: 13px; color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .email-row-snippet { font-size: 11px; color: #52525b; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .email-detail-pane { overflow-y: auto; padding: 28px 36px; }
+    .email-detail-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #27272a; }
+    .email-detail-subject { font-size: 18px; font-weight: 600; color: #e4e4e7; margin-bottom: 8px; }
+    .email-detail-meta { font-size: 12px; color: #71717a; display: flex; gap: 16px; flex-wrap: wrap; }
+    .email-detail-snippet { font-size: 14px; color: #a1a1aa; line-height: 1.7; white-space: pre-wrap; }
+    .email-detail-actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+
+    /* ── Quick links bar ─────────────────────────────────────── */
+    .quick-links { display: flex; gap: 10px; padding: 8px 0 0; flex-wrap: wrap; }
+    .quick-link { display: inline-flex; align-items: center; gap: 6px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 6px 14px; font-size: 12px; color: #a1a1aa; text-decoration: none; cursor: pointer; }
+    .quick-link:hover { border-color: #3b82f6; color: #e4e4e7; }
   </style>
 </head>
 <body>
@@ -996,16 +1044,24 @@
     </div>
   </div>
 
-  <!-- Tabs -->
-  <div class="tabs">
-    <div class="tab active" data-tab="today">Today</div>
-    <div class="tab" data-tab="calendar">Calendar</div>
-    <div class="tab" data-tab="tasks">Tasks</div>
-    <div class="tab" data-tab="board">Board</div>
-    <div class="tab" data-tab="goals">Goals</div>
-    <div class="tab" data-tab="matrix">Matrix</div>
-    <div class="tab" data-tab="projects">Projects</div>
-    <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
+  <!-- Quick links + Tabs -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid #27272a;background:#09090b;">
+    <div class="tabs" style="border-bottom:none;padding:0;">
+      <div class="tab active" data-tab="today">Today</div>
+      <div class="tab" data-tab="calendar">Calendar</div>
+      <div class="tab" data-tab="tasks">Tasks</div>
+      <div class="tab" data-tab="board">Board</div>
+      <div class="tab" data-tab="goals">Goals</div>
+      <div class="tab" data-tab="matrix">Matrix</div>
+      <div class="tab" data-tab="projects">Projects</div>
+      <div class="tab" data-tab="journal">Journal</div>
+      <div class="tab" data-tab="email">Email</div>
+      <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
+    </div>
+    <div class="quick-links">
+      <a class="quick-link" href="https://anchor-mortgage-app-production.up.railway.app" target="_blank">🏠 Anchor Command</a>
+      <a class="quick-link" href="https://app.arive.com" target="_blank">📋 Arive</a>
+    </div>
   </div>
 
   <div class="main">
@@ -1085,6 +1141,7 @@
             <div class="today-section-header">
               <span class="today-section-title">Inbox</span>
               <span id="inbox-status-badge"></span>
+              <a href="/api/gcal-auth" title="Re-authorize Google" style="margin-left:auto;font-size:11px;color:#52525b;text-decoration:none;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">🔄 Reconnect</a>
             </div>
             <div id="inbox-content"><div class="today-empty">Loading...</div></div>
           </div>
@@ -1203,6 +1260,56 @@
       </div>
     </div>
 
+    <!-- ── Journal section ────────────────────────────────────── -->
+    <div class="section" id="sec-journal">
+      <div class="journal-layout">
+        <!-- Sidebar: past entries -->
+        <div class="journal-sidebar">
+          <div class="journal-sidebar-header">
+            <span style="font-weight:600;font-size:13px;">Entries</span>
+            <button class="btn-add" onclick="newJournalEntry()" style="padding:3px 10px;font-size:12px;">+ New</button>
+          </div>
+          <button class="journal-therapy-btn" onclick="openTherapyView()">📋 Therapy Prep (last 14 days)</button>
+          <div id="journal-entry-list"></div>
+        </div>
+
+        <!-- Editor -->
+        <div class="journal-editor" id="journal-editor-panel">
+          <div id="journal-editor-content">
+            <div class="today-empty" style="margin-top:60px;">Select an entry or create a new one.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Therapy view overlay -->
+      <div id="therapy-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;overflow-y:auto;padding:40px 20px;">
+        <div style="max-width:720px;margin:0 auto;background:#18181b;border-radius:12px;padding:32px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+            <h2 style="margin:0;font-size:18px;">Therapy Prep — Last 14 Days</h2>
+            <button onclick="closeTherapyView()" style="background:none;border:none;color:#a1a1aa;font-size:20px;cursor:pointer;">✕</button>
+          </div>
+          <div id="therapy-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Email section ──────────────────────────────────────── -->
+    <div class="section" id="sec-email">
+      <div class="email-layout">
+        <div class="email-list-pane" id="email-list-pane">
+          <div class="email-list-toolbar">
+            <span style="font-size:13px;font-weight:600;">Inbox</span>
+            <button class="focus-btn" onclick="loadInbox().then(renderEmailSection)" style="padding:4px 10px;font-size:11px;">↻ Refresh</button>
+            <a href="/api/gcal-auth" style="font-size:11px;color:#52525b;text-decoration:none;margin-left:4px;" title="Re-authorize Google">🔄</a>
+          </div>
+          <div id="email-list-items"><div class="today-empty">Loading...</div></div>
+        </div>
+        <div class="email-detail-pane" id="email-detail-pane">
+          <div class="today-empty" style="margin-top:80px;">Select an email to read it.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Project Detail section ─────────────────────────────── -->
     <div class="section" id="sec-detail">
       <button class="detail-back" onclick="closeDetail()">&larr; Back to Projects</button>
@@ -1224,6 +1331,8 @@
     let editingGoalId = null;
     let showingGoalForm = false;
     let matrixDragTaskId = null;
+    let journalEntries = [];
+    let currentJournalDate = null;
 
     /* ── Init ─────────────────────────────────────────────────── */
     async function init() {
@@ -1243,7 +1352,7 @@
         googleClientId = cfg.clientId || "";
       } catch {}
 
-      await Promise.all([loadTasks(), loadProjects(), loadGoals(), loadCalEvents(), loadInbox()]);
+      await Promise.all([loadTasks(), loadProjects(), loadGoals(), loadCalEvents(), loadInbox(), loadJournalEntries()]);
       renderAll();
       setupTabs();
       setupFilters();
@@ -2199,6 +2308,13 @@
             calCursor = new Date();
             if (calView === "month") calCursor.setDate(1);
             renderCalendarView();
+          }
+          if (tab.dataset.tab === "journal") {
+            if (!currentJournalDate) newJournalEntry();
+            else { renderJournalSidebar(); renderJournalEditor(); }
+          }
+          if (tab.dataset.tab === "email") {
+            renderEmailSection();
           }
         });
       });
@@ -3634,6 +3750,240 @@
       await loadTasks();
       await loadCalEvents();
       renderToday();
+    }
+
+    /* ── Journal ──────────────────────────────────────────────── */
+    async function loadJournalEntries() {
+      try {
+        const res = await fetch("/api/journal");
+        const data = await res.json();
+        journalEntries = data.entries || [];
+      } catch { journalEntries = []; }
+    }
+
+    function renderJournalSidebar() {
+      const list = document.getElementById("journal-entry-list");
+      if (!list) return;
+      if (!journalEntries.length) {
+        list.innerHTML = `<div class="today-empty" style="padding:20px 14px;">No entries yet.<br>Hit + New to start.</div>`;
+        return;
+      }
+      list.innerHTML = journalEntries.map(e => {
+        const preview = e.content.replace(/\n/g, " ").substring(0, 60);
+        const label = e.title || formatJournalDateLabel(e.date);
+        return `<div class="journal-entry-item ${e.date === currentJournalDate ? 'active' : ''}" onclick="openJournalEntry('${e.date}')">
+          <div class="journal-entry-date">${formatJournalDateLabel(e.date)}</div>
+          <div class="journal-entry-title">${esc(label)}</div>
+          ${preview ? `<div class="journal-entry-preview">${esc(preview)}</div>` : ""}
+        </div>`;
+      }).join("");
+    }
+
+    function formatJournalDateLabel(dateStr) {
+      if (!dateStr) return "";
+      const [y, m, d] = dateStr.split("-").map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    }
+
+    function renderJournalEditor() {
+      const panel = document.getElementById("journal-editor-content");
+      if (!panel) return;
+      const entry = journalEntries.find(e => e.date === currentJournalDate);
+      const todayStr = new Date().toISOString().substring(0, 10);
+      const date = currentJournalDate || todayStr;
+
+      panel.innerHTML = `
+        <div class="journal-editor-header">
+          <span class="journal-date-label">${formatJournalDateLabel(date)}</span>
+        </div>
+        <input class="journal-title-input" id="journal-title-inp" placeholder="Title (optional)" value="${esc(entry ? entry.title : "")}" />
+        <div style="height:12px;"></div>
+        <textarea class="journal-body-input" id="journal-body-inp" placeholder="Write anything — what happened today, how you're feeling, what's on your mind...">${entry ? esc(entry.content) : ""}</textarea>
+        <div class="journal-actions">
+          <button class="journal-save-btn" onclick="saveJournalEntry()">Save</button>
+          ${entry ? `<button class="journal-delete-btn" onclick="deleteJournalEntry('${entry.id}')">Delete</button>` : ""}
+          <span class="journal-saved-msg" id="journal-saved-msg" style="display:none;">Saved ✓</span>
+        </div>`;
+
+      // Auto-save on Ctrl+S / Cmd+S
+      const body = document.getElementById("journal-body-inp");
+      if (body) {
+        body.addEventListener("keydown", e => {
+          if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); saveJournalEntry(); }
+        });
+        body.focus();
+      }
+    }
+
+    function newJournalEntry() {
+      const todayStr = new Date().toISOString().substring(0, 10);
+      currentJournalDate = todayStr;
+      renderJournalSidebar();
+      renderJournalEditor();
+    }
+
+    function openJournalEntry(date) {
+      currentJournalDate = date;
+      renderJournalSidebar();
+      renderJournalEditor();
+    }
+
+    async function saveJournalEntry() {
+      const date = currentJournalDate || new Date().toISOString().substring(0, 10);
+      const title = document.getElementById("journal-title-inp")?.value || "";
+      const content = document.getElementById("journal-body-inp")?.value || "";
+      const res = await fetch("/api/journal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, title, content }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const idx = journalEntries.findIndex(e => e.date === date);
+        if (idx !== -1) journalEntries[idx] = data.entry;
+        else { journalEntries.unshift(data.entry); }
+        currentJournalDate = date;
+        const msg = document.getElementById("journal-saved-msg");
+        if (msg) { msg.style.display = "inline"; setTimeout(() => { msg.style.display = "none"; }, 2000); }
+        renderJournalSidebar();
+      }
+    }
+
+    async function deleteJournalEntry(id) {
+      if (!confirm("Delete this entry?")) return;
+      await fetch(`/api/journal/${id}`, { method: "DELETE" });
+      journalEntries = journalEntries.filter(e => e.id !== id);
+      currentJournalDate = null;
+      renderJournalSidebar();
+      const panel = document.getElementById("journal-editor-content");
+      if (panel) panel.innerHTML = `<div class="today-empty" style="margin-top:60px;">Select an entry or create a new one.</div>`;
+    }
+
+    function openTherapyView() {
+      const overlay = document.getElementById("therapy-overlay");
+      const content = document.getElementById("therapy-content");
+      if (!overlay || !content) return;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 14);
+      const cutoffStr = cutoff.toISOString().substring(0, 10);
+      const recent = journalEntries.filter(e => e.date >= cutoffStr).sort((a, b) => b.date > a.date ? 1 : -1);
+      if (!recent.length) {
+        content.innerHTML = `<div class="today-empty">No journal entries in the last 14 days.</div>`;
+      } else {
+        content.innerHTML = recent.map(e => `
+          <div style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid #27272a;">
+            <div style="font-size:12px;color:#71717a;margin-bottom:4px;">${formatJournalDateLabel(e.date)}</div>
+            ${e.title ? `<div style="font-size:15px;font-weight:600;color:#e4e4e7;margin-bottom:8px;">${esc(e.title)}</div>` : ""}
+            <div style="font-size:13px;color:#a1a1aa;white-space:pre-wrap;line-height:1.7;">${esc(e.content)}</div>
+          </div>`).join("");
+      }
+      overlay.style.display = "block";
+    }
+
+    function closeTherapyView() {
+      const overlay = document.getElementById("therapy-overlay");
+      if (overlay) overlay.style.display = "none";
+    }
+
+    /* ── Email section ────────────────────────────────────────── */
+    let selectedEmailId = null;
+
+    function renderEmailSection() {
+      const listEl = document.getElementById("email-list-items");
+      const detailEl = document.getElementById("email-detail-pane");
+      if (!listEl) return;
+
+      if (!inboxEmails.length) {
+        listEl.innerHTML = `<div class="today-empty" style="padding:32px 16px;">
+          ${inboxEmails.length === 0 ? 'Inbox zero — nothing unread!<br><br><a href="/api/gcal-auth" style="color:#3b82f6;font-size:12px;">🔄 Reconnect Google</a>' : 'Loading...'}
+        </div>`;
+        if (detailEl) detailEl.innerHTML = `<div class="today-empty" style="margin-top:80px;">Select an email to read it.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = inboxEmails.map(e => `
+        <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}')">
+          <div class="email-row-from">
+            <span>${esc(e.from)}</span>
+            <span style="font-size:10px;color:#3f3f46;">${formatEmailDate(e.date)}</span>
+          </div>
+          <div class="email-row-subject">${esc(e.subject)}</div>
+          <div class="email-row-snippet">${esc(e.snippet)}</div>
+        </div>`).join("");
+
+      if (selectedEmailId) renderEmailDetail(selectedEmailId);
+    }
+
+    function selectEmail(id) {
+      selectedEmailId = id;
+      renderEmailSection();
+      renderEmailDetail(id);
+    }
+
+    function renderEmailDetail(id) {
+      const detailEl = document.getElementById("email-detail-pane");
+      if (!detailEl) return;
+      const email = inboxEmails.find(e => e.id === id);
+      if (!email) return;
+
+      const triage = triageEmail(email);
+      const projectOpts = projects.filter(p => !p.archived)
+        .map(p => `<option value="${esc(p.name)}" ${triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+
+      detailEl.innerHTML = `
+        <div class="email-detail-header">
+          <div class="email-detail-subject">${esc(email.subject)}</div>
+          <div class="email-detail-meta">
+            <span>From: <strong style="color:#a1a1aa;">${esc(email.from)}</strong></span>
+            <span>${esc(email.fromEmail || "")}</span>
+            <span>${formatEmailDate(email.date)}</span>
+            ${email.unread ? `<span style="color:#f59e0b;font-size:11px;">● Unread</span>` : ""}
+          </div>
+        </div>
+
+        <div class="email-detail-snippet">${esc(email.snippet)}</div>
+
+        <div class="email-detail-actions">
+          ${email.unread ? `<button class="focus-btn" onclick="markEmailRead('${email.id}')" style="padding:6px 14px;font-size:12px;">Mark Read</button>` : ""}
+        </div>
+
+        <div style="margin-top:24px;padding:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;">
+          <div style="font-size:12px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Create Task from Email</div>
+          <input id="etask-title-${id}" class="inp-title" value="${esc(email.subject)}" placeholder="Task title" style="margin-bottom:8px;" />
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+            <select id="etask-proj-${id}" class="filter-btn" style="background:#09090b;border:1px solid #27272a;color:#a1a1aa;border-radius:6px;padding:5px 10px;font-size:12px;">
+              <option value="">No project</option>${projectOpts}
+            </select>
+            <select id="etask-pri-${id}" class="filter-btn" style="background:#09090b;border:1px solid #27272a;color:#a1a1aa;border-radius:6px;padding:5px 10px;font-size:12px;">
+              <option value="normal" ${triage.priority === "normal" ? "selected" : ""}>Normal</option>
+              <option value="high" ${triage.priority === "high" ? "selected" : ""}>High</option>
+              <option value="urgent" ${triage.priority === "urgent" ? "selected" : ""}>Urgent</option>
+            </select>
+            <input id="etask-due-${id}" type="date" value="${triage.suggestedDue || ""}" style="background:#09090b;border:1px solid #27272a;color:#a1a1aa;border-radius:6px;padding:5px 10px;font-size:12px;" />
+          </div>
+          <button class="journal-save-btn" onclick="createTaskFromEmailDetail('${id}')" style="font-size:12px;padding:6px 16px;">+ Create Task</button>
+          <span id="etask-saved-${id}" style="display:none;font-size:12px;color:#34d399;margin-left:10px;">Task created ✓</span>
+        </div>`;
+    }
+
+    async function createTaskFromEmailDetail(emailId) {
+      const email = inboxEmails.find(e => e.id === emailId);
+      if (!email) return;
+      const title = document.getElementById(`etask-title-${emailId}`)?.value || email.subject;
+      const project = document.getElementById(`etask-proj-${emailId}`)?.value || "";
+      const priority = document.getElementById(`etask-pri-${emailId}`)?.value || "normal";
+      const due = document.getElementById(`etask-due-${emailId}`)?.value || "";
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, project, priority, due, emailId, emailSubject: email.subject, todayFocus: true }),
+      });
+      if (res.ok) {
+        await markEmailRead(emailId);
+        await loadTasks();
+        const msg = document.getElementById(`etask-saved-${emailId}`);
+        if (msg) { msg.style.display = "inline"; setTimeout(() => { msg.style.display = "none"; }, 2500); }
+      }
     }
 
     init();

@@ -11,6 +11,7 @@ const DATA_DIR = path.join(BASE, "data");
 const TASKS_FILE = path.join(DATA_DIR, "tasks.md");
 const PROJECTS_FILE = path.join(DATA_DIR, "projects.md");
 const GOALS_FILE = path.join(DATA_DIR, "goals.json");
+const JOURNAL_FILE = path.join(DATA_DIR, "journal.json");
 const GCAL_TOKEN_FILE = path.join(DATA_DIR, "gcal-token.json");
 
 // Google Calendar config
@@ -47,6 +48,9 @@ if (!fs.existsSync(PROJECTS_FILE)) {
 }
 if (!fs.existsSync(GOALS_FILE)) {
   fs.writeFileSync(GOALS_FILE, JSON.stringify([], null, 2), "utf8");
+}
+if (!fs.existsSync(JOURNAL_FILE)) {
+  fs.writeFileSync(JOURNAL_FILE, JSON.stringify([], null, 2), "utf8");
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
@@ -448,6 +452,14 @@ function writeProjectDetail(id, detail) {
 function deleteProjectDetail(id) {
   const fp = projectDetailPath(id);
   if (fs.existsSync(fp)) fs.unlinkSync(fp);
+}
+
+/* ─── Journal helpers ────────────────────────────────────────────────── */
+function loadJournal() {
+  try { return JSON.parse(fs.readFileSync(JOURNAL_FILE, "utf8")); } catch { return []; }
+}
+function saveJournal(entries) {
+  fs.writeFileSync(JOURNAL_FILE, JSON.stringify(entries, null, 2), "utf8");
 }
 
 /* ─── Auth bypass paths ──────────────────────────────────────────────── */
@@ -910,6 +922,44 @@ const server = http.createServer(async (req, res) => {
       const filtered = goals.filter(g => g.id !== id);
       if (filtered.length === goals.length) return json(res, 404, { error: "Goal not found" });
       writeGoals(filtered);
+      return json(res, 200, { ok: true });
+    }
+
+    /* ── JOURNAL API ────────────────────────────────────────────────── */
+    if (urlPath === "/api/journal" && req.method === "GET") {
+      const entries = loadJournal();
+      entries.sort((a, b) => (b.date > a.date ? 1 : -1));
+      return json(res, 200, { entries });
+    }
+
+    if (urlPath === "/api/journal" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const date = String(body.date || "").substring(0, 10);
+      const content = String(body.content || "").substring(0, 50000);
+      const title = String(body.title || "").substring(0, 200);
+      if (!date) return json(res, 400, { error: "date required" });
+      const entries = loadJournal();
+      const existing = entries.findIndex(e => e.date === date);
+      if (existing !== -1) {
+        entries[existing].content = content;
+        entries[existing].title = title;
+        entries[existing].updatedAt = new Date().toISOString();
+        saveJournal(entries);
+        return json(res, 200, { entry: entries[existing] });
+      }
+      const entry = { id: generateId(), date, title, content, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      entries.push(entry);
+      saveJournal(entries);
+      return json(res, 201, { entry });
+    }
+
+    const journalMatch = urlPath.match(/^\/api\/journal\/([a-f0-9]+)$/);
+    if (journalMatch && req.method === "DELETE") {
+      const id = journalMatch[1];
+      const entries = loadJournal();
+      const filtered = entries.filter(e => e.id !== id);
+      if (filtered.length === entries.length) return json(res, 404, { error: "Entry not found" });
+      saveJournal(filtered);
       return json(res, 200, { ok: true });
     }
 
