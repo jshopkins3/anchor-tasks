@@ -1278,6 +1278,7 @@
               </div>
             </div>
             <button class="task-edit" onclick="openEdit('${t.id}')" title="Edit">&#9998;</button>
+            <button class="task-edit" onclick="showMovePopover('${t.id}', this)" title="Move to project" style="position:relative;">⇄</button>
             <button class="task-edit" onclick="${t.todayFocus ? `unpinFromToday('${t.id}')` : `pinToToday('${t.id}')`}" title="${t.todayFocus ? "Remove from Today" : "Pin to Today"}" style="color:${t.todayFocus ? "#34d399" : "#3f3f46"}">${t.todayFocus ? "★" : "☆"}</button>
             <button class="task-edit" onclick="openScheduleModal('${t.id}')" title="Schedule to calendar" style="color:${t.calEventId ? '#34d399' : '#3f3f46'}">📅</button>
             <button class="task-delete" onclick="deleteTask('${t.id}')" title="Delete">&times;</button>
