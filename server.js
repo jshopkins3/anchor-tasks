@@ -887,6 +887,19 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok });
     }
 
+    if (urlPath.match(/^\/api\/gmail-delete\//) && req.method === "POST") {
+      const msgId = urlPath.split("/").pop();
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+      try {
+        const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/trash`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        return json(res, 200, { ok: resp.ok });
+      } catch { return json(res, 500, { ok: false }); }
+    }
+
     /* ── GOALS API ──────────────────────────────────────────────── */
     if (urlPath === "/api/goals" && req.method === "GET") {
       const goals = readGoals();

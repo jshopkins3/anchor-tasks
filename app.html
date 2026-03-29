@@ -1142,7 +1142,8 @@
             <div class="today-section-header">
               <span class="today-section-title">Inbox</span>
               <span id="inbox-status-badge"></span>
-              <a href="/api/gcal-auth" title="Re-authorize Google" style="margin-left:auto;font-size:11px;color:#52525b;text-decoration:none;opacity:.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">🔄 Reconnect</a>
+              <button onclick="markAllEmailsRead()" style="margin-left:auto;background:none;border:none;font-size:11px;color:#52525b;cursor:pointer;padding:0;" title="Mark all read">✓ All read</button>
+              <a href="/api/gcal-auth" title="Re-authorize Google" style="font-size:11px;color:#52525b;text-decoration:none;opacity:.6;margin-left:8px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">🔄</a>
             </div>
             <div id="inbox-content"><div class="today-empty">Loading...</div></div>
           </div>
@@ -2317,7 +2318,7 @@
           if (tab.dataset.tab === "email") {
             const el = document.getElementById("email-list-items");
             if (el) el.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Loading...</div>`;
-            loadInbox().then(renderEmailSection);
+            loadInbox().then(() => renderEmailSection());
           }
         });
       });
@@ -2960,12 +2961,14 @@
         const res = await fetch("/api/gmail-inbox");
         const data = await res.json();
         if (data.needsReauth) {
+          inboxEmails = [];
           renderInbox([], true, data.reason);
         } else {
           inboxEmails = data.emails || [];
           renderInbox(inboxEmails, !data.connected);
         }
       } catch {
+        inboxEmails = [];
         renderInbox([], true);
       }
     }
@@ -3031,6 +3034,7 @@
                 ${showForm ? "Cancel" : "→ Task"}
               </button>
               <button class="email-btn read-btn" onclick="markEmailRead('${email.id}')">✓ Read</button>
+              <button class="email-btn" onclick="deleteEmail('${email.id}')" style="color:#ef4444;border-color:#ef4444;" title="Delete">🗑</button>
             </div>
             ${showForm ? `
             <div class="email-task-form" id="etf-form-${email.id}" style="border:1px solid #3f3f46;border-radius:8px;">
@@ -3199,6 +3203,25 @@
 
       await loadTasks();
       renderAll();
+    }
+
+    async function deleteEmail(emailId) {
+      await fetch(`/api/gmail-delete/${emailId}`, { method: "POST" });
+      inboxEmails = inboxEmails.filter(e => e.id !== emailId);
+      if (selectedEmailId === emailId) selectedEmailId = null;
+      renderInbox(inboxEmails, false);
+      renderEmailSection();
+      renderStats();
+    }
+
+    async function markAllEmailsRead() {
+      await Promise.all(inboxEmails.filter(e => e.unread).map(e =>
+        fetch(`/api/gmail-mark-read/${e.id}`, { method: "POST" })
+      ));
+      inboxEmails = [];
+      renderInbox([], false);
+      renderEmailSection();
+      renderStats();
     }
 
     async function markEmailRead(emailId) {
@@ -4106,7 +4129,8 @@
         <div class="email-detail-snippet">${esc(email.snippet)}</div>
 
         <div class="email-detail-actions">
-          ${email.unread ? `<button class="focus-btn" onclick="markEmailRead('${email.id}')" style="padding:6px 14px;font-size:12px;">Mark Read</button>` : ""}
+          ${email.unread ? `<button class="focus-btn" onclick="markEmailRead('${email.id}').then(renderEmailSection)" style="padding:6px 14px;font-size:12px;">✓ Mark Read</button>` : ""}
+          <button class="focus-btn" onclick="deleteEmail('${email.id}')" style="padding:6px 14px;font-size:12px;color:#ef4444;border-color:#ef4444;">🗑 Delete</button>
         </div>
 
         <div style="margin-top:24px;padding:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;">
