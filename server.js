@@ -11,6 +11,15 @@ const DATA_DIR = path.join(BASE, "data");
 const TASKS_FILE = path.join(DATA_DIR, "tasks.md");
 const PROJECTS_FILE = path.join(DATA_DIR, "projects.md");
 const GOALS_FILE = path.join(DATA_DIR, "goals.json");
+const GCAL_TOKEN_FILE = path.join(DATA_DIR, "gcal-token.json");
+
+// Google Calendar config
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+const GCAL_CALENDAR_ID = process.env.GCAL_CALENDAR_ID || "primary";
+const GCAL_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.readonly",
+].join(" ");
 
 const MIME = {
   ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
@@ -133,6 +142,10 @@ function parseTasks() {
       urgent: parts[8] === "true",
       important: parts[9] === "true",
       linkedGoal: parts[10] || "",
+      todayFocus: parts[11] === "true",
+      todayOrder: parseInt(parts[12]) || 0,
+      calEventId: parts[13] || "",
+      scheduledStart: parts[14] || "",
       done,
     });
   }
@@ -142,7 +155,7 @@ function parseTasks() {
 function writeTasks(tasks) {
   const active = tasks.filter(t => !t.done);
   const completed = tasks.filter(t => t.done);
-  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""} | ${t.personal ? "true" : "false"} | ${t.urgent ? "true" : "false"} | ${t.important ? "true" : "false"} | ${t.linkedGoal || ""}`;
+  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""} | ${t.personal ? "true" : "false"} | ${t.urgent ? "true" : "false"} | ${t.important ? "true" : "false"} | ${t.linkedGoal || ""} | ${t.todayFocus ? "true" : "false"} | ${t.todayOrder || 0} | ${t.calEventId || ""} | ${t.scheduledStart || ""}`;
   const md = [
     "# Tasks", "",
     "## Active", ...active.map(fmt), "",
@@ -193,6 +206,113 @@ function writeGoals(goals) {
   fs.writeFileSync(GOALS_FILE, JSON.stringify(goals, null, 2), "utf8");
 }
 
+/* ─── Google Calendar helpers ────────────────────────────────────────────── */
+function loadGCalToken() {
+  try { return fs.existsSync(GCAL_TOKEN_FILE) ? JSON.parse(fs.readFileSync(GCAL_TOKEN_FILE, "utf8")) : null; }
+  catch { return null; }
+}
+function saveGCalToken(token) {
+  fs.writeFileSync(GCAL_TOKEN_FILE, JSON.stringify(token, null, 2));
+}
+
+async function getGCalAccessToken() {
+  const token = loadGCalToken();
+  if (!token || !token.refresh_token) return null;
+  if (token.access_token && token.expires_at && Date.now() < token.expires_at - 300000) {
+    return token.access_token;
+  }
+  try {
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      refresh_token: token.refresh_token,
+      grant_type: "refresh_token",
+    });
+    const resp = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+    const data = await resp.json();
+    if (data.access_token) {
+      token.access_token = data.access_token;
+      token.expires_at = Date.now() + (data.expires_in || 3600) * 1000;
+      saveGCalToken(token);
+      return data.access_token;
+    }
+    console.error("[gcal] Token refresh failed:", data);
+    return null;
+  } catch (err) {
+    console.error("[gcal] Token refresh error:", err.message);
+    return null;
+  }
+}
+
+async function gcalCreateOrUpdateEvent(eventId, eventData) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(GCAL_CALENDAR_ID)}/events`;
+  try {
+    if (eventId) {
+      const resp = await fetch(`${baseUrl}/${eventId}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(eventData),
+      });
+      if (resp.ok) return await resp.json();
+      if (resp.status !== 404) { console.error("[gcal] Update failed:", resp.status); return null; }
+    }
+    const resp = await fetch(baseUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(eventData),
+    });
+    if (resp.ok) return await resp.json();
+    console.error("[gcal] Create failed:", resp.status, await resp.text());
+    return null;
+  } catch (err) {
+    console.error("[gcal] API error:", err.message);
+    return null;
+  }
+}
+
+async function gcalDeleteEvent(eventId) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken || !eventId) return;
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(GCAL_CALENDAR_ID)}/events/${eventId}`;
+  try {
+    await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } });
+  } catch (err) {
+    console.error("[gcal] Delete error:", err.message);
+  }
+}
+
+async function gcalGetTodayEvents() {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  const now = new Date();
+  const y = now.getFullYear(), mo = now.getMonth(), d = now.getDate();
+  const timeMin = new Date(y, mo, d, 0, 0, 0).toISOString();
+  const timeMax = new Date(y, mo, d, 23, 59, 59).toISOString();
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(GCAL_CALENDAR_ID)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=20`;
+  try {
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!resp.ok) { console.error("[gcal] Events fetch failed:", resp.status); return null; }
+    const data = await resp.json();
+    return (data.items || []).map(ev => ({
+      id: ev.id,
+      title: ev.summary || "(No title)",
+      start: ev.start?.dateTime || ev.start?.date || "",
+      end: ev.end?.dateTime || ev.end?.date || "",
+      allDay: !ev.start?.dateTime,
+      location: ev.location || "",
+    }));
+  } catch (err) {
+    console.error("[gcal] Events error:", err.message);
+    return null;
+  }
+}
+
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
 function projectDetailPath(id) {
   return path.join(DATA_DIR, `project-${id}.json`);
@@ -215,7 +335,7 @@ function deleteProjectDetail(id) {
 }
 
 /* ─── Auth bypass paths ──────────────────────────────────────────────── */
-const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico"];
+const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico", "/api/gcal-callback"];
 
 /* ─── HTTP server ────────────────────────────────────────────────────── */
 const server = http.createServer(async (req, res) => {
@@ -333,6 +453,10 @@ const server = http.createServer(async (req, res) => {
       if (body.urgent !== undefined) tasks[idx].urgent = !!body.urgent;
       if (body.important !== undefined) tasks[idx].important = !!body.important;
       if (body.linkedGoal !== undefined) tasks[idx].linkedGoal = String(body.linkedGoal).substring(0, 50);
+      if (body.todayFocus !== undefined) tasks[idx].todayFocus = !!body.todayFocus;
+      if (body.todayOrder !== undefined) tasks[idx].todayOrder = Math.max(0, parseInt(body.todayOrder) || 0);
+      if (body.calEventId !== undefined) tasks[idx].calEventId = String(body.calEventId).substring(0, 200);
+      if (body.scheduledStart !== undefined) tasks[idx].scheduledStart = String(body.scheduledStart).substring(0, 50);
       writeTasks(tasks);
       return json(res, 200, { task: tasks[idx] });
     }
@@ -442,6 +566,160 @@ const server = http.createServer(async (req, res) => {
         writeProjectDetail(id, detail);
       }
       return json(res, 200, detail);
+    }
+
+    /* ── GOOGLE CALENDAR API ──────────────────────────────────── */
+    // Status
+    if (urlPath === "/api/gcal-status" && req.method === "GET") {
+      const token = loadGCalToken();
+      return json(res, 200, { connected: !!(token && token.refresh_token) });
+    }
+
+    // OAuth redirect
+    if (urlPath === "/api/gcal-auth" && req.method === "GET") {
+      if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+        return json(res, 500, { error: "Google OAuth not configured" });
+      }
+      const host = req.headers.host || "";
+      const proto = IS_PRODUCTION ? "https" : "http";
+      const redirectUri = `${proto}://${host}/api/gcal-callback`;
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: GCAL_SCOPES,
+        access_type: "offline",
+        prompt: "consent",
+      }).toString();
+      res.writeHead(302, { Location: authUrl });
+      return res.end();
+    }
+
+    // OAuth callback (public — no auth required)
+    if (urlPath === "/api/gcal-callback" && req.method === "GET") {
+      const code = url.searchParams.get("code");
+      if (!code) { res.writeHead(302, { Location: "/?gcal=error" }); return res.end(); }
+      const host = req.headers.host || "";
+      const proto = IS_PRODUCTION ? "https" : "http";
+      const redirectUri = `${proto}://${host}/api/gcal-callback`;
+      try {
+        const params = new URLSearchParams({
+          code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+          redirect_uri: redirectUri, grant_type: "authorization_code",
+        });
+        const resp = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: params.toString(),
+        });
+        const data = await resp.json();
+        if (data.refresh_token) {
+          saveGCalToken({
+            refresh_token: data.refresh_token,
+            access_token: data.access_token,
+            expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+          });
+          console.log("[gcal] Calendar connected successfully");
+          res.writeHead(302, { Location: "/?gcal=connected" });
+        } else {
+          console.error("[gcal] No refresh token in response:", data);
+          res.writeHead(302, { Location: "/?gcal=error" });
+        }
+      } catch (err) {
+        console.error("[gcal] Callback error:", err.message);
+        res.writeHead(302, { Location: "/?gcal=error" });
+      }
+      return res.end();
+    }
+
+    // Today's events
+    if (urlPath === "/api/gcal-events" && req.method === "GET") {
+      const events = await gcalGetTodayEvents();
+      if (events === null) return json(res, 200, { events: [], connected: false });
+      return json(res, 200, { events, connected: true });
+    }
+
+    // Schedule task to calendar
+    const scheduleMatch = urlPath.match(/^\/api\/tasks\/([a-f0-9]+)\/schedule$/);
+    if (scheduleMatch && req.method === "POST") {
+      const id = scheduleMatch[1];
+      const body = JSON.parse(await readBody(req));
+      const tasks = parseTasks();
+      const idx = tasks.findIndex(t => t.id === id);
+      if (idx === -1) return json(res, 404, { error: "Task not found" });
+      const t = tasks[idx];
+      const { startTime, endTime, allDay } = body;
+      let eventData;
+      if (allDay) {
+        const dateStr = (startTime || "").substring(0, 10);
+        const nextDay = dateStr ? new Date(new Date(dateStr + "T12:00:00Z").getTime() + 86400000).toISOString().substring(0, 10) : dateStr;
+        eventData = {
+          summary: t.title,
+          description: t.project ? `Project: ${t.project}` : "",
+          start: { date: dateStr },
+          end: { date: nextDay },
+        };
+      } else {
+        eventData = {
+          summary: t.title,
+          description: t.project ? `Project: ${t.project}` : "",
+          start: { dateTime: startTime },
+          end: { dateTime: endTime },
+        };
+      }
+      const evt = await gcalCreateOrUpdateEvent(t.calEventId || null, eventData);
+      if (!evt) return json(res, 500, { error: "Failed to create calendar event" });
+      tasks[idx].calEventId = evt.id;
+      tasks[idx].scheduledStart = startTime || "";
+      writeTasks(tasks);
+      return json(res, 200, { task: tasks[idx], eventId: evt.id });
+    }
+
+    // Remove task from calendar
+    if (scheduleMatch && req.method === "DELETE") {
+      const id = scheduleMatch[1];
+      const tasks = parseTasks();
+      const idx = tasks.findIndex(t => t.id === id);
+      if (idx === -1) return json(res, 404, { error: "Task not found" });
+      if (tasks[idx].calEventId) await gcalDeleteEvent(tasks[idx].calEventId);
+      tasks[idx].calEventId = "";
+      tasks[idx].scheduledStart = "";
+      writeTasks(tasks);
+      return json(res, 200, { task: tasks[idx] });
+    }
+
+    // AI Prioritize — scoring algorithm
+    if (urlPath === "/api/ai-prioritize" && req.method === "GET") {
+      const tasks = parseTasks().filter(t => !t.done);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const scored = tasks.map(t => {
+        let score = 0;
+        // Priority
+        if (t.priority === "urgent") score += 40;
+        else if (t.priority === "high") score += 25;
+        else if (t.priority === "normal") score += 10;
+        else score += 2;
+        // Due date
+        if (t.due) {
+          const due = new Date(t.due + "T00:00:00");
+          const diff = Math.floor((due - today) / 86400000);
+          if (diff < 0) score += 50;          // overdue
+          else if (diff === 0) score += 40;   // due today
+          else if (diff <= 2) score += 30;    // due in 2 days
+          else if (diff <= 7) score += 20;    // due this week
+          else if (diff <= 14) score += 10;   // due next 2 weeks
+        }
+        // Eisenhower flags
+        if (t.urgent && t.important) score += 20;
+        else if (t.important) score += 10;
+        else if (t.urgent) score += 8;
+        // Already in focus
+        if (t.todayFocus) score += 5;
+        return { ...t, _score: score };
+      });
+      scored.sort((a, b) => b._score - a._score);
+      return json(res, 200, { tasks: scored.slice(0, 10).map(t => { const { _score, ...rest } = t; return { ...rest, score: _score }; }) });
     }
 
     /* ── GOALS API ──────────────────────────────────────────────── */

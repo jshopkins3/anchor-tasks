@@ -533,6 +533,206 @@
       display: flex; flex-direction: column; gap: 16px;
       position: absolute; left: -20px; top: 50%; transform: translateY(-50%);
     }
+
+    /* ── Today view ──────────────────────────────────────────── */
+    .today-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .today-date {
+      font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -0.02em;
+    }
+    .today-subtitle { font-size: 13px; color: #71717a; margin-top: 2px; }
+    .today-header-actions { display: flex; gap: 8px; align-items: center; }
+    .btn-ai-prioritize {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(139,92,246,.15); border: 1px solid rgba(139,92,246,.4);
+      color: #a78bfa; border-radius: 8px; padding: 7px 14px; font-size: 12px;
+      font-weight: 600; cursor: pointer; font-family: inherit;
+      transition: all .15s;
+    }
+    .btn-ai-prioritize:hover { background: rgba(139,92,246,.25); border-color: #a78bfa; }
+    .btn-icon {
+      background: #27272a; border: 1px solid #3f3f46; color: #71717a;
+      border-radius: 8px; padding: 7px 10px; cursor: pointer; display: flex; align-items: center;
+    }
+    .btn-icon:hover { color: #e4e4e7; border-color: #52525b; }
+
+    .today-layout {
+      display: grid; grid-template-columns: 1fr 380px; gap: 16px; align-items: start;
+    }
+    @media (max-width: 900px) { .today-layout { grid-template-columns: 1fr; } }
+    .today-col-main { display: flex; flex-direction: column; gap: 16px; }
+    .today-col-side { display: flex; flex-direction: column; gap: 16px; }
+
+    .today-section-card {
+      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .today-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px; padding-bottom: 12px;
+      border-bottom: 1px solid #27272a;
+    }
+    .today-section-title {
+      font-size: 12px; font-weight: 700; color: #71717a;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .today-section-count {
+      background: #27272a; color: #a1a1aa; font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+    }
+
+    /* Focus items */
+    .focus-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid #1f1f23;
+    }
+    .focus-item:last-child { border-bottom: none; }
+    .focus-rank {
+      font-size: 11px; font-weight: 700; color: #3f3f46;
+      width: 16px; text-align: center; flex-shrink: 0;
+    }
+    .focus-check {
+      width: 18px; height: 18px; border-radius: 4px;
+      border: 2px solid #3f3f46; background: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: all .15s;
+    }
+    .focus-check:hover { border-color: #3b82f6; }
+    .focus-check.done { background: #3b82f6; border-color: #3b82f6; }
+    .focus-check.done::after { content: "\2713"; color: #fff; font-size: 11px; font-weight: 700; }
+    .focus-body { flex: 1; min-width: 0; }
+    .focus-title { font-size: 13px; color: #e4e4e7; }
+    .focus-title.done { text-decoration: line-through; color: #52525b; }
+    .focus-meta { display: flex; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+    .focus-tag {
+      font-size: 10px; padding: 1px 6px; border-radius: 4px;
+      background: #27272a; color: #71717a;
+    }
+    .focus-tag.scheduled { background: rgba(16,185,129,.12); color: #34d399; }
+    .focus-tag.due-today { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .focus-tag.overdue { background: rgba(239,68,68,.15); color: #f87171; }
+    .focus-tag.pri-urgent { background: rgba(239,68,68,.15); color: #f87171; }
+    .focus-tag.pri-high { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .focus-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .focus-btn {
+      background: none; border: 1px solid #3f3f46; color: #71717a;
+      border-radius: 5px; padding: 3px 8px; font-size: 10px; cursor: pointer;
+      font-family: inherit; transition: all .12s;
+    }
+    .focus-btn:hover { color: #e4e4e7; border-color: #52525b; }
+    .focus-btn.schedule-btn:hover { color: #60a5fa; border-color: #60a5fa; }
+    .focus-btn.remove-btn:hover { color: #f87171; border-color: #ef4444; }
+    .focus-btn.scheduled { color: #34d399; border-color: rgba(16,185,129,.4); background: rgba(16,185,129,.08); }
+
+    .today-empty { text-align: center; padding: 24px; color: #3f3f46; font-size: 13px; }
+
+    .today-add-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 12px;
+      padding-top: 12px; border-top: 1px solid #1f1f23;
+    }
+    .today-add-label { font-size: 11px; color: #52525b; white-space: nowrap; }
+
+    /* Calendar events */
+    .gcal-connect-btn {
+      background: none; border: 1px solid #3f3f46; color: #71717a;
+      border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+      font-family: inherit;
+    }
+    .gcal-connect-btn:hover { color: #3b82f6; border-color: #3b82f6; }
+    .gcal-connected-badge {
+      font-size: 10px; color: #34d399; background: rgba(16,185,129,.12);
+      padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    }
+    .cal-event {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 8px 0; border-bottom: 1px solid #1f1f23;
+    }
+    .cal-event:last-child { border-bottom: none; }
+    .cal-event-time {
+      font-size: 11px; color: #71717a; white-space: nowrap;
+      width: 64px; flex-shrink: 0; padding-top: 1px;
+    }
+    .cal-event-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #3b82f6; flex-shrink: 0; margin-top: 4px;
+    }
+    .cal-event-title { font-size: 13px; color: #e4e4e7; }
+    .cal-event-loc { font-size: 11px; color: #71717a; margin-top: 2px; }
+
+    /* AI suggestions */
+    .ai-note { font-size: 11px; color: #52525b; margin-bottom: 10px; font-style: italic; }
+    .ai-suggestion-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 10px; border-radius: 8px; cursor: pointer;
+      transition: background .1s;
+    }
+    .ai-suggestion-item:hover { background: #1f1f23; }
+    .ai-suggestion-item.pinned { opacity: .5; pointer-events: none; }
+    .ai-score-bar {
+      height: 3px; background: rgba(139,92,246,.3); border-radius: 2px;
+      margin-top: 4px; overflow: hidden;
+    }
+    .ai-score-fill { height: 100%; background: #8b5cf6; border-radius: 2px; }
+
+    /* Needs Attention */
+    .attention-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid #1f1f23; font-size: 13px;
+    }
+    .attention-item:last-child { border-bottom: none; }
+    .attention-icon { font-size: 15px; flex-shrink: 0; }
+    .attention-body { flex: 1; }
+    .attention-label { color: #e4e4e7; }
+    .attention-count { font-size: 11px; color: #71717a; margin-top: 1px; }
+    .attention-action {
+      background: none; border: 1px solid #3f3f46; color: #71717a;
+      border-radius: 5px; padding: 2px 8px; font-size: 10px; cursor: pointer;
+      font-family: inherit;
+    }
+    .attention-action:hover { color: #e4e4e7; border-color: #52525b; }
+
+    /* Schedule modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.7);
+      display: flex; align-items: center; justify-content: center; z-index: 200;
+    }
+    .modal-box {
+      background: #18181b; border: 1px solid #27272a; border-radius: 14px;
+      padding: 24px; width: 380px; max-width: 95vw;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .modal-title { font-size: 15px; font-weight: 700; color: #fff; }
+    .modal-close {
+      background: none; border: none; color: #71717a; font-size: 20px;
+      cursor: pointer; line-height: 1;
+    }
+    .modal-close:hover { color: #e4e4e7; }
+    .modal-task-name {
+      font-size: 13px; color: #a1a1aa; background: #27272a;
+      border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;
+    }
+    .modal-field { margin-bottom: 14px; }
+    .modal-field label {
+      font-size: 11px; color: #71717a; text-transform: uppercase;
+      letter-spacing: 0.04em; display: block; margin-bottom: 5px;
+    }
+    .modal-field input, .modal-field select {
+      background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7;
+      border-radius: 8px; padding: 8px 12px; font-size: 13px;
+      font-family: inherit; outline: none; width: 100%;
+    }
+    .modal-field input:focus { border-color: #3b82f6; }
+    .modal-time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .modal-allday {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: #a1a1aa; margin-bottom: 14px; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -553,7 +753,8 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <div class="tab active" data-tab="tasks">Tasks</div>
+    <div class="tab active" data-tab="today">Today</div>
+    <div class="tab" data-tab="tasks">Tasks</div>
     <div class="tab" data-tab="board">Board</div>
     <div class="tab" data-tab="goals">Goals</div>
     <div class="tab" data-tab="matrix">Matrix</div>
@@ -563,8 +764,87 @@
 
   <div class="main">
 
+    <!-- ── Today section ─────────────────────────────────────── -->
+    <div class="section active" id="sec-today">
+
+      <!-- Header row -->
+      <div class="today-header">
+        <div>
+          <div class="today-date" id="today-date-label"></div>
+          <div class="today-subtitle" id="today-subtitle"></div>
+        </div>
+        <div class="today-header-actions">
+          <button class="btn-ai-prioritize" onclick="aiPrioritize()" id="btn-ai-prioritize">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            AI Prioritize
+          </button>
+          <button class="btn-icon" onclick="refreshToday()" title="Refresh calendar">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Two-column layout -->
+      <div class="today-layout">
+
+        <!-- Left: Focus List -->
+        <div class="today-col-main">
+          <div class="today-section-card">
+            <div class="today-section-header">
+              <span class="today-section-title">Focus List</span>
+              <span class="today-section-count" id="focus-count">0</span>
+            </div>
+            <div id="today-focus-list"></div>
+            <div class="today-add-row" id="today-add-row">
+              <span class="today-add-label">Add task to today:</span>
+              <select id="today-task-picker" style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none;">
+                <option value="">— pick a task —</option>
+              </select>
+              <button class="btn-add" style="padding:6px 12px;font-size:12px;" onclick="pinSelectedTask()">Pin</button>
+            </div>
+          </div>
+
+          <!-- AI Suggestions (hidden by default) -->
+          <div class="today-section-card" id="ai-suggestions-card" style="display:none">
+            <div class="today-section-header">
+              <span class="today-section-title">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#a78bfa" stroke-width="2" style="vertical-align:-2px;margin-right:4px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                AI Suggested Priorities
+              </span>
+              <button class="btn-cancel" style="padding:3px 10px;font-size:11px;" onclick="dismissAISuggestions()">Dismiss</button>
+            </div>
+            <div class="ai-note">Ranked by due date, priority level, and urgency. Click to pin to your focus list.</div>
+            <div id="ai-suggestions-list"></div>
+            <div style="text-align:right;margin-top:10px;">
+              <button class="btn-save" style="font-size:12px;" onclick="applyAISuggestions()">Add All to Focus List</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Calendar -->
+        <div class="today-col-side">
+          <div class="today-section-card">
+            <div class="today-section-header">
+              <span class="today-section-title">Today's Calendar</span>
+              <span id="gcal-status-badge"></span>
+            </div>
+            <div id="today-calendar-content"></div>
+          </div>
+
+          <!-- Needs Attention -->
+          <div class="today-section-card" id="needs-attention-card">
+            <div class="today-section-header">
+              <span class="today-section-title">Needs Attention</span>
+            </div>
+            <div id="needs-attention-list"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- ── Tasks section ──────────────────────────────────────── -->
-    <div class="section active" id="sec-tasks">
+    <div class="section" id="sec-tasks">
       <div class="stats" id="task-stats"></div>
 
       <div class="filters" id="task-filters">
@@ -683,10 +963,20 @@
         googleClientId = cfg.clientId || "";
       } catch {}
 
-      await Promise.all([loadTasks(), loadProjects(), loadGoals()]);
+      await Promise.all([loadTasks(), loadProjects(), loadGoals(), loadCalEvents()]);
       renderAll();
       setupTabs();
       setupFilters();
+
+      // Show gcal feedback from OAuth redirect
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("gcal") === "connected") {
+        history.replaceState({}, "", "/");
+        setTimeout(() => alert("Google Calendar connected!"), 300);
+      } else if (urlParams.get("gcal") === "error") {
+        history.replaceState({}, "", "/");
+        alert("Google Calendar connection failed. Please try again.");
+      }
 
       // Enter key to add task
       document.getElementById("new-task-title").addEventListener("keydown", e => {
@@ -718,6 +1008,7 @@
 
     /* ── Rendering ────────────────────────────────────────────── */
     function renderAll() {
+      renderToday();
       renderStats();
       renderTasks();
       renderBoard();
@@ -781,6 +1072,7 @@
               </div>
             </div>
             <button class="task-edit" onclick="openEdit('${t.id}')" title="Edit">&#9998;</button>
+            <button class="task-edit" onclick="${t.todayFocus ? `unpinFromToday('${t.id}')` : `pinToToday('${t.id}')`}" title="${t.todayFocus ? "Remove from Today" : "Pin to Today"}" style="color:${t.todayFocus ? "#34d399" : "#3f3f46"}">${t.todayFocus ? "★" : "☆"}</button>
             <button class="task-delete" onclick="deleteTask('${t.id}')" title="Delete">&times;</button>
           </div>
           ${editingTaskId === t.id ? `
@@ -1977,6 +2269,408 @@
       const d = document.createElement("div");
       d.textContent = s || "";
       return d.innerHTML;
+    }
+
+    /* ── Today / Calendar ────────────────────────────────────── */
+    let calEvents = [];
+    let gcalConnected = false;
+    let aiSuggestions = [];
+    let scheduleTaskId = null;
+
+    function formatTodayDate() {
+      const d = new Date();
+      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      return {
+        date: `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`,
+        sub: `${d.getFullYear()} · ${tasks.filter(t=>!t.done).length} active tasks`,
+      };
+    }
+
+    function formatEventTime(iso) {
+      if (!iso || iso.length === 10) return "All day";
+      const d = new Date(iso);
+      let h = d.getHours(), m = d.getMinutes();
+      const ampm = h >= 12 ? "pm" : "am";
+      h = h % 12 || 12;
+      return `${h}:${String(m).padStart(2,"0")}${ampm}`;
+    }
+
+    function getDueTag(due) {
+      if (!due) return "";
+      const today = new Date(); today.setHours(0,0,0,0);
+      const dueDate = new Date(due + "T00:00:00");
+      const diff = Math.floor((dueDate - today) / 86400000);
+      if (diff < 0) return `<span class="focus-tag overdue">Overdue ${Math.abs(diff)}d</span>`;
+      if (diff === 0) return `<span class="focus-tag due-today">Due today</span>`;
+      if (diff <= 2) return `<span class="focus-tag due-today">Due in ${diff}d</span>`;
+      return `<span class="focus-tag">${due}</span>`;
+    }
+
+    async function loadCalEvents() {
+      try {
+        const res = await fetch("/api/gcal-events");
+        const data = await res.json();
+        calEvents = data.events || [];
+        gcalConnected = data.connected || false;
+      } catch {
+        calEvents = [];
+        gcalConnected = false;
+      }
+    }
+
+    async function checkGCalStatus() {
+      try {
+        const res = await fetch("/api/gcal-status");
+        const data = await res.json();
+        gcalConnected = data.connected || false;
+      } catch {}
+    }
+
+    function renderToday() {
+      // Date header
+      const { date, sub } = formatTodayDate();
+      document.getElementById("today-date-label").textContent = date;
+      document.getElementById("today-subtitle").textContent = sub;
+
+      // Focus list
+      const focusTasks = tasks
+        .filter(t => t.todayFocus && !t.done)
+        .sort((a, b) => (a.todayOrder || 0) - (b.todayOrder || 0));
+      const doneFocus = tasks.filter(t => t.todayFocus && t.done);
+      const allFocus = [...focusTasks, ...doneFocus];
+
+      document.getElementById("focus-count").textContent = focusTasks.length;
+
+      const focusList = document.getElementById("today-focus-list");
+      if (!allFocus.length) {
+        focusList.innerHTML = `<div class="today-empty">No tasks pinned for today.<br>Use "AI Prioritize" or pick a task below.</div>`;
+      } else {
+        focusList.innerHTML = allFocus.map((t, i) => {
+          const priBadge = (t.priority === "urgent" || t.priority === "high")
+            ? `<span class="focus-tag pri-${t.priority}">${t.priority}</span>` : "";
+          const schedBadge = t.scheduledStart
+            ? `<span class="focus-tag scheduled">📅 ${formatEventTime(t.scheduledStart)}</span>` : "";
+          const projBadge = t.project ? `<span class="focus-tag">${esc(t.project)}</span>` : "";
+          const scheduleBtnClass = t.calEventId ? "focus-btn schedule-btn scheduled" : "focus-btn schedule-btn";
+          const scheduleBtnLabel = t.calEventId ? "Scheduled" : "Schedule";
+          return `
+            <div class="focus-item">
+              <span class="focus-rank">${t.done ? "✓" : (i + 1)}</span>
+              <button class="focus-check ${t.done ? "done" : ""}" onclick="toggleTask('${t.id}')"></button>
+              <div class="focus-body">
+                <div class="focus-title ${t.done ? "done" : ""}">${esc(t.title)}</div>
+                <div class="focus-meta">${priBadge}${getDueTag(t.due)}${schedBadge}${projBadge}</div>
+              </div>
+              <div class="focus-actions">
+                <button class="${scheduleBtnClass}" onclick="openScheduleModal('${t.id}')">${scheduleBtnLabel}</button>
+                <button class="focus-btn remove-btn" onclick="unpinFromToday('${t.id}')" title="Remove from today">×</button>
+              </div>
+            </div>`;
+        }).join("");
+      }
+
+      // Populate task picker (non-pinned, active tasks)
+      const picker = document.getElementById("today-task-picker");
+      const notPinned = tasks.filter(t => !t.done && !t.todayFocus);
+      picker.innerHTML = `<option value="">— pick a task —</option>` +
+        notPinned.map(t => `<option value="${t.id}">${esc(t.title)}${t.project ? " [" + esc(t.project) + "]" : ""}</option>`).join("");
+
+      // Calendar
+      renderCalendar();
+
+      // Needs attention
+      renderNeedsAttention();
+    }
+
+    function renderCalendar() {
+      const statusEl = document.getElementById("gcal-status-badge");
+      const contentEl = document.getElementById("today-calendar-content");
+
+      if (!gcalConnected) {
+        statusEl.innerHTML = `<a href="/api/gcal-auth" class="gcal-connect-btn">Connect Calendar</a>`;
+        contentEl.innerHTML = `<div class="today-empty">Connect your Google Calendar to see today's events here.</div>`;
+        return;
+      }
+
+      statusEl.innerHTML = `<span class="gcal-connected-badge">Connected</span>`;
+
+      if (!calEvents.length) {
+        contentEl.innerHTML = `<div class="today-empty">No events scheduled for today.</div>`;
+        return;
+      }
+
+      contentEl.innerHTML = calEvents.map(ev => `
+        <div class="cal-event">
+          <div class="cal-event-time">${ev.allDay ? "All day" : formatEventTime(ev.start)}</div>
+          <div class="cal-event-dot"></div>
+          <div>
+            <div class="cal-event-title">${esc(ev.title)}</div>
+            ${ev.location ? `<div class="cal-event-loc">📍 ${esc(ev.location)}</div>` : ""}
+          </div>
+        </div>`).join("");
+    }
+
+    function renderNeedsAttention() {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const activeTasks = tasks.filter(t => !t.done);
+
+      const overdue = activeTasks.filter(t => {
+        if (!t.due) return false;
+        return new Date(t.due + "T00:00:00") < today;
+      });
+      const dueThisWeek = activeTasks.filter(t => {
+        if (!t.due) return false;
+        const d = new Date(t.due + "T00:00:00");
+        const diff = Math.floor((d - today) / 86400000);
+        return diff >= 0 && diff <= 7;
+      });
+      const urgent = activeTasks.filter(t => t.priority === "urgent" && !t.todayFocus);
+      const unscheduled = activeTasks.filter(t => t.due && !t.project).length;
+
+      const items = [];
+      if (overdue.length) items.push({ icon: "🔴", label: `${overdue.length} overdue task${overdue.length > 1 ? "s" : ""}`, action: "viewOverdue" });
+      if (dueThisWeek.length) items.push({ icon: "📅", label: `${dueThisWeek.length} due this week`, action: null });
+      if (urgent.length) items.push({ icon: "⚡", label: `${urgent.length} urgent task${urgent.length > 1 ? "s" : ""} not in focus`, action: "addUrgent" });
+      if (!gcalConnected) items.push({ icon: "📆", label: "Google Calendar not connected", action: "connectCal" });
+
+      const el = document.getElementById("needs-attention-list");
+      document.getElementById("needs-attention-card").style.display = items.length ? "" : "none";
+      if (!items.length) return;
+
+      el.innerHTML = items.map(item => `
+        <div class="attention-item">
+          <span class="attention-icon">${item.icon}</span>
+          <span class="attention-body"><span class="attention-label">${item.label}</span></span>
+          ${item.action ? `<button class="attention-action" onclick="handleAttention('${item.action}')">${item.action === "connectCal" ? "Connect" : "View"}</button>` : ""}
+        </div>`).join("");
+    }
+
+    function handleAttention(action) {
+      if (action === "connectCal") { window.location.href = "/api/gcal-auth"; }
+      else if (action === "viewOverdue") {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+        document.querySelector(".tab[data-tab='tasks']").classList.add("active");
+        document.getElementById("sec-tasks").classList.add("active");
+        taskFilter = "active";
+        renderTasks();
+      } else if (action === "addUrgent") {
+        aiPrioritize();
+      }
+    }
+
+    async function pinToToday(taskId) {
+      const focusTasks = tasks.filter(t => t.todayFocus);
+      const maxOrder = focusTasks.reduce((m, t) => Math.max(m, t.todayOrder || 0), 0);
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ todayFocus: true, todayOrder: maxOrder + 1 }),
+      });
+      await loadTasks();
+      renderToday();
+      renderTasks();
+    }
+
+    async function unpinFromToday(taskId) {
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ todayFocus: false, todayOrder: 0 }),
+      });
+      await loadTasks();
+      renderToday();
+      renderTasks();
+    }
+
+    function pinSelectedTask() {
+      const picker = document.getElementById("today-task-picker");
+      const id = picker.value;
+      if (!id) return;
+      pinToToday(id);
+    }
+
+    async function refreshToday() {
+      const btn = document.getElementById("btn-ai-prioritize");
+      await loadCalEvents();
+      renderToday();
+    }
+
+    /* ── AI Prioritize ──────────────────────────────────────── */
+    async function aiPrioritize() {
+      const btn = document.getElementById("btn-ai-prioritize");
+      btn.textContent = "Analyzing...";
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/ai-prioritize");
+        const data = await res.json();
+        aiSuggestions = data.tasks || [];
+        renderAISuggestions();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> AI Prioritize`;
+        btn.disabled = false;
+      }
+    }
+
+    function renderAISuggestions() {
+      const card = document.getElementById("ai-suggestions-card");
+      const list = document.getElementById("ai-suggestions-list");
+      if (!aiSuggestions.length) { card.style.display = "none"; return; }
+      card.style.display = "";
+      const maxScore = aiSuggestions[0]?.score || 1;
+      list.innerHTML = aiSuggestions.map((t, i) => {
+        const alreadyPinned = t.todayFocus;
+        const pct = Math.round((t.score / maxScore) * 100);
+        return `
+          <div class="ai-suggestion-item ${alreadyPinned ? "pinned" : ""}" onclick="${alreadyPinned ? "" : `pinFromSuggestion('${t.id}')`}">
+            <span class="focus-rank">${i + 1}</span>
+            <div style="flex:1;min-width:0;">
+              <div class="focus-title">${esc(t.title)}</div>
+              <div class="ai-score-bar"><div class="ai-score-fill" style="width:${pct}%"></div></div>
+              <div class="focus-meta" style="margin-top:3px;">
+                ${t.priority !== "normal" ? `<span class="focus-tag pri-${t.priority}">${t.priority}</span>` : ""}
+                ${getDueTag(t.due)}
+                ${t.project ? `<span class="focus-tag">${esc(t.project)}</span>` : ""}
+              </div>
+            </div>
+            ${alreadyPinned ? `<span style="font-size:10px;color:#34d399;">✓ Pinned</span>` : `<button class="focus-btn" style="white-space:nowrap;">+ Add</button>`}
+          </div>`;
+      }).join("");
+    }
+
+    async function pinFromSuggestion(taskId) {
+      await pinToToday(taskId);
+      // Update suggestion UI immediately
+      const t = aiSuggestions.find(t => t.id === taskId);
+      if (t) t.todayFocus = true;
+      renderAISuggestions();
+    }
+
+    async function applyAISuggestions() {
+      for (const t of aiSuggestions.filter(t => !t.todayFocus)) {
+        await pinToToday(t.id);
+        t.todayFocus = true;
+      }
+      renderAISuggestions();
+      dismissAISuggestions();
+    }
+
+    function dismissAISuggestions() {
+      document.getElementById("ai-suggestions-card").style.display = "none";
+      aiSuggestions = [];
+    }
+
+    /* ── Schedule modal ─────────────────────────────────────── */
+    function openScheduleModal(taskId) {
+      scheduleTaskId = taskId;
+      const t = tasks.find(t => t.id === taskId);
+      if (!t) return;
+      const today = new Date().toISOString().substring(0, 10);
+      const dateVal = t.due || today;
+      const existing = document.getElementById("schedule-modal");
+      if (existing) existing.remove();
+      const modal = document.createElement("div");
+      modal.id = "schedule-modal";
+      modal.className = "modal-overlay";
+      modal.innerHTML = `
+        <div class="modal-box" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <span class="modal-title">Schedule to Calendar</span>
+            <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
+          </div>
+          <div class="modal-task-name">${esc(t.title)}</div>
+          <label class="modal-allday">
+            <input type="checkbox" id="sched-allday" onchange="toggleAlldayUI(this.checked)" />
+            All-day event
+          </label>
+          <div class="modal-field">
+            <label>Date</label>
+            <input type="date" id="sched-date" value="${dateVal}" />
+          </div>
+          <div id="sched-time-row" class="modal-time-row">
+            <div class="modal-field">
+              <label>Start Time</label>
+              <input type="time" id="sched-start" value="09:00" />
+            </div>
+            <div class="modal-field">
+              <label>End Time</label>
+              <input type="time" id="sched-end" value="10:00" />
+            </div>
+          </div>
+          ${t.calEventId ? `<div style="font-size:11px;color:#34d399;margin-bottom:8px;">✓ Already scheduled — saving will update the event</div>
+          <button class="btn-cancel" style="font-size:12px;margin-bottom:12px;width:100%;" onclick="unscheduleTask('${t.id}')">Remove from Calendar</button>` : ""}
+          <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeScheduleModal()">Cancel</button>
+            <button class="btn-save" onclick="saveSchedule()">Schedule</button>
+          </div>
+        </div>`;
+      modal.addEventListener("click", closeScheduleModal);
+      document.body.appendChild(modal);
+      if (!gcalConnected) {
+        const footer = modal.querySelector(".modal-footer");
+        footer.insertAdjacentHTML("beforebegin", `<div style="font-size:11px;color:#f87171;margin-bottom:8px;">⚠ Google Calendar not connected — <a href="/api/gcal-auth" style="color:#60a5fa;">Connect now</a></div>`);
+      }
+    }
+
+    function toggleAlldayUI(allDay) {
+      const row = document.getElementById("sched-time-row");
+      if (row) row.style.display = allDay ? "none" : "";
+    }
+
+    function closeScheduleModal() {
+      const m = document.getElementById("schedule-modal");
+      if (m) m.remove();
+      scheduleTaskId = null;
+    }
+
+    async function saveSchedule() {
+      if (!scheduleTaskId) return;
+      const date = document.getElementById("sched-date").value;
+      const allDay = document.getElementById("sched-allday").checked;
+      if (!date) return;
+      let body;
+      if (allDay) {
+        body = { allDay: true, startTime: date };
+      } else {
+        const start = document.getElementById("sched-start").value;
+        const end = document.getElementById("sched-end").value;
+        body = {
+          startTime: `${date}T${start}:00`,
+          endTime: `${date}T${end}:00`,
+          allDay: false,
+        };
+      }
+      const btn = document.querySelector("#schedule-modal .btn-save");
+      if (btn) { btn.textContent = "Saving..."; btn.disabled = true; }
+      try {
+        const res = await fetch(`/api/tasks/${scheduleTaskId}/schedule`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          closeScheduleModal();
+          await loadTasks();
+          await loadCalEvents();
+          renderToday();
+        } else {
+          const err = await res.json();
+          alert("Failed to schedule: " + (err.error || "unknown error"));
+        }
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    }
+
+    async function unscheduleTask(taskId) {
+      await fetch(`/api/tasks/${taskId}/schedule`, { method: "DELETE" });
+      closeScheduleModal();
+      await loadTasks();
+      await loadCalEvents();
+      renderToday();
     }
 
     init();
