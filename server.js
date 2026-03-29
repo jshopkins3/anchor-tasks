@@ -375,10 +375,11 @@ async function gmailGetInbox() {
       new URLSearchParams({ q: "is:unread in:inbox", maxResults: "15" }).toString();
     const listResp = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!listResp.ok) {
-      const err = await listResp.text();
-      console.error("[gmail] List failed:", listResp.status, err);
-      // If 403/401, scopes may not include gmail — surface this clearly
-      if (listResp.status === 401 || listResp.status === 403) return { needsReauth: true };
+      const errText = await listResp.text();
+      console.error("[gmail] List failed:", listResp.status, errText);
+      let errReason = "unknown";
+      try { errReason = JSON.parse(errText)?.error?.errors?.[0]?.reason || JSON.parse(errText)?.error?.status || "unknown"; } catch {}
+      if (listResp.status === 401 || listResp.status === 403) return { needsReauth: true, reason: errReason };
       return null;
     }
     const listData = await listResp.json();
@@ -743,17 +744,26 @@ const server = http.createServer(async (req, res) => {
           body: params.toString(),
         });
         const data = await resp.json();
-        if (data.refresh_token) {
-          saveGCalToken({
-            refresh_token: data.refresh_token,
-            access_token: data.access_token,
-            expires_at: Date.now() + (data.expires_in || 3600) * 1000,
-          });
-          console.log("[gcal] Calendar connected successfully");
-          res.writeHead(302, { Location: "/?gcal=connected" });
+        if (data.access_token) {
+          // Keep existing refresh_token if Google didn't issue a new one (re-auth scenario)
+          const existing = loadGCalToken();
+          const refresh_token = data.refresh_token || (existing && existing.refresh_token) || null;
+          if (refresh_token) {
+            saveGCalToken({
+              refresh_token,
+              access_token: data.access_token,
+              expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+              scope: data.scope || "",
+            });
+            console.log("[gcal] Connected successfully. Scopes:", data.scope || "(not returned)");
+            res.writeHead(302, { Location: "/?gcal=connected" });
+          } else {
+            console.error("[gcal] No refresh token available:", data);
+            res.writeHead(302, { Location: "/?gcal=error&reason=no_refresh_token" });
+          }
         } else {
-          console.error("[gcal] No refresh token in response:", data);
-          res.writeHead(302, { Location: "/?gcal=error" });
+          console.error("[gcal] Token exchange failed:", data);
+          res.writeHead(302, { Location: "/?gcal=error&reason=" + encodeURIComponent(data.error || "unknown") });
         }
       } catch (err) {
         console.error("[gcal] Callback error:", err.message);

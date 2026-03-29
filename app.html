@@ -2958,7 +2958,7 @@
         const res = await fetch("/api/gmail-inbox");
         const data = await res.json();
         if (data.needsReauth) {
-          renderInbox([], true);
+          renderInbox([], true, data.reason);
         } else {
           inboxEmails = data.emails || [];
           renderInbox(inboxEmails, !data.connected);
@@ -2982,14 +2982,17 @@
       return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     }
 
-    function renderInbox(emails, notConnected) {
+    function renderInbox(emails, notConnected, reason) {
       const badge = document.getElementById("inbox-status-badge");
       const content = document.getElementById("inbox-content");
       if (!badge || !content) return;
 
       if (notConnected) {
         badge.innerHTML = `<a href="/api/gcal-auth" class="gcal-connect-btn">Connect</a>`;
-        content.innerHTML = `<div class="today-empty">Re-connect Google to enable Gmail access.</div>`;
+        const apiNote = (reason === "accessNotConfigured" || reason === "SERVICE_DISABLED")
+          ? `<div style="margin-top:8px;font-size:11px;color:#f87171;">Gmail API is not enabled in Google Cloud Console.<br>Go to <strong>APIs &amp; Services → Enable APIs</strong> and enable <strong>Gmail API</strong>, then reconnect.</div>`
+          : `<div style="margin-top:8px;font-size:11px;color:#71717a;">Click Connect and re-authorize to grant Gmail access.${reason ? `<br>Reason: ${reason}` : ""}</div>`;
+        content.innerHTML = `<div class="today-empty">Gmail not connected.${apiNote}</div>`;
         return;
       }
 
