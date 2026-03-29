@@ -787,7 +787,8 @@ const server = http.createServer(async (req, res) => {
       const idx = tasks.findIndex(t => t.id === id);
       if (idx === -1) return json(res, 404, { error: "Task not found" });
       const t = tasks[idx];
-      const { startTime, endTime, allDay } = body;
+      const { startTime, endTime, allDay, recurrence, timeZone } = body;
+      const tz = timeZone || "America/Chicago";
       let eventData;
       if (allDay) {
         const dateStr = (startTime || "").substring(0, 10);
@@ -802,10 +803,11 @@ const server = http.createServer(async (req, res) => {
         eventData = {
           summary: t.title,
           description: t.project ? `Project: ${t.project}` : "",
-          start: { dateTime: startTime },
-          end: { dateTime: endTime },
+          start: { dateTime: startTime, timeZone: tz },
+          end: { dateTime: endTime, timeZone: tz },
         };
       }
+      if (Array.isArray(recurrence) && recurrence.length) eventData.recurrence = recurrence;
       const evt = await gcalCreateOrUpdateEvent(t.calEventId || null, eventData);
       if (!evt) return json(res, 500, { error: "Failed to create calendar event" });
       tasks[idx].calEventId = evt.id;
