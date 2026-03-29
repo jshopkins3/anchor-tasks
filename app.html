@@ -4090,7 +4090,7 @@
         <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}')">
           <div class="email-row-from">
             <span>${esc(e.from)}</span>
-            <span style="font-size:10px;color:#3f3f46;">${formatEmailDate(e.date)}</span>
+            <span style="font-size:10px;color:#3f3f46;">${formatEmailTime(e.date)}</span>
           </div>
           <div class="email-row-subject">${esc(e.subject)}</div>
           <div class="email-row-snippet">${esc(e.snippet)}</div>
