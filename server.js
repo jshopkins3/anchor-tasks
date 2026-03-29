@@ -927,6 +927,51 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── GCAL EVENT EDIT ────────────────────────────────────────────── */
+    const gcalEventMatch = urlPath.match(/^\/api\/gcal-event\/([^/]+)$/);
+    if (gcalEventMatch && (req.method === "PATCH" || req.method === "DELETE")) {
+      const eventId = gcalEventMatch[1];
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+
+      // Determine which calendar (source param tells us)
+      const sourceParam = url.searchParams.get("source") || "personal";
+      const calId = sourceParam === "anchor" ? ANCHOR_GCAL_CALENDAR_ID : GCAL_CALENDAR_ID;
+
+      if (req.method === "DELETE") {
+        const delUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${eventId}`;
+        const delResp = await fetch(delUrl, { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } });
+        return json(res, delResp.ok || delResp.status === 404 ? 200 : 500, { ok: delResp.ok });
+      }
+
+      // PATCH — update event
+      const body = JSON.parse(await readBody(req));
+      const { title, startTime, endTime, allDay, timeZone, location } = body;
+      const tz = timeZone || "America/Chicago";
+      let eventData;
+      if (allDay) {
+        const dateStr = (startTime || "").substring(0, 10);
+        const nextDay = dateStr ? new Date(new Date(dateStr + "T12:00:00Z").getTime() + 86400000).toISOString().substring(0, 10) : dateStr;
+        eventData = { summary: title, start: { date: dateStr }, end: { date: nextDay } };
+      } else {
+        eventData = { summary: title, start: { dateTime: startTime, timeZone: tz }, end: { dateTime: endTime, timeZone: tz } };
+      }
+      if (location !== undefined) eventData.location = location;
+
+      const patchUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${eventId}`;
+      const patchResp = await fetch(patchUrl, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(eventData),
+      });
+      if (!patchResp.ok) {
+        const err = await patchResp.text();
+        console.error("[gcal] Event patch failed:", patchResp.status, err);
+        return json(res, 500, { error: "Failed to update event" });
+      }
+      return json(res, 200, { ok: true });
+    }
+
     /* ── JOURNAL API ────────────────────────────────────────────────── */
     if (urlPath === "/api/journal" && req.method === "GET") {
       const entries = loadJournal();

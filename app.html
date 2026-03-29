@@ -2790,9 +2790,12 @@
         const sub = ev.source === "task"
           ? (ev.taskId ? `<div class="cal-day-event-sub">Task${tasks.find(t=>t.id===ev.taskId)?.project ? " · " + esc(tasks.find(t=>t.id===ev.taskId).project) : ""}</div>` : "")
           : (ev.location ? `<div class="cal-day-event-sub">📍 ${esc(ev.location)}</div>` : "");
-        return `<div class="cal-day-event ${ev.source}">
+        const editData = encodeURIComponent(JSON.stringify({ id: ev.id, title: ev.title, start: ev.start, end: ev.end, allDay: ev.allDay, location: ev.location || "", source: ev.source }));
+        const clickable = ev.source !== "task" ? `style="cursor:pointer;" onclick="openCalEventEdit(decodeURIComponent('${editData}'))"` : "";
+        const editHint = ev.source !== "task" ? `<span style="font-size:10px;color:#3f3f46;margin-left:6px;">✎ edit</span>` : "";
+        return `<div class="cal-day-event ${ev.source}" ${clickable}>
           <div class="cal-day-event-time">${timeLabel}</div>
-          <div><div class="cal-day-event-title">${esc(ev.title)}</div>${sub}</div>
+          <div style="flex:1;"><div class="cal-day-event-title">${esc(ev.title)}${editHint}</div>${sub}</div>
         </div>`;
       }).join("");
 
@@ -3884,6 +3887,160 @@
     function closeTherapyView() {
       const overlay = document.getElementById("therapy-overlay");
       if (overlay) overlay.style.display = "none";
+    }
+
+    /* ── Calendar event edit ──────────────────────────────────── */
+    function openCalEventEdit(evJson) {
+      const ev = typeof evJson === "string" ? JSON.parse(evJson) : evJson;
+      closeCalEventEdit();
+
+      const startDate = (ev.start || "").substring(0, 10);
+      const startTimeParts = ev.allDay ? ["12", "00", true] : parseTimeParts(ev.start);
+      const endTimeParts   = ev.allDay ? ["1",  "00", false] : parseTimeParts(ev.end);
+
+      const [sh, sm, sIsAM] = startTimeParts;
+      const [eh, em, eIsAM] = endTimeParts;
+
+      const sourceLabel = ev.source === "anchor" ? "Anchor Calendar" : "Personal Calendar";
+      const sourceColor = ev.source === "anchor" ? "#fcd34d" : "#93c5fd";
+
+      const modal = document.createElement("div");
+      modal.className = "modal-overlay";
+      modal.id = "cal-event-edit-modal";
+      modal.innerHTML = `<div class="modal-box" style="width:400px;">
+        <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Edit Event</span>
+          <span style="font-size:11px;color:${sourceColor};font-weight:500;">${sourceLabel}</span>
+        </div>
+
+        <div class="modal-field">
+          <label>Title</label>
+          <input id="cee-title" class="inp-title" value="${esc(ev.title)}" style="width:100%;box-sizing:border-box;" />
+        </div>
+
+        <div class="modal-field">
+          <label>Date</label>
+          <input id="cee-date" type="date" value="${startDate}" style="width:100%;box-sizing:border-box;background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:7px 10px;font-size:13px;" />
+        </div>
+
+        <div class="modal-field">
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="cee-allday" ${ev.allDay ? "checked" : ""} onchange="toggleCeeAllDay()" />
+            All-day event
+          </label>
+        </div>
+
+        <div id="cee-time-fields" style="${ev.allDay ? "display:none;" : ""}">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="modal-field">
+              <label>Start</label>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <select id="cee-sh" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildHourOpts(sh)}</select>
+                <select id="cee-sm" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildMinOpts(sm)}</select>
+                <div style="display:flex;gap:3px;">
+                  <button class="ampm-btn ${sIsAM ? "active" : ""}" id="cee-s-am" onclick="setCeeAmPm('s','AM')">AM</button>
+                  <button class="ampm-btn ${sIsAM ? "" : "active"}" id="cee-s-pm" onclick="setCeeAmPm('s','PM')">PM</button>
+                </div>
+              </div>
+            </div>
+            <div class="modal-field">
+              <label>End</label>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <select id="cee-eh" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildHourOpts(eh)}</select>
+                <select id="cee-em" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildMinOpts(em)}</select>
+                <div style="display:flex;gap:3px;">
+                  <button class="ampm-btn ${eIsAM ? "active" : ""}" id="cee-e-am" onclick="setCeeAmPm('e','AM')">AM</button>
+                  <button class="ampm-btn ${eIsAM ? "" : "active"}" id="cee-e-pm" onclick="setCeeAmPm('e','PM')">PM</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-field">
+          <label>Location</label>
+          <input id="cee-location" class="inp-title" value="${esc(ev.location || "")}" placeholder="Optional" style="width:100%;box-sizing:border-box;" />
+        </div>
+
+        <div class="modal-footer" style="justify-content:space-between;">
+          <button class="btn-cancel" style="color:#ef4444;border-color:#ef4444;" onclick="deleteCalEvent('${ev.id}','${ev.source}')">Delete</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-cancel" onclick="closeCalEventEdit()">Cancel</button>
+            <button class="btn-save" id="cee-save-btn" onclick="saveCalEventEdit('${ev.id}','${ev.source}')">Save</button>
+          </div>
+        </div>
+      </div>`;
+      modal.addEventListener("click", e => { if (e.target === modal) closeCalEventEdit(); });
+      document.body.appendChild(modal);
+    }
+
+    function parseTimeParts(isoStr) {
+      if (!isoStr || isoStr.length <= 10) return ["12", "00", true];
+      const d = new Date(isoStr);
+      const h24 = d.getHours(), m = d.getMinutes();
+      const isAM = h24 < 12;
+      const h12 = h24 % 12 || 12;
+      return [String(h12), String(m).padStart(2, "0"), isAM];
+    }
+
+    function setCeeAmPm(slot, val) {
+      const amId = `cee-${slot}-am`, pmId = `cee-${slot}-pm`;
+      document.getElementById(amId).classList.toggle("active", val === "AM");
+      document.getElementById(pmId).classList.toggle("active", val === "PM");
+    }
+
+    function toggleCeeAllDay() {
+      const checked = document.getElementById("cee-allday").checked;
+      document.getElementById("cee-time-fields").style.display = checked ? "none" : "";
+    }
+
+    function closeCalEventEdit() {
+      const m = document.getElementById("cal-event-edit-modal");
+      if (m) m.remove();
+    }
+
+    async function saveCalEventEdit(eventId, source) {
+      const btn = document.getElementById("cee-save-btn");
+      if (btn) { btn.textContent = "Saving..."; btn.disabled = true; }
+      const title = document.getElementById("cee-title").value.trim();
+      const date  = document.getElementById("cee-date").value;
+      const allDay = document.getElementById("cee-allday").checked;
+      const location = document.getElementById("cee-location")?.value || "";
+      if (!title || !date) { if (btn) { btn.textContent = "Save"; btn.disabled = false; } return; }
+      let body;
+      if (allDay) {
+        body = { title, startTime: date, allDay: true, location };
+      } else {
+        const startTime = getTimeValue("cee-sh", "cee-sm", "cee-s-am");
+        const endTime   = getTimeValue("cee-eh", "cee-em", "cee-e-am");
+        body = { title, startTime: `${date}T${startTime}`, endTime: `${date}T${endTime}`, allDay: false, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, location };
+      }
+      const res = await fetch(`/api/gcal-event/${eventId}?source=${source}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        closeCalEventEdit();
+        calLoading = false;
+        await renderCalendarView();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert("Failed to update: " + (err.error || "unknown error"));
+        if (btn) { btn.textContent = "Save"; btn.disabled = false; }
+      }
+    }
+
+    async function deleteCalEvent(eventId, source) {
+      if (!confirm("Delete this event from Google Calendar?")) return;
+      const res = await fetch(`/api/gcal-event/${eventId}?source=${source}`, { method: "DELETE" });
+      if (res.ok) {
+        closeCalEventEdit();
+        calLoading = false;
+        await renderCalendarView();
+      } else {
+        alert("Failed to delete event.");
+      }
     }
 
     /* ── Email section ────────────────────────────────────────── */
