@@ -534,6 +534,51 @@
       position: absolute; left: -20px; top: 50%; transform: translateY(-50%);
     }
 
+    /* ── Inbox ──────────────────────────────────────────────────── */
+    .email-item {
+      padding: 10px 0; border-bottom: 1px solid #1f1f23;
+    }
+    .email-item:last-child { border-bottom: none; }
+    .email-header { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+    .email-unread-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #3b82f6; flex-shrink: 0;
+    }
+    .email-from {
+      font-size: 12px; font-weight: 600; color: #e4e4e7;
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .email-time { font-size: 10px; color: #52525b; flex-shrink: 0; }
+    .email-subject {
+      font-size: 12px; color: #a1a1aa; margin-bottom: 3px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .email-snippet {
+      font-size: 11px; color: #52525b; line-height: 1.4;
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .email-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .email-btn {
+      background: none; border: 1px solid #3f3f46; color: #71717a;
+      border-radius: 5px; padding: 3px 8px; font-size: 10px; cursor: pointer;
+      font-family: inherit; transition: all .12s;
+    }
+    .email-btn:hover { color: #e4e4e7; border-color: #52525b; }
+    .email-btn.task-btn:hover { color: #60a5fa; border-color: #3b82f6; background: rgba(59,130,246,.08); }
+    .email-btn.read-btn:hover { color: #34d399; border-color: #10b981; }
+    .email-task-form {
+      background: #27272a; border-radius: 8px; padding: 12px;
+      margin-top: 8px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .email-task-form input, .email-task-form select {
+      background: #18181b; border: 1px solid #3f3f46; color: #e4e4e7;
+      border-radius: 6px; padding: 6px 10px; font-size: 12px;
+      font-family: inherit; outline: none; width: 100%;
+    }
+    .email-task-form input:focus, .email-task-form select:focus { border-color: #3b82f6; }
+    .email-task-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .email-task-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
     /* ── Calendar view ──────────────────────────────────────── */
     .cal-toolbar {
       display: flex; align-items: center; gap: 16px;
@@ -960,6 +1005,15 @@
             <div id="today-calendar-content"></div>
           </div>
 
+          <!-- Inbox -->
+          <div class="today-section-card" id="inbox-card">
+            <div class="today-section-header">
+              <span class="today-section-title">Inbox</span>
+              <span id="inbox-status-badge"></span>
+            </div>
+            <div id="inbox-content"><div class="today-empty">Loading...</div></div>
+          </div>
+
           <!-- Needs Attention -->
           <div class="today-section-card" id="needs-attention-card">
             <div class="today-section-header">
@@ -1114,7 +1168,7 @@
         googleClientId = cfg.clientId || "";
       } catch {}
 
-      await Promise.all([loadTasks(), loadProjects(), loadGoals(), loadCalEvents()]);
+      await Promise.all([loadTasks(), loadProjects(), loadGoals(), loadCalEvents(), loadInbox()]);
       renderAll();
       setupTabs();
       setupFilters();
@@ -1220,6 +1274,7 @@
                 ${t.assignee ? `<span class="task-tag assignee-tag">${esc(t.assignee)}</span>` : ""}
                 ${t.due ? `<span class="task-tag due">${t.due}</span>` : ""}
                 ${t.project ? `<span class="task-tag project-tag">${esc(t.project)}</span>` : ""}
+                ${t.emailId ? `<span class="task-tag" style="background:rgba(59,130,246,.12);color:#60a5fa;" title="${esc(t.emailSubject)}">✉</span>` : ""}
               </div>
             </div>
             <button class="task-edit" onclick="openEdit('${t.id}')" title="Edit">&#9998;</button>
@@ -2698,6 +2753,154 @@
       await renderCalendarView();
     }
 
+    /* ── Inbox ───────────────────────────────────────────────── */
+    let inboxEmails = [];
+    let inboxEmailTaskForm = null; // email id currently showing task form
+
+    async function loadInbox() {
+      try {
+        const res = await fetch("/api/gmail-inbox");
+        const data = await res.json();
+        if (data.needsReauth) {
+          renderInbox([], true);
+        } else {
+          inboxEmails = data.emails || [];
+          renderInbox(inboxEmails, !data.connected);
+        }
+      } catch {
+        renderInbox([], true);
+      }
+    }
+
+    function formatEmailTime(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+      if (diff < 86400000) {
+        let h = d.getHours(), ampm = h >= 12 ? "pm" : "am";
+        h = h % 12 || 12;
+        return `${h}:${String(d.getMinutes()).padStart(2,"0")}${ampm}`;
+      }
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+
+    function renderInbox(emails, notConnected) {
+      const badge = document.getElementById("inbox-status-badge");
+      const content = document.getElementById("inbox-content");
+      if (!badge || !content) return;
+
+      if (notConnected) {
+        badge.innerHTML = `<a href="/api/gcal-auth" class="gcal-connect-btn">Connect</a>`;
+        content.innerHTML = `<div class="today-empty">Re-connect Google to enable Gmail access.</div>`;
+        return;
+      }
+
+      const unread = emails.filter(e => e.unread).length;
+      badge.innerHTML = unread
+        ? `<span class="today-section-count">${unread}</span>`
+        : `<span style="font-size:10px;color:#52525b;">All read</span>`;
+
+      if (!emails.length) {
+        content.innerHTML = `<div class="today-empty">Inbox zero! Nothing unread.</div>`;
+        return;
+      }
+
+      content.innerHTML = emails.map(email => {
+        const showForm = inboxEmailTaskForm === email.id;
+        const projectOpts = projects.filter(p => !p.archived)
+          .map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
+
+        return `
+          <div class="email-item" id="email-${email.id}">
+            <div class="email-header">
+              ${email.unread ? `<span class="email-unread-dot"></span>` : ""}
+              <span class="email-from">${esc(email.from)}</span>
+              <span class="email-time">${formatEmailTime(email.date)}</span>
+            </div>
+            <div class="email-subject">${esc(email.subject)}</div>
+            <div class="email-snippet">${esc(email.snippet)}</div>
+            <div class="email-actions">
+              <button class="email-btn task-btn" onclick="toggleEmailTaskForm('${email.id}')">
+                ${showForm ? "Cancel" : "→ Task"}
+              </button>
+              <button class="email-btn read-btn" onclick="markEmailRead('${email.id}')">✓ Read</button>
+            </div>
+            ${showForm ? `
+            <div class="email-task-form">
+              <input id="etf-title-${email.id}" value="${esc(email.subject)}" placeholder="Task title..." />
+              <div class="email-task-form-row">
+                <select id="etf-project-${email.id}">
+                  <option value="">No project</option>
+                  ${projectOpts}
+                </select>
+                <select id="etf-priority-${email.id}">
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              <div class="email-task-form-row">
+                <input id="etf-due-${email.id}" type="date" placeholder="Due date" />
+                <input id="etf-assignee-${email.id}" value="${esc(user ? user.name : "")}" placeholder="Assign to..." />
+              </div>
+              <div class="email-task-form-actions">
+                <button class="btn-cancel" style="font-size:12px;" onclick="toggleEmailTaskForm('${email.id}')">Cancel</button>
+                <button class="btn-save" style="font-size:12px;" onclick="createTaskFromEmail('${email.id}')">Create Task</button>
+              </div>
+            </div>` : ""}
+          </div>`;
+      }).join("");
+    }
+
+    function toggleEmailTaskForm(emailId) {
+      inboxEmailTaskForm = inboxEmailTaskForm === emailId ? null : emailId;
+      renderInbox(inboxEmails, false);
+    }
+
+    async function createTaskFromEmail(emailId) {
+      const email = inboxEmails.find(e => e.id === emailId);
+      if (!email) return;
+      const title = document.getElementById(`etf-title-${emailId}`)?.value.trim();
+      if (!title) return;
+      const project = document.getElementById(`etf-project-${emailId}`)?.value || "";
+      const priority = document.getElementById(`etf-priority-${emailId}`)?.value || "normal";
+      const due = document.getElementById(`etf-due-${emailId}`)?.value || "";
+      const assignee = document.getElementById(`etf-assignee-${emailId}`)?.value || "";
+
+      const btn = document.querySelector(`#email-${emailId} .btn-save`);
+      if (btn) { btn.textContent = "Creating..."; btn.disabled = true; }
+
+      await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title, project, priority, due, assignee,
+          todayFocus: true,
+          emailId: email.id,
+          emailSubject: email.subject,
+        }),
+      });
+
+      // Mark email as read
+      await fetch(`/api/gmail-mark-read/${emailId}`, { method: "POST" });
+      inboxEmails = inboxEmails.filter(e => e.id !== emailId);
+      inboxEmailTaskForm = null;
+
+      await loadTasks();
+      renderAll();
+    }
+
+    async function markEmailRead(emailId) {
+      await fetch(`/api/gmail-mark-read/${emailId}`, { method: "POST" });
+      inboxEmails = inboxEmails.filter(e => e.id !== emailId);
+      renderInbox(inboxEmails, false);
+      // Update unread count in stats
+      renderStats();
+    }
+
     /* ── Today / Calendar ────────────────────────────────────── */
     let calEvents = [];
     let gcalConnected = false;
@@ -2779,6 +2982,7 @@
           const schedBadge = t.scheduledStart
             ? `<span class="focus-tag scheduled">📅 ${formatEventTime(t.scheduledStart)}</span>` : "";
           const projBadge = t.project ? `<span class="focus-tag">${esc(t.project)}</span>` : "";
+          const emailBadge = t.emailId ? `<span class="focus-tag" style="background:rgba(59,130,246,.12);color:#60a5fa;" title="${esc(t.emailSubject)}">✉</span>` : "";
           const scheduleBtnClass = t.calEventId ? "focus-btn schedule-btn scheduled" : "focus-btn schedule-btn";
           const scheduleBtnLabel = t.calEventId ? "Scheduled" : "Schedule";
           return `
@@ -2787,7 +2991,7 @@
               <button class="focus-check ${t.done ? "done" : ""}" onclick="toggleTask('${t.id}')"></button>
               <div class="focus-body">
                 <div class="focus-title ${t.done ? "done" : ""}">${esc(t.title)}</div>
-                <div class="focus-meta">${priBadge}${getDueTag(t.due)}${schedBadge}${projBadge}</div>
+                <div class="focus-meta">${priBadge}${getDueTag(t.due)}${schedBadge}${projBadge}${emailBadge}</div>
               </div>
               <div class="focus-actions">
                 <button class="${scheduleBtnClass}" onclick="openScheduleModal('${t.id}')">${scheduleBtnLabel}</button>
@@ -2805,6 +3009,9 @@
 
       // Calendar
       renderCalendar();
+
+      // Inbox
+      renderInbox(inboxEmails, false);
 
       // Needs attention
       renderNeedsAttention();
@@ -2919,8 +3126,7 @@
     }
 
     async function refreshToday() {
-      const btn = document.getElementById("btn-ai-prioritize");
-      await loadCalEvents();
+      await Promise.all([loadCalEvents(), loadInbox()]);
       renderToday();
     }
 

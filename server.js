@@ -21,6 +21,8 @@ const ANCHOR_GCAL_CALENDAR_ID = process.env.ANCHOR_GCAL_CALENDAR_ID ||
 const GCAL_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
 ].join(" ");
 
 const MIME = {
@@ -148,6 +150,8 @@ function parseTasks() {
       todayOrder: parseInt(parts[12]) || 0,
       calEventId: parts[13] || "",
       scheduledStart: parts[14] || "",
+      emailId: parts[15] || "",
+      emailSubject: parts[16] || "",
       done,
     });
   }
@@ -157,7 +161,7 @@ function parseTasks() {
 function writeTasks(tasks) {
   const active = tasks.filter(t => !t.done);
   const completed = tasks.filter(t => t.done);
-  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""} | ${t.personal ? "true" : "false"} | ${t.urgent ? "true" : "false"} | ${t.important ? "true" : "false"} | ${t.linkedGoal || ""} | ${t.todayFocus ? "true" : "false"} | ${t.todayOrder || 0} | ${t.calEventId || ""} | ${t.scheduledStart || ""}`;
+  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""} | ${t.personal ? "true" : "false"} | ${t.urgent ? "true" : "false"} | ${t.important ? "true" : "false"} | ${t.linkedGoal || ""} | ${t.todayFocus ? "true" : "false"} | ${t.todayOrder || 0} | ${t.calEventId || ""} | ${t.scheduledStart || ""} | ${t.emailId || ""} | ${t.emailSubject || ""}`;
   const md = [
     "# Tasks", "",
     "## Active", ...active.map(fmt), "",
@@ -337,6 +341,94 @@ async function gcalGetRangeEvents(startDate, endDate) {
   return [...personal, ...anchor].sort((a, b) => a.start.localeCompare(b.start));
 }
 
+/* ─── Gmail helpers ──────────────────────────────────────────────────────── */
+function parseEmailHeader(headers, name) {
+  const h = (headers || []).find(h => h.name.toLowerCase() === name.toLowerCase());
+  return h ? h.value : "";
+}
+
+function decodeEmailBody(payload) {
+  // Try to get plain text body
+  function findPart(p) {
+    if (!p) return "";
+    if (p.mimeType === "text/plain" && p.body?.data) return p.body.data;
+    if (p.parts) { for (const part of p.parts) { const r = findPart(part); if (r) return r; } }
+    return "";
+  }
+  const raw = findPart(payload);
+  if (!raw) return "";
+  try {
+    return Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8").substring(0, 2000);
+  } catch { return ""; }
+}
+
+async function gmailGetInbox() {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  try {
+    // List unread messages
+    const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
+      new URLSearchParams({ q: "is:unread in:inbox", maxResults: "15" }).toString();
+    const listResp = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!listResp.ok) {
+      const err = await listResp.text();
+      console.error("[gmail] List failed:", listResp.status, err);
+      // If 403/401, scopes may not include gmail — surface this clearly
+      if (listResp.status === 401 || listResp.status === 403) return { needsReauth: true };
+      return null;
+    }
+    const listData = await listResp.json();
+    const messages = listData.messages || [];
+    if (!messages.length) return [];
+
+    // Fetch metadata for each
+    const emails = await Promise.all(messages.slice(0, 15).map(async m => {
+      const msgUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`;
+      const msgResp = await fetch(msgUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!msgResp.ok) return null;
+      const msg = await msgResp.json();
+      const headers = msg.payload?.headers || [];
+      const from = parseEmailHeader(headers, "From");
+      const subject = parseEmailHeader(headers, "Subject") || "(No subject)";
+      const date = parseEmailHeader(headers, "Date");
+      // Parse display name from "Name <email>" format
+      const fromMatch = from.match(/^"?([^"<]+)"?\s*<?([^>]*)>?$/);
+      const fromName = fromMatch ? fromMatch[1].trim() : from;
+      const fromEmail = fromMatch ? fromMatch[2].trim() : from;
+      return {
+        id: m.id,
+        threadId: msg.threadId,
+        subject,
+        from: fromName || fromEmail,
+        fromEmail,
+        snippet: msg.snippet || "",
+        date,
+        unread: (msg.labelIds || []).includes("UNREAD"),
+      };
+    }));
+    return emails.filter(Boolean);
+  } catch (err) {
+    console.error("[gmail] Inbox error:", err.message);
+    return null;
+  }
+}
+
+async function gmailMarkRead(messageId) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return false;
+  try {
+    const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
+    });
+    return resp.ok;
+  } catch (err) {
+    console.error("[gmail] Mark read error:", err.message);
+    return false;
+  }
+}
+
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
 function projectDetailPath(id) {
   return path.join(DATA_DIR, `project-${id}.json`);
@@ -481,6 +573,8 @@ const server = http.createServer(async (req, res) => {
       if (body.todayOrder !== undefined) tasks[idx].todayOrder = Math.max(0, parseInt(body.todayOrder) || 0);
       if (body.calEventId !== undefined) tasks[idx].calEventId = String(body.calEventId).substring(0, 200);
       if (body.scheduledStart !== undefined) tasks[idx].scheduledStart = String(body.scheduledStart).substring(0, 50);
+      if (body.emailId !== undefined) tasks[idx].emailId = String(body.emailId).substring(0, 200);
+      if (body.emailSubject !== undefined) tasks[idx].emailSubject = String(body.emailSubject).substring(0, 500);
       writeTasks(tasks);
       return json(res, 200, { task: tasks[idx] });
     }
@@ -753,6 +847,20 @@ const server = http.createServer(async (req, res) => {
       });
       scored.sort((a, b) => b._score - a._score);
       return json(res, 200, { tasks: scored.slice(0, 10).map(t => { const { _score, ...rest } = t; return { ...rest, score: _score }; }) });
+    }
+
+    /* ── GMAIL API ──────────────────────────────────────────────── */
+    if (urlPath === "/api/gmail-inbox" && req.method === "GET") {
+      const result = await gmailGetInbox();
+      if (result === null) return json(res, 200, { emails: [], connected: false });
+      if (result && result.needsReauth) return json(res, 200, { emails: [], connected: false, needsReauth: true });
+      return json(res, 200, { emails: result, connected: true });
+    }
+
+    if (urlPath.match(/^\/api\/gmail-mark-read\//) && req.method === "POST") {
+      const msgId = urlPath.split("/").pop();
+      const ok = await gmailMarkRead(msgId);
+      return json(res, 200, { ok });
     }
 
     /* ── GOALS API ──────────────────────────────────────────────── */
