@@ -2315,7 +2315,9 @@
             else { renderJournalSidebar(); renderJournalEditor(); }
           }
           if (tab.dataset.tab === "email") {
-            renderEmailSection();
+            const el = document.getElementById("email-list-items");
+            if (el) el.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Loading...</div>`;
+            loadInbox().then(renderEmailSection);
           }
         });
       });
@@ -4056,9 +4058,7 @@
       if (!listEl) return;
 
       if (!inboxEmails.length) {
-        listEl.innerHTML = `<div class="today-empty" style="padding:32px 16px;">
-          ${inboxEmails.length === 0 ? 'Inbox zero — nothing unread!<br><br><a href="/api/gcal-auth" style="color:#3b82f6;font-size:12px;">🔄 Reconnect Google</a>' : 'Loading...'}
-        </div>`;
+        listEl.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Inbox zero — nothing unread!<br><br><a href="/api/gcal-auth" style="color:#3b82f6;font-size:12px;">🔄 Reconnect Google</a></div>`;
         if (detailEl) detailEl.innerHTML = `<div class="today-empty" style="margin-top:80px;">Select an email to read it.</div>`;
         return;
       }
