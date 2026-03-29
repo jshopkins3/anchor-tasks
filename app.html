@@ -4121,7 +4121,7 @@
           <div class="email-detail-meta">
             <span>From: <strong style="color:#a1a1aa;">${esc(email.from)}</strong></span>
             <span>${esc(email.fromEmail || "")}</span>
-            <span>${formatEmailDate(email.date)}</span>
+            <span>${formatEmailTime(email.date)}</span>
             ${email.unread ? `<span style="color:#f59e0b;font-size:11px;">● Unread</span>` : ""}
           </div>
         </div>
@@ -4129,7 +4129,7 @@
         <div class="email-detail-snippet">${esc(email.snippet)}</div>
 
         <div class="email-detail-actions">
-          ${email.unread ? `<button class="focus-btn" onclick="markEmailRead('${email.id}').then(renderEmailSection)" style="padding:6px 14px;font-size:12px;">✓ Mark Read</button>` : ""}
+          ${email.unread ? `<button class="focus-btn" onclick="markEmailRead('${email.id}')" style="padding:6px 14px;font-size:12px;">✓ Mark Read</button>` : ""}
           <button class="focus-btn" onclick="deleteEmail('${email.id}')" style="padding:6px 14px;font-size:12px;color:#ef4444;border-color:#ef4444;">🗑 Delete</button>
         </div>
 
