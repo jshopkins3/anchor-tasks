@@ -2807,10 +2807,14 @@
         return;
       }
 
-      content.innerHTML = emails.map(email => {
+      const digest = renderInboxDigest(emails);
+      const digestHtml = digest ? `<div style="font-size:11px;color:#71717a;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #1f1f23;">${digest}</div>` : "";
+
+      content.innerHTML = digestHtml + emails.map(email => {
         const showForm = inboxEmailTaskForm === email.id;
+        const triage = showForm ? triageEmail(email) : null;
         const projectOpts = projects.filter(p => !p.archived)
-          .map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
+          .map(p => `<option value="${esc(p.name)}" ${triage && triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
 
         return `
           <div class="email-item" id="email-${email.id}">
@@ -2828,22 +2832,26 @@
               <button class="email-btn read-btn" onclick="markEmailRead('${email.id}')">✓ Read</button>
             </div>
             ${showForm ? `
-            <div class="email-task-form">
-              <input id="etf-title-${email.id}" value="${esc(email.subject)}" placeholder="Task title..." />
+            <div class="email-task-form" id="etf-form-${email.id}" style="border:1px solid #3f3f46;border-radius:8px;">
+              <div style="font-size:10px;color:#a78bfa;margin-bottom:4px;display:flex;align-items:center;gap:4px;">
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                AI pre-filled from email content
+              </div>
+              <input id="etf-title-${email.id}" value="${esc(triage.title)}" placeholder="Task title..." />
               <div class="email-task-form-row">
                 <select id="etf-project-${email.id}">
                   <option value="">No project</option>
                   ${projectOpts}
                 </select>
                 <select id="etf-priority-${email.id}">
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                  <option value="low">Low</option>
+                  <option value="normal" ${triage.priority==="normal"?"selected":""}>Normal</option>
+                  <option value="high" ${triage.priority==="high"?"selected":""}>High</option>
+                  <option value="urgent" ${triage.priority==="urgent"?"selected":""}>Urgent</option>
+                  <option value="low" ${triage.priority==="low"?"selected":""}>Low</option>
                 </select>
               </div>
               <div class="email-task-form-row">
-                <input id="etf-due-${email.id}" type="date" placeholder="Due date" />
+                <input id="etf-due-${email.id}" type="date" value="${triage.due}" />
                 <input id="etf-assignee-${email.id}" value="${esc(user ? user.name : "")}" placeholder="Assign to..." />
               </div>
               <div class="email-task-form-actions">
@@ -2855,9 +2863,108 @@
       }).join("");
     }
 
+    /* ── AI Email Triage ─────────────────────────────────────── */
+    function triageEmail(email) {
+      const text = ((email.subject || "") + " " + (email.snippet || "")).toLowerCase();
+
+      // Priority scoring
+      let priority = "normal";
+      if (/urgent|asap|immediately|critical|time.sensitive|expir|deadline/.test(text)) priority = "urgent";
+      else if (/closing|due|lock|appraisal|title|hoi|insurance|docs|condition|ctc|funding/.test(text)) priority = "high";
+      else if (/question|follow.up|check.in|update|status|review/.test(text)) priority = "normal";
+      else if (/fyi|newsletter|unsubscribe|no.reply/.test(text)) priority = "low";
+
+      // Clean up subject for task title
+      let title = (email.subject || "")
+        .replace(/^(re|fwd?|fw):\s*/i, "")
+        .replace(/^(re|fwd?|fw):\s*/i, "") // double pass for Re: Fwd: etc
+        .trim();
+      if (!title) title = `Email from ${email.from}`;
+
+      // Try to match a project by scanning project names and task keywords
+      let suggestedProject = "";
+      const activeProjects = projects.filter(p => !p.archived);
+      // Check if any project name appears in the email text
+      for (const p of activeProjects) {
+        const pName = p.name.toLowerCase();
+        // Match by project name words
+        const words = pName.split(/\s+/).filter(w => w.length > 3);
+        if (words.some(w => text.includes(w))) {
+          suggestedProject = p.name;
+          break;
+        }
+      }
+      // Also check email from domain against project names
+      if (!suggestedProject) {
+        const fromDomain = (email.fromEmail || "").split("@")[1] || "";
+        for (const p of activeProjects) {
+          if (fromDomain && p.name.toLowerCase().includes(fromDomain.split(".")[0])) {
+            suggestedProject = p.name;
+            break;
+          }
+        }
+      }
+
+      // Suggest a due date if urgency detected
+      let due = "";
+      if (priority === "urgent") {
+        due = new Date().toISOString().substring(0, 10); // today
+      } else if (priority === "high") {
+        const d = new Date(); d.setDate(d.getDate() + 2);
+        due = d.toISOString().substring(0, 10);
+      }
+
+      return { title, priority, suggestedProject, due };
+    }
+
+    function aiTriageEmail(emailId) {
+      const email = inboxEmails.find(e => e.id === emailId);
+      if (!email) return;
+      const triage = triageEmail(email);
+      // Apply to form fields
+      const titleEl = document.getElementById(`etf-title-${emailId}`);
+      const priEl = document.getElementById(`etf-priority-${emailId}`);
+      const projEl = document.getElementById(`etf-project-${emailId}`);
+      const dueEl = document.getElementById(`etf-due-${emailId}`);
+      if (titleEl) titleEl.value = triage.title;
+      if (priEl) priEl.value = triage.priority;
+      if (projEl && triage.suggestedProject) projEl.value = triage.suggestedProject;
+      if (dueEl && triage.due) dueEl.value = triage.due;
+      // Flash the form to show it was updated
+      const form = document.getElementById(`etf-form-${emailId}`);
+      if (form) {
+        form.style.transition = "border-color .3s";
+        form.style.borderColor = "#8b5cf6";
+        setTimeout(() => { form.style.borderColor = ""; }, 600);
+      }
+    }
+
+    function renderInboxDigest(emails) {
+      if (!emails || !emails.length) return "";
+      const urgent = emails.filter(e => {
+        const t = triageEmail(e);
+        return t.priority === "urgent";
+      });
+      const high = emails.filter(e => {
+        const t = triageEmail(e);
+        return t.priority === "high";
+      });
+      const senders = [...new Set(emails.slice(0, 3).map(e => e.from.split(" ")[0]))];
+
+      let digest = `<strong>${emails.length} unread</strong>`;
+      if (urgent.length) digest += ` · <span style="color:#f87171;">${urgent.length} urgent</span>`;
+      if (high.length) digest += ` · <span style="color:#fbbf24;">${high.length} high priority</span>`;
+      digest += ` · from ${senders.join(", ")}${emails.length > 3 ? " & more" : ""}`;
+      return digest;
+    }
+
     function toggleEmailTaskForm(emailId) {
       inboxEmailTaskForm = inboxEmailTaskForm === emailId ? null : emailId;
       renderInbox(inboxEmails, false);
+      // Auto-triage when form opens
+      if (inboxEmailTaskForm === emailId) {
+        setTimeout(() => aiTriageEmail(emailId), 50);
+      }
     }
 
     async function createTaskFromEmail(emailId) {
