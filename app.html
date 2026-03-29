@@ -873,7 +873,7 @@
     }
     .modal-box {
       background: #18181b; border: 1px solid #27272a; border-radius: 14px;
-      padding: 24px; width: 380px; max-width: 95vw;
+      padding: 24px; width: 420px; max-width: 95vw;
     }
     .modal-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -899,13 +899,85 @@
       border-radius: 8px; padding: 8px 12px; font-size: 13px;
       font-family: inherit; outline: none; width: 100%;
     }
-    .modal-field input:focus { border-color: #3b82f6; }
-    .modal-time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-field input:focus, .modal-field select:focus { border-color: #3b82f6; }
     .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
     .modal-allday {
       display: flex; align-items: center; gap: 8px;
       font-size: 13px; color: #a1a1aa; margin-bottom: 14px; cursor: pointer;
     }
+    /* Time picker */
+    .time-picker-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .time-picker-row .tp-sep { font-size: 13px; color: #52525b; }
+    .tp-select {
+      background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7;
+      border-radius: 8px; padding: 8px 10px; font-size: 13px;
+      font-family: inherit; outline: none; cursor: pointer;
+    }
+    .tp-select:focus { border-color: #3b82f6; }
+    .ampm-group { display: flex; border: 1px solid #3f3f46; border-radius: 8px; overflow: hidden; }
+    .ampm-btn {
+      background: none; border: none; color: #71717a;
+      padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+      font-family: inherit; transition: all .12s;
+    }
+    .ampm-btn + .ampm-btn { border-left: 1px solid #3f3f46; }
+    .ampm-btn.active { background: #3b82f6; color: #fff; }
+    .ampm-btn:not(.active):hover { background: #27272a; color: #e4e4e7; }
+    .time-block-label { font-size: 11px; color: #71717a; margin-bottom: 5px; }
+    .time-to-sep { font-size: 12px; color: #52525b; padding: 0 4px; align-self: center; margin-top: 16px; }
+
+    /* Morning Brief */
+    .morning-brief {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      border: 1px solid rgba(59,130,246,.3); border-radius: 14px;
+      padding: 20px 22px; margin-bottom: 20px; position: relative;
+      overflow: hidden;
+    }
+    .morning-brief::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+    }
+    .morning-brief-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .morning-brief-greeting {
+      font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.01em;
+    }
+    .morning-brief-date { font-size: 12px; color: #60a5fa; margin-top: 2px; }
+    .morning-brief-dismiss {
+      background: none; border: none; color: #3f3f46; font-size: 16px;
+      cursor: pointer; padding: 2px; line-height: 1; flex-shrink: 0;
+    }
+    .morning-brief-dismiss:hover { color: #71717a; }
+    .brief-stats {
+      display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .brief-stat {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #a1a1aa;
+    }
+    .brief-stat-icon { font-size: 14px; }
+    .brief-stat strong { color: #e4e4e7; }
+    .brief-stat.warn strong { color: #f87171; }
+    .brief-stat.caution strong { color: #fbbf24; }
+    .brief-priorities { border-top: 1px solid rgba(59,130,246,.2); padding-top: 12px; }
+    .brief-priorities-label {
+      font-size: 10px; font-weight: 700; color: #60a5fa;
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;
+    }
+    .brief-priority-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: #a1a1aa; padding: 3px 0;
+    }
+    .brief-priority-num {
+      font-size: 10px; font-weight: 700; color: #3b82f6;
+      width: 16px; text-align: center; flex-shrink: 0;
+    }
+    .brief-priority-title { color: #e4e4e7; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .brief-priority-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -957,6 +1029,9 @@
           </button>
         </div>
       </div>
+
+      <!-- Morning Brief -->
+      <div id="morning-brief-container"></div>
 
       <!-- Two-column layout -->
       <div class="today-layout">
@@ -3066,6 +3141,8 @@
     }
 
     function renderToday() {
+      renderMorningBrief();
+
       // Date header
       const { date, sub } = formatTodayDate();
       document.getElementById("today-date-label").textContent = date;
@@ -3304,7 +3381,100 @@
       aiSuggestions = [];
     }
 
+    /* ── Morning Brief ───────────────────────────────────────── */
+    function morningBriefKey() {
+      return "brief-dismissed-" + new Date().toISOString().substring(0, 10);
+    }
+
+    function renderMorningBrief() {
+      const container = document.getElementById("morning-brief-container");
+      if (!container) return;
+      if (localStorage.getItem(morningBriefKey())) { container.innerHTML = ""; return; }
+
+      const now = new Date();
+      const hour = now.getHours();
+      const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+      const firstName = (user?.name || "").split(" ")[0] || "there";
+      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const dateLabel = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}`;
+      const todayStr = now.toISOString().substring(0, 10);
+
+      // Stats
+      const activeTasks = tasks.filter(t => !t.done);
+      const overdue = activeTasks.filter(t => t.due && new Date(t.due + "T00:00:00") < new Date(todayStr + "T00:00:00"));
+      const dueToday = activeTasks.filter(t => t.due === todayStr);
+      const unread = inboxEmails.length;
+      const urgentEmails = inboxEmails.filter(e => triageEmail(e).priority === "urgent");
+      const todayEvents = calEvents.length;
+
+      // Top 3 priorities (quick score without server call)
+      const scored = activeTasks.map(t => {
+        let s = 0;
+        if (t.priority === "urgent") s += 40; else if (t.priority === "high") s += 25; else s += 10;
+        if (t.due) {
+          const diff = Math.floor((new Date(t.due + "T00:00:00") - new Date(todayStr + "T00:00:00")) / 86400000);
+          if (diff < 0) s += 50; else if (diff === 0) s += 40; else if (diff <= 2) s += 30; else if (diff <= 7) s += 20;
+        }
+        if (t.urgent && t.important) s += 20; else if (t.important) s += 10;
+        return { ...t, _s: s };
+      }).sort((a, b) => b._s - a._s).slice(0, 3);
+
+      const priorityColors = { urgent: "#f87171", high: "#fbbf24", normal: "#60a5fa", low: "#71717a" };
+
+      container.innerHTML = `
+        <div class="morning-brief">
+          <div class="morning-brief-header">
+            <div>
+              <div class="morning-brief-greeting">${greeting}, ${esc(firstName)}!</div>
+              <div class="morning-brief-date">${dateLabel}</div>
+            </div>
+            <button class="morning-brief-dismiss" onclick="dismissMorningBrief()" title="Dismiss for today">&times;</button>
+          </div>
+          <div class="brief-stats">
+            ${todayEvents ? `<div class="brief-stat"><span class="brief-stat-icon">📅</span><span><strong>${todayEvents}</strong> event${todayEvents > 1 ? "s" : ""} today</span></div>` : ""}
+            ${unread ? `<div class="brief-stat ${urgentEmails.length ? "warn" : ""}"><span class="brief-stat-icon">✉</span><span><strong>${unread}</strong> unread${urgentEmails.length ? ` · ${urgentEmails.length} urgent` : ""}</span></div>` : '<div class="brief-stat"><span class="brief-stat-icon">✉</span><span>Inbox clear</span></div>'}
+            ${overdue.length ? `<div class="brief-stat warn"><span class="brief-stat-icon">⚠</span><span><strong>${overdue.length}</strong> overdue</span></div>` : ""}
+            ${dueToday.length ? `<div class="brief-stat caution"><span class="brief-stat-icon">🎯</span><span><strong>${dueToday.length}</strong> due today</span></div>` : ""}
+            ${!overdue.length && !dueToday.length ? `<div class="brief-stat"><span class="brief-stat-icon">✅</span><span>No overdue tasks</span></div>` : ""}
+          </div>
+          ${scored.length ? `
+          <div class="brief-priorities">
+            <div class="brief-priorities-label">Recommended Focus</div>
+            ${scored.map((t, i) => `
+              <div class="brief-priority-item">
+                <span class="brief-priority-num">${i + 1}</span>
+                <span class="brief-priority-title">${esc(t.title)}</span>
+                ${t.priority !== "normal" ? `<span class="brief-priority-tag" style="background:${priorityColors[t.priority]}22;color:${priorityColors[t.priority]}">${t.priority}</span>` : ""}
+                ${t.due === todayStr ? `<span class="brief-priority-tag" style="background:rgba(245,158,11,.15);color:#fbbf24;">today</span>` : ""}
+              </div>`).join("")}
+          </div>` : ""}
+        </div>`;
+    }
+
+    function dismissMorningBrief() {
+      localStorage.setItem(morningBriefKey(), "1");
+      document.getElementById("morning-brief-container").innerHTML = "";
+    }
+
     /* ── Schedule modal ─────────────────────────────────────── */
+    function buildHourOpts(selected) {
+      return [1,2,3,4,5,6,7,8,9,10,11,12].map(h =>
+        `<option value="${h}" ${h === selected ? "selected" : ""}>${h}</option>`).join("");
+    }
+    function buildMinOpts(selected) {
+      return ["00","15","30","45"].map(m =>
+        `<option value="${m}" ${m === selected ? "selected" : ""}>${m}</option>`).join("");
+    }
+    function toggleAlldayUI(allDay) {
+      const row = document.getElementById("sched-time-row");
+      if (row) row.style.display = allDay ? "none" : "";
+    }
+    function setAmPm(slot, val) {
+      document.getElementById(`sched-${slot}-am`).classList.toggle("active", val === "AM");
+      document.getElementById(`sched-${slot}-pm`).classList.toggle("active", val === "PM");
+    }
+
     function openScheduleModal(taskId, prefillDate) {
       scheduleTaskId = taskId;
       const t = tasks.find(t => t.id === taskId);
@@ -3323,42 +3493,71 @@
             <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
           </div>
           <div class="modal-task-name">${esc(t.title)}</div>
+
           <label class="modal-allday">
             <input type="checkbox" id="sched-allday" onchange="toggleAlldayUI(this.checked)" />
             All-day event
           </label>
+
           <div class="modal-field">
             <label>Date</label>
             <input type="date" id="sched-date" value="${dateVal}" />
           </div>
-          <div id="sched-time-row" class="modal-time-row">
-            <div class="modal-field">
-              <label>Start Time</label>
-              <input type="time" id="sched-start" value="09:00" />
+
+          <div id="sched-time-row">
+            <div style="display:flex;gap:16px;align-items:flex-end;">
+              <div style="flex:1;">
+                <div class="time-block-label">Start</div>
+                <div class="time-picker-row">
+                  <select class="tp-select" id="sched-sh" style="width:64px;">${buildHourOpts(9)}</select>
+                  <span class="tp-sep">:</span>
+                  <select class="tp-select" id="sched-sm" style="width:70px;">${buildMinOpts("00")}</select>
+                  <div class="ampm-group">
+                    <button class="ampm-btn active" id="sched-start-am" onclick="setAmPm('start','AM')">AM</button>
+                    <button class="ampm-btn" id="sched-start-pm" onclick="setAmPm('start','PM')">PM</button>
+                  </div>
+                </div>
+              </div>
+              <div style="flex:1;">
+                <div class="time-block-label">End</div>
+                <div class="time-picker-row">
+                  <select class="tp-select" id="sched-eh" style="width:64px;">${buildHourOpts(10)}</select>
+                  <span class="tp-sep">:</span>
+                  <select class="tp-select" id="sched-em" style="width:70px;">${buildMinOpts("00")}</select>
+                  <div class="ampm-group">
+                    <button class="ampm-btn active" id="sched-end-am" onclick="setAmPm('end','AM')">AM</button>
+                    <button class="ampm-btn" id="sched-end-pm" onclick="setAmPm('end','PM')">PM</button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="modal-field">
-              <label>End Time</label>
-              <input type="time" id="sched-end" value="10:00" />
+
+            <div class="modal-field" style="margin-top:14px;">
+              <label>Repeat</label>
+              <select id="sched-recur">
+                <option value="">Does not repeat</option>
+                <option value="DAILY">Daily</option>
+                <option value="WEEKDAYS">Every weekday (Mon–Fri)</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="BIWEEKLY">Every 2 weeks</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
             </div>
           </div>
-          ${t.calEventId ? `<div style="font-size:11px;color:#34d399;margin-bottom:8px;">✓ Already scheduled — saving will update the event</div>
+
+          ${t.calEventId ? `
+          <div style="font-size:11px;color:#34d399;margin-bottom:8px;">✓ Already scheduled — saving will update the event</div>
           <button class="btn-cancel" style="font-size:12px;margin-bottom:12px;width:100%;" onclick="unscheduleTask('${t.id}')">Remove from Calendar</button>` : ""}
+
+          ${!gcalConnected ? `<div style="font-size:11px;color:#f87171;margin-bottom:12px;">⚠ Google Calendar not connected — <a href="/api/gcal-auth" style="color:#60a5fa;">Connect now</a></div>` : ""}
+
           <div class="modal-footer">
             <button class="btn-cancel" onclick="closeScheduleModal()">Cancel</button>
             <button class="btn-save" onclick="saveSchedule()">Schedule</button>
           </div>
         </div>`;
-      modal.addEventListener("click", closeScheduleModal);
+      modal.addEventListener("click", e => { if (e.target === modal) closeScheduleModal(); });
       document.body.appendChild(modal);
-      if (!gcalConnected) {
-        const footer = modal.querySelector(".modal-footer");
-        footer.insertAdjacentHTML("beforebegin", `<div style="font-size:11px;color:#f87171;margin-bottom:8px;">⚠ Google Calendar not connected — <a href="/api/gcal-auth" style="color:#60a5fa;">Connect now</a></div>`);
-      }
-    }
-
-    function toggleAlldayUI(allDay) {
-      const row = document.getElementById("sched-time-row");
-      if (row) row.style.display = allDay ? "none" : "";
     }
 
     function closeScheduleModal() {
@@ -3367,21 +3566,42 @@
       scheduleTaskId = null;
     }
 
+    function getTimeValue(hourId, minId, ampmAmId) {
+      const h = parseInt(document.getElementById(hourId).value);
+      const m = document.getElementById(minId).value;
+      const isAM = document.getElementById(ampmAmId).classList.contains("active");
+      let hour24 = h % 12 + (isAM ? 0 : 12);
+      return `${String(hour24).padStart(2,"0")}:${m}:00`;
+    }
+
+    function getRRule(recur, dateStr) {
+      const dayAbbr = ["SU","MO","TU","WE","TH","FR","SA"];
+      const dow = dayAbbr[new Date(dateStr + "T12:00:00").getDay()];
+      if (recur === "DAILY") return ["RRULE:FREQ=DAILY"];
+      if (recur === "WEEKDAYS") return ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"];
+      if (recur === "WEEKLY") return [`RRULE:FREQ=WEEKLY;BYDAY=${dow}`];
+      if (recur === "BIWEEKLY") return [`RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${dow}`];
+      if (recur === "MONTHLY") return ["RRULE:FREQ=MONTHLY"];
+      return [];
+    }
+
     async function saveSchedule() {
       if (!scheduleTaskId) return;
       const date = document.getElementById("sched-date").value;
       const allDay = document.getElementById("sched-allday").checked;
       if (!date) return;
+      const recur = document.getElementById("sched-recur")?.value || "";
       let body;
       if (allDay) {
-        body = { allDay: true, startTime: date };
+        body = { allDay: true, startTime: date, recurrence: getRRule(recur, date) };
       } else {
-        const start = document.getElementById("sched-start").value;
-        const end = document.getElementById("sched-end").value;
+        const startTime = getTimeValue("sched-sh", "sched-sm", "sched-start-am");
+        const endTime = getTimeValue("sched-eh", "sched-em", "sched-end-am");
         body = {
-          startTime: `${date}T${start}:00`,
-          endTime: `${date}T${end}:00`,
+          startTime: `${date}T${startTime}`,
+          endTime: `${date}T${endTime}`,
           allDay: false,
+          recurrence: getRRule(recur, date),
         };
       }
       const btn = document.querySelector("#schedule-modal .btn-save");
@@ -3399,9 +3619,11 @@
           renderToday();
         } else {
           const err = await res.json();
+          if (btn) { btn.textContent = "Schedule"; btn.disabled = false; }
           alert("Failed to schedule: " + (err.error || "unknown error"));
         }
       } catch (e) {
+        if (btn) { btn.textContent = "Schedule"; btn.disabled = false; }
         alert("Error: " + e.message);
       }
     }
