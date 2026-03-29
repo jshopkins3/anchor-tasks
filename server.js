@@ -907,7 +907,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok });
     }
 
-    if (urlPath.match(/^\/api\/gmail-message\//) && req.method === "GET") {
+    if (urlPath.match(/^\/api\/gmail-message\/[^/]+$/) && req.method === "GET") {
       const msgId = urlPath.split("/").pop();
       const accessToken = await getGCalAccessToken();
       if (!accessToken) return json(res, 401, { error: "Not authorized" });
@@ -918,10 +918,47 @@ const server = http.createServer(async (req, res) => {
         if (!msgResp.ok) return json(res, msgResp.status, { error: "Failed to fetch message" });
         const msg = await msgResp.json();
         const body = gmailExtractBody(msg.payload);
-        return json(res, 200, { body });
+        // Collect attachments
+        const attachments = [];
+        function findAttachments(p) {
+          if (!p) return;
+          if (p.filename && p.body?.attachmentId) {
+            attachments.push({ name: p.filename, attachmentId: p.body.attachmentId, mimeType: p.mimeType, size: p.body.size || 0 });
+          }
+          if (p.parts) p.parts.forEach(findAttachments);
+        }
+        findAttachments(msg.payload);
+        return json(res, 200, { body, attachments });
       } catch (err) {
         console.error("[gmail] Message fetch error:", err.message);
         return json(res, 500, { error: "Failed to fetch message" });
+      }
+    }
+
+    // Download attachment
+    const attachMatch = urlPath.match(/^\/api\/gmail-message\/([^/]+)\/attachment\/([^/]+)$/);
+    if (attachMatch && req.method === "GET") {
+      const [, msgId, attachmentId] = attachMatch;
+      const name = url.searchParams.get("name") || "attachment";
+      const mimeType = url.searchParams.get("mime") || "application/octet-stream";
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+      try {
+        const attResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/attachments/${attachmentId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!attResp.ok) return json(res, attResp.status, { error: "Failed to fetch attachment" });
+        const attData = await attResp.json();
+        const buf = Buffer.from(attData.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+        res.writeHead(200, {
+          "Content-Type": mimeType,
+          "Content-Disposition": `attachment; filename="${name.replace(/"/g, "")}"`,
+          "Content-Length": buf.length,
+        });
+        return res.end(buf);
+      } catch (err) {
+        console.error("[gmail] Attachment fetch error:", err.message);
+        return json(res, 500, { error: "Failed to fetch attachment" });
       }
     }
 
