@@ -4099,13 +4099,16 @@
       if (selectedEmailId) renderEmailDetail(selectedEmailId);
     }
 
-    function selectEmail(id) {
+    async function selectEmail(id) {
       selectedEmailId = id;
       renderEmailSection();
-      renderEmailDetail(id);
+      await renderEmailDetail(id);
+      // Mark read automatically when opened
+      const email = inboxEmails.find(e => e.id === id);
+      if (email && email.unread) markEmailRead(id);
     }
 
-    function renderEmailDetail(id) {
+    async function renderEmailDetail(id) {
       const detailEl = document.getElementById("email-detail-pane");
       if (!detailEl) return;
       const email = inboxEmails.find(e => e.id === id);
@@ -4115,25 +4118,21 @@
       const projectOpts = projects.filter(p => !p.archived)
         .map(p => `<option value="${esc(p.name)}" ${triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
 
+      // Show header + actions immediately, body loading
       detailEl.innerHTML = `
         <div class="email-detail-header">
           <div class="email-detail-subject">${esc(email.subject)}</div>
           <div class="email-detail-meta">
             <span>From: <strong style="color:#a1a1aa;">${esc(email.from)}</strong></span>
-            <span>${esc(email.fromEmail || "")}</span>
+            <span style="color:#52525b;">${esc(email.fromEmail || "")}</span>
             <span>${formatEmailTime(email.date)}</span>
-            ${email.unread ? `<span style="color:#f59e0b;font-size:11px;">● Unread</span>` : ""}
           </div>
         </div>
-
-        <div class="email-detail-snippet">${esc(email.snippet)}</div>
-
         <div class="email-detail-actions">
-          ${email.unread ? `<button class="focus-btn" onclick="markEmailRead('${email.id}')" style="padding:6px 14px;font-size:12px;">✓ Mark Read</button>` : ""}
           <button class="focus-btn" onclick="deleteEmail('${email.id}')" style="padding:6px 14px;font-size:12px;color:#ef4444;border-color:#ef4444;">🗑 Delete</button>
         </div>
-
-        <div style="margin-top:24px;padding:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;">
+        <div id="email-body-area" style="margin:20px 0;min-height:120px;color:#71717a;font-size:13px;">Loading email body...</div>
+        <div style="margin-top:8px;padding:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;">
           <div style="font-size:12px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Create Task from Email</div>
           <input id="etask-title-${id}" class="inp-title" value="${esc(email.subject)}" placeholder="Task title" style="margin-bottom:8px;" />
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
@@ -4150,6 +4149,35 @@
           <button class="journal-save-btn" onclick="createTaskFromEmailDetail('${id}')" style="font-size:12px;padding:6px 16px;">+ Create Task</button>
           <span id="etask-saved-${id}" style="display:none;font-size:12px;color:#34d399;margin-left:10px;">Task created ✓</span>
         </div>`;
+
+      // Fetch full body
+      try {
+        const res = await fetch(`/api/gmail-message/${id}`);
+        const data = await res.json();
+        const bodyArea = document.getElementById("email-body-area");
+        if (!bodyArea) return;
+        if (data.body?.type === "html") {
+          const iframe = document.createElement("iframe");
+          iframe.sandbox = "allow-same-origin";
+          iframe.style.cssText = "width:100%;border:none;background:#fff;border-radius:8px;min-height:400px;";
+          bodyArea.innerHTML = "";
+          bodyArea.appendChild(iframe);
+          iframe.contentDocument.open();
+          iframe.contentDocument.write(data.body.data);
+          iframe.contentDocument.close();
+          // Auto-resize iframe to content height
+          setTimeout(() => {
+            try { iframe.style.height = iframe.contentDocument.body.scrollHeight + 40 + "px"; } catch {}
+          }, 300);
+        } else if (data.body?.type === "text") {
+          bodyArea.innerHTML = `<pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;color:#d4d4d8;line-height:1.7;">${esc(data.body.data)}</pre>`;
+        } else {
+          bodyArea.innerHTML = `<div style="color:#52525b;font-size:13px;font-style:italic;">${esc(email.snippet)}</div>`;
+        }
+      } catch {
+        const bodyArea = document.getElementById("email-body-area");
+        if (bodyArea) bodyArea.innerHTML = `<div style="color:#52525b;font-size:13px;font-style:italic;">${esc(email.snippet)}</div>`;
+      }
     }
 
     async function createTaskFromEmailDetail(emailId) {

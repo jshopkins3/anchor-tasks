@@ -366,6 +366,26 @@ function decodeEmailBody(payload) {
   } catch { return ""; }
 }
 
+function gmailExtractBody(payload) {
+  // Recursively find the best body part (prefer text/html, fallback to text/plain)
+  function findPart(p, mimeType) {
+    if (!p) return null;
+    if (p.mimeType === mimeType && p.body?.data) return p.body.data;
+    if (p.parts) {
+      for (const part of p.parts) {
+        const found = findPart(part, mimeType);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  const htmlData = findPart(payload, "text/html");
+  if (htmlData) return { type: "html", data: Buffer.from(htmlData.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8") };
+  const textData = findPart(payload, "text/plain");
+  if (textData) return { type: "text", data: Buffer.from(textData.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8") };
+  return null;
+}
+
 async function gmailGetInbox() {
   const accessToken = await getGCalAccessToken();
   if (!accessToken) return null;
@@ -885,6 +905,24 @@ const server = http.createServer(async (req, res) => {
       const msgId = urlPath.split("/").pop();
       const ok = await gmailMarkRead(msgId);
       return json(res, 200, { ok });
+    }
+
+    if (urlPath.match(/^\/api\/gmail-message\//) && req.method === "GET") {
+      const msgId = urlPath.split("/").pop();
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+      try {
+        const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!msgResp.ok) return json(res, msgResp.status, { error: "Failed to fetch message" });
+        const msg = await msgResp.json();
+        const body = gmailExtractBody(msg.payload);
+        return json(res, 200, { body });
+      } catch (err) {
+        console.error("[gmail] Message fetch error:", err.message);
+        return json(res, 500, { error: "Failed to fetch message" });
+      }
     }
 
     if (urlPath.match(/^\/api\/gmail-delete\//) && req.method === "POST") {
