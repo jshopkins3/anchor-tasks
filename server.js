@@ -24,6 +24,7 @@ const GCAL_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/drive",
 ].join(" ");
 
 const MIME = {
@@ -54,13 +55,29 @@ if (!fs.existsSync(JOURNAL_FILE)) {
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
-function httpsGet(url) {
+function httpsGet(url, headers) {
   return new Promise((resolve, reject) => {
-    https.get(url, res => {
+    const opts = typeof url === "string" ? new URL(url) : url;
+    const reqOpts = { hostname: opts.hostname, path: opts.pathname + opts.search, headers: headers || {} };
+    https.get(reqOpts, res => {
       let d = "";
       res.on("data", c => (d += c));
       res.on("end", () => resolve(d));
     }).on("error", reject);
+  });
+}
+
+function httpsPost(url, body, headers) {
+  return new Promise((resolve, reject) => {
+    const opts = new URL(url);
+    const req = https.request({ hostname: opts.hostname, path: opts.pathname, method: "POST", headers: { ...headers, "Content-Length": Buffer.byteLength(body) } }, res => {
+      let d = "";
+      res.on("data", c => (d += c));
+      res.on("end", () => resolve(d));
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
   });
 }
 
@@ -611,6 +628,52 @@ const server = http.createServer(async (req, res) => {
       proxyReq.write(body);
       proxyReq.end();
       return;
+    }
+
+    /* ── DRIVE FOLDER SEARCH (proxy for Anchor Command) ────────── */
+    if (urlPath === "/api/drive-search" && req.method === "POST") {
+      const apiKey = req.headers["x-api-key"];
+      if (!req.session && !(apiKey && apiKey === (process.env.COMMAND_API_KEY || ""))) {
+        return json(res, 401, { error: "Not authenticated" });
+      }
+      try {
+        const body = JSON.parse(await readBody(req));
+        const borrowerName = body.borrowerName || "";
+        const parentId = body.parentId || "";
+        // Get access token from Tasks' OAuth token
+        const tokenFile = path.join(DATA_DIR, "gcal-token.json");
+        const tokenData = JSON.parse(fs.readFileSync(tokenFile, "utf8"));
+        if (!tokenData.refresh_token) return json(res, 500, { error: "No refresh token" });
+        // Refresh access token
+        const tokenResp = await httpsPost("https://oauth2.googleapis.com/token", JSON.stringify({
+          client_id: GOOGLE_CLIENT_ID,
+          client_secret: GOOGLE_CLIENT_SECRET,
+          refresh_token: tokenData.refresh_token,
+          grant_type: "refresh_token",
+        }), { "Content-Type": "application/json" });
+        const tokenJson = JSON.parse(tokenResp);
+        const accessToken = tokenJson.access_token;
+        if (!accessToken) return json(res, 500, { error: "Failed to get access token" });
+        // Search Drive
+        const lastName = borrowerName.split(" ").pop().replace(/'/g, "\\'");
+        const queries = [
+          `name contains '${borrowerName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+          `name contains '${lastName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        ];
+        for (const q of queries) {
+          const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&fields=files(id,name,webViewLink)`;
+          const searchResp = await httpsGet(searchUrl, { Authorization: `Bearer ${accessToken}` });
+          const searchJson = JSON.parse(searchResp);
+          if (searchJson.files && searchJson.files.length > 0) {
+            const firstName = borrowerName.split(" ")[0].toLowerCase();
+            const best = searchJson.files.find(f => f.name.toLowerCase().includes(firstName)) || searchJson.files[0];
+            return json(res, 200, { result: { folderId: best.id, folderUrl: best.webViewLink || `https://drive.google.com/drive/u/0/folders/${best.id}`, folderName: best.name } });
+          }
+        }
+        return json(res, 200, { result: null });
+      } catch (e) {
+        return json(res, 500, { error: e.message });
+      }
     }
 
     /* ── TASKS API ─────────────────────────────────────────────────── */
