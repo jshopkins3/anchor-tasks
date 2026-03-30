@@ -4583,7 +4583,7 @@
        ANCHOR DAN — AI Assistant
        Connects to Anchor Command API for loan/pipeline context
        ═══════════════════════════════════════════════════════════════════ */
-    const COMMAND_API = "https://anchorcommand.myanchormortgage.com";
+    const COMMAND_API = ""; // Use local proxy to avoid cross-domain cookie issues
     let danOpen = false;
     let danMessages = [];
     let danLoading = false;
@@ -4657,7 +4657,7 @@
 
       danLoading = true;
       try {
-        const resp = await fetch(COMMAND_API + "/api/ai-context", {
+        const resp = await fetch("/api/anchor-dan", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },

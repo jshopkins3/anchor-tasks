@@ -586,6 +586,33 @@ const server = http.createServer(async (req, res) => {
       req.session = session;
     }
 
+    /* ── ANCHOR DAN PROXY (to Command API) ──────────────────────── */
+    if (urlPath === "/api/anchor-dan" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = await readBody(req);
+      const COMMAND_URL = process.env.COMMAND_API_URL || "https://anchorcommand.myanchormortgage.com";
+      const COMMAND_API_KEY = process.env.COMMAND_API_KEY || "";
+      const proxyReq = https.request(`${COMMAND_URL}/api/ai-context`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": COMMAND_API_KEY,
+          "X-Proxy-User": req.session.email,
+        },
+      }, proxyRes => {
+        let d = "";
+        proxyRes.on("data", c => d += c);
+        proxyRes.on("end", () => {
+          try { return json(res, 200, JSON.parse(d)); }
+          catch { return json(res, 200, { response: d }); }
+        });
+      });
+      proxyReq.on("error", e => json(res, 500, { error: e.message }));
+      proxyReq.write(body);
+      proxyReq.end();
+      return;
+    }
+
     /* ── TASKS API ─────────────────────────────────────────────────── */
     if (urlPath === "/api/tasks" && req.method === "GET") {
       return json(res, 200, { tasks: parseTasks() });
