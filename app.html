@@ -1065,6 +1065,8 @@
       <a class="quick-link" href="https://anchorcommand.myanchormortgage.com/processor-app_2.html" target="_blank">🏠 Anchor Command</a>
       <a class="quick-link" href="https://mycommunitymortgage.myarive.com" target="_blank">📋 Arive</a>
       <a class="quick-link" href="https://sites.google.com/myanchormortgage.com/anchormortgage/anchor-navigation-portal?authuser=0" target="_blank">🌐 Intranet</a>
+      <a class="quick-link" href="https://mail.google.com/mail/u/0/" target="_blank">✉️ Gmail</a>
+      <a class="quick-link" href="https://calendar.google.com/calendar/u/0/" target="_blank">📅 Google Calendar</a>
     </div>
   </div>
 
@@ -1207,6 +1209,7 @@
             <option value="urgent">Urgent</option>
           </select>
           <select class="inp-sm" id="new-task-project"></select>
+          <select class="inp-sm" id="new-task-goal"><option value="">No goal</option></select>
           <button class="btn-add" onclick="addTask()">Add</button>
         </div>
 
@@ -1412,6 +1415,7 @@
       renderMatrixProjectFilter();
       renderProjects();
       renderProjectDropdown();
+      renderGoalDropdown();
       renderBoardProjectFilter();
     }
 
@@ -1464,6 +1468,7 @@
                 ${t.assignee ? `<span class="task-tag assignee-tag">${esc(t.assignee)}</span>` : ""}
                 ${t.due ? `<span class="task-tag due">${t.due}</span>` : ""}
                 ${t.project ? `<span class="task-tag project-tag">${esc(t.project)}</span>` : ""}
+                ${t.linkedGoal ? (() => { const g = goals.find(g => g.id === t.linkedGoal); return g ? `<span class="task-tag" style="background:rgba(167,139,246,.12);color:#a78bfa;" title="Goal: ${esc(g.title)}">🎯 ${esc(g.title)}</span>` : ""; })() : ""}
                 ${t.emailId ? `<span class="task-tag" style="background:rgba(59,130,246,.12);color:#60a5fa;" title="${esc(t.emailSubject)}">✉</span>` : ""}
               </div>
             </div>
@@ -1508,6 +1513,13 @@
               <select id="ed-personal-${t.id}">
                 <option value="false" ${!t.personal?"selected":""}>No</option>
                 <option value="true" ${t.personal?"selected":""}>Yes</option>
+              </select>
+            </div>
+            <div>
+              <label>Goal</label>
+              <select id="ed-goal-${t.id}">
+                <option value="">No goal</option>
+                ${goals.map(g => `<option value="${g.id}" ${t.linkedGoal===g.id?"selected":""}>${esc(g.title)}</option>`).join("")}
               </select>
             </div>
             <div class="edit-actions">
@@ -1555,7 +1567,46 @@
         active.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
     }
 
+    function renderGoalDropdown() {
+      const sel = document.getElementById("new-task-goal");
+      if (!sel) return;
+      const current = sel.value;
+      sel.innerHTML = `<option value="">No goal</option>` +
+        goals.map(g => `<option value="${g.id}" ${current === g.id ? "selected" : ""}>${esc(g.title)}</option>`).join("");
+    }
+
     /* ── Actions ──────────────────────────────────────────────── */
+    // Sync task ↔ goal linkedTasks when a task's linkedGoal changes
+    async function syncGoalLink(taskId, oldGoalId, newGoalId) {
+      // Remove from old goal
+      if (oldGoalId && oldGoalId !== newGoalId) {
+        const oldGoal = goals.find(g => g.id === oldGoalId);
+        if (oldGoal) {
+          const updated = (oldGoal.linkedTasks || []).filter(id => id !== taskId);
+          await fetch(`/api/goals/${oldGoalId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ linkedTasks: updated })
+          });
+        }
+      }
+      // Add to new goal
+      if (newGoalId) {
+        const newGoal = goals.find(g => g.id === newGoalId);
+        if (newGoal) {
+          const existing = newGoal.linkedTasks || [];
+          if (!existing.includes(taskId)) {
+            await fetch(`/api/goals/${newGoalId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ linkedTasks: [...existing, taskId] })
+            });
+          }
+        }
+      }
+      await loadGoals();
+    }
+
     async function addTask() {
       const title = document.getElementById("new-task-title").value.trim();
       if (!title) return;
@@ -1563,17 +1614,25 @@
       const due = document.getElementById("new-task-due").value;
       const priority = document.getElementById("new-task-priority").value;
       const project = document.getElementById("new-task-project").value;
+      const linkedGoal = document.getElementById("new-task-goal").value;
 
-      await fetch("/api/tasks", {
+      const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, assignee, due, priority, project })
+        body: JSON.stringify({ title, assignee, due, priority, project, linkedGoal })
       });
+      const data = await res.json();
+
+      // Sync the goal's linkedTasks if a goal was selected
+      if (linkedGoal && data.task?.id) {
+        await syncGoalLink(data.task.id, null, linkedGoal);
+      }
 
       document.getElementById("new-task-title").value = "";
       document.getElementById("new-task-assignee").value = "";
       document.getElementById("new-task-due").value = "";
       document.getElementById("new-task-priority").value = "normal";
+      document.getElementById("new-task-goal").value = "";
       await loadTasks();
       renderAll();
     }
@@ -1596,12 +1655,23 @@
       const project = document.getElementById(`ed-proj-${id}`).value;
       const personalEl = document.getElementById(`ed-personal-${id}`);
       const personal = personalEl ? personalEl.value === "true" : false;
+      const goalEl = document.getElementById(`ed-goal-${id}`);
+      const linkedGoal = goalEl ? goalEl.value : "";
+
+      // Track old goal for sync
+      const oldTask = tasks.find(t => t.id === id);
+      const oldGoalId = oldTask?.linkedGoal || "";
 
       await fetch(`/api/tasks/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, assignee, due, priority, project, personal })
+        body: JSON.stringify({ title, assignee, due, priority, project, personal, linkedGoal })
       });
+
+      // Sync goal's linkedTasks if goal changed
+      if (oldGoalId !== linkedGoal) {
+        await syncGoalLink(id, oldGoalId, linkedGoal);
+      }
 
       editingTaskId = null;
       await loadTasks();
@@ -1727,6 +1797,7 @@
                 ${t.priority && t.priority !== "normal" ? `<span class="task-tag pri-${t.priority}">${t.priority}</span>` : ""}
                 ${t.assignee ? `<span class="task-tag assignee-tag">${esc(t.assignee)}</span>` : ""}
                 ${t.due ? `<span class="task-tag due">${t.due}</span>` : ""}
+                ${t.linkedGoal ? (() => { const g = goals.find(g => g.id === t.linkedGoal); return g ? `<span class="task-tag" style="background:rgba(167,139,246,.12);color:#a78bfa;" title="Goal: ${esc(g.title)}">🎯 ${esc(g.title)}</span>` : ""; })() : ""}
               </div>
             </div>
             <button class="task-edit" onclick="openEdit('${t.id}'); renderDetail()" title="Edit">&#9998;</button>
@@ -1767,6 +1838,13 @@
               <select id="ed-personal-${t.id}">
                 <option value="false" ${!t.personal?"selected":""}>No</option>
                 <option value="true" ${t.personal?"selected":""}>Yes</option>
+              </select>
+            </div>
+            <div>
+              <label>Goal</label>
+              <select id="ed-goal-${t.id}">
+                <option value="">No goal</option>
+                ${goals.map(g => `<option value="${g.id}" ${t.linkedGoal===g.id?"selected":""}>${esc(g.title)}</option>`).join("")}
               </select>
             </div>
             <div class="edit-actions">

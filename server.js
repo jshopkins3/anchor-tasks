@@ -218,11 +218,24 @@ function writeGoals(goals) {
 
 /* ─── Google Calendar helpers ────────────────────────────────────────────── */
 function loadGCalToken() {
-  try { return fs.existsSync(GCAL_TOKEN_FILE) ? JSON.parse(fs.readFileSync(GCAL_TOKEN_FILE, "utf8")) : null; }
-  catch { return null; }
+  try {
+    if (fs.existsSync(GCAL_TOKEN_FILE)) return JSON.parse(fs.readFileSync(GCAL_TOKEN_FILE, "utf8"));
+  } catch {}
+  // Fallback: restore from env var (survives Railway redeploys)
+  try {
+    if (process.env.GCAL_TOKEN) {
+      const token = JSON.parse(process.env.GCAL_TOKEN);
+      fs.writeFileSync(GCAL_TOKEN_FILE, JSON.stringify(token, null, 2));
+      console.log("[gcal] Restored token from GCAL_TOKEN env var");
+      return token;
+    }
+  } catch {}
+  return null;
 }
 function saveGCalToken(token) {
   fs.writeFileSync(GCAL_TOKEN_FILE, JSON.stringify(token, null, 2));
+  // Log the token value so it can be set as GCAL_TOKEN env var on Railway
+  console.log("[gcal] TOKEN_FOR_ENV:", JSON.stringify(token));
 }
 
 async function getGCalAccessToken() {
