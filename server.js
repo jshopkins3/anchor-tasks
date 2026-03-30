@@ -375,7 +375,7 @@ function decodeEmailBody(payload) {
   const raw = findPart(payload);
   if (!raw) return "";
   try {
-    return Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8").substring(0, 2000);
+    return Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
   } catch { return ""; }
 }
 
@@ -405,7 +405,7 @@ async function gmailGetInbox() {
   try {
     // List unread messages
     const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
-      new URLSearchParams({ q: "is:unread in:inbox", maxResults: "15" }).toString();
+      new URLSearchParams({ q: "is:unread in:inbox", maxResults: "30" }).toString();
     const listResp = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!listResp.ok) {
       const errText = await listResp.text();
@@ -420,7 +420,7 @@ async function gmailGetInbox() {
     if (!messages.length) return [];
 
     // Fetch metadata for each
-    const emails = await Promise.all(messages.slice(0, 15).map(async m => {
+    const emails = await Promise.all(messages.slice(0, 30).map(async m => {
       const msgUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`;
       const msgResp = await fetch(msgUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
       if (!msgResp.ok) return null;
@@ -463,6 +463,22 @@ async function gmailMarkRead(messageId) {
     return resp.ok;
   } catch (err) {
     console.error("[gmail] Mark read error:", err.message);
+    return false;
+  }
+}
+
+async function gmailArchive(messageId) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return false;
+  try {
+    const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ removeLabelIds: ["INBOX", "UNREAD"] }),
+    });
+    return resp.ok;
+  } catch (err) {
+    console.error("[gmail] Archive error:", err.message);
     return false;
   }
 }
@@ -973,6 +989,12 @@ const server = http.createServer(async (req, res) => {
         console.error("[gmail] Attachment fetch error:", err.message);
         return json(res, 500, { error: "Failed to fetch attachment" });
       }
+    }
+
+    if (urlPath.match(/^\/api\/gmail-archive\//) && req.method === "POST") {
+      const msgId = urlPath.split("/").pop();
+      const ok = await gmailArchive(msgId);
+      return json(res, 200, { ok });
     }
 
     if (urlPath.match(/^\/api\/gmail-delete\//) && req.method === "POST") {

@@ -1006,24 +1006,140 @@
 
     /* ── Email section ───────────────────────────────────────── */
     .email-layout { display: flex; height: calc(100vh - 120px); overflow: hidden; }
-    .email-list-pane { width: 320px; min-width: 180px; max-width: 60%; border-right: 1px solid #27272a; overflow-y: auto; flex-shrink: 0; }
+    .email-list-pane { width: 360px; min-width: 260px; max-width: 50%; border-right: 1px solid #27272a; overflow-y: auto; flex-shrink: 0; }
     .email-resize-handle { width: 5px; cursor: col-resize; background: transparent; flex-shrink: 0; transition: background .15s; }
     .email-resize-handle:hover, .email-resize-handle.dragging { background: #3b82f6; }
-    .email-detail-pane { flex: 1; overflow-y: auto; padding: 28px 36px; min-width: 0; }
-    .email-list-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #27272a; position: sticky; top: 0; background: #09090b; z-index: 1; }
-    .email-row { padding: 12px 16px; border-bottom: 1px solid #1f1f23; cursor: pointer; }
-    .email-row:hover { background: #18181b; }
-    .email-row.active { background: #1f1f23; border-left: 3px solid #3b82f6; }
-    .email-row.unread .email-row-subject { font-weight: 600; color: #e4e4e7; }
-    .email-row-from { font-size: 12px; color: #71717a; margin-bottom: 2px; display: flex; justify-content: space-between; }
-    .email-row-subject { font-size: 13px; color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .email-row-snippet { font-size: 11px; color: #52525b; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .email-detail-header { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #27272a; }
-    .email-detail-subject { font-size: 18px; font-weight: 600; color: #e4e4e7; margin-bottom: 8px; }
-    .email-detail-meta { font-size: 12px; color: #71717a; display: flex; gap: 16px; flex-wrap: wrap; }
-    .email-detail-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-    .email-attachment { display: inline-flex; align-items: center; gap: 6px; background: #1f1f23; border: 1px solid #27272a; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #a1a1aa; cursor: pointer; text-decoration: none; }
-    .email-attachment:hover { border-color: #3b82f6; color: #93c5fd; }
+    .email-detail-pane { flex: 1; overflow-y: auto; padding: 0; min-width: 0; }
+    .email-list-toolbar {
+      display: flex; align-items: center; gap: 10px; padding: 14px 20px;
+      border-bottom: 1px solid #27272a; position: sticky; top: 0; background: #09090b; z-index: 2;
+    }
+    .email-toolbar-title { font-size: 15px; font-weight: 700; color: #e4e4e7; }
+    .email-toolbar-count {
+      background: #3b82f6; color: #fff; font-size: 11px; font-weight: 600;
+      border-radius: 10px; padding: 1px 8px; min-width: 20px; text-align: center;
+    }
+    .email-toolbar-actions { margin-left: auto; display: flex; gap: 4px; }
+    .email-toolbar-btn {
+      background: none; border: 1px solid transparent; color: #71717a; border-radius: 6px;
+      padding: 5px 8px; font-size: 13px; cursor: pointer; transition: all .15s; line-height: 1;
+    }
+    .email-toolbar-btn:hover { background: #18181b; color: #e4e4e7; border-color: #27272a; }
+    .email-toolbar-btn[title]:hover { color: #3b82f6; }
+
+    .email-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 20px; border-bottom: 1px solid rgba(39,39,42,.5); cursor: pointer;
+      transition: background .1s;
+    }
+    .email-row:hover { background: rgba(24,24,27,.8); }
+    .email-row.active { background: #1a1a2e; border-left: 3px solid #3b82f6; padding-left: 17px; }
+    .email-row.unread .email-row-from { color: #f4f4f5; font-weight: 600; }
+    .email-row.unread .email-row-subject { color: #e4e4e7; font-weight: 600; }
+
+    .email-avatar {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff; text-transform: uppercase;
+    }
+    .email-row-content { flex: 1; min-width: 0; }
+    .email-row-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+    .email-row-from { font-size: 13px; color: #a1a1aa; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .email-row-time { font-size: 11px; color: #52525b; flex-shrink: 0; white-space: nowrap; }
+    .email-row-subject { font-size: 13px; color: #8b8b95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+    .email-row-snippet { font-size: 12px; color: #52525b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
+    .email-row-badges { display: flex; gap: 4px; margin-top: 4px; }
+    .email-row-badge {
+      font-size: 10px; padding: 1px 6px; border-radius: 3px;
+      background: rgba(59,130,246,.1); color: #60a5fa; white-space: nowrap;
+    }
+
+    /* Detail pane */
+    .email-detail-wrap { padding: 32px 40px; max-width: 800px; }
+    .email-detail-subject { font-size: 22px; font-weight: 700; color: #f4f4f5; margin-bottom: 20px; line-height: 1.3; }
+    .email-detail-sender {
+      display: flex; align-items: center; gap: 14px;
+      padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid #27272a;
+    }
+    .email-detail-avatar {
+      width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; color: #fff; text-transform: uppercase;
+    }
+    .email-detail-sender-info { flex: 1; min-width: 0; }
+    .email-detail-sender-name { font-size: 14px; font-weight: 600; color: #e4e4e7; }
+    .email-detail-sender-email { font-size: 12px; color: #71717a; }
+    .email-detail-date { font-size: 12px; color: #52525b; flex-shrink: 0; }
+    .email-detail-actions {
+      display: flex; gap: 6px; margin-bottom: 20px;
+    }
+    .email-action-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #18181b; border: 1px solid #27272a; color: #a1a1aa;
+      border-radius: 8px; padding: 7px 14px; font-size: 12px; cursor: pointer;
+      font-family: inherit; transition: all .15s;
+    }
+    .email-action-btn:hover { border-color: #3f3f46; color: #e4e4e7; background: #1f1f23; }
+    .email-action-btn.danger:hover { border-color: #ef4444; color: #ef4444; }
+    .email-action-btn.task-action:hover { border-color: #3b82f6; color: #60a5fa; }
+
+    .email-body-container {
+      margin: 20px 0; min-height: 200px; line-height: 1.7;
+    }
+    .email-body-container iframe {
+      width: 100%; border: none; border-radius: 8px; background: #fff; min-height: 400px;
+    }
+    .email-body-container pre {
+      white-space: pre-wrap; word-wrap: break-word; font-family: inherit;
+      font-size: 14px; color: #d4d4d8; line-height: 1.7; margin: 0;
+    }
+    .email-body-loading {
+      color: #52525b; font-size: 13px; padding: 20px 0;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .email-body-loading::before {
+      content: ""; width: 16px; height: 16px; border: 2px solid #27272a;
+      border-top-color: #3b82f6; border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .email-attachments { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+    .email-attachment {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #18181b; border: 1px solid #27272a; border-radius: 8px;
+      padding: 8px 14px; font-size: 12px; color: #a1a1aa; cursor: pointer;
+      text-decoration: none; transition: all .15s;
+    }
+    .email-attachment:hover { border-color: #3b82f6; color: #93c5fd; background: #1a1a2e; }
+    .email-attachment-icon { font-size: 16px; }
+    .email-attachment-info { display: flex; flex-direction: column; }
+    .email-attachment-name { color: #d4d4d8; font-weight: 500; }
+    .email-attachment-size { font-size: 10px; color: #52525b; }
+
+    .email-task-card {
+      background: #18181b; border: 1px solid #27272a; border-radius: 10px;
+      padding: 20px; margin-top: 24px;
+    }
+    .email-task-card-title {
+      font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;
+    }
+    .email-task-card input, .email-task-card select {
+      background: #09090b; border: 1px solid #3f3f46; color: #e4e4e7;
+      border-radius: 6px; padding: 8px 12px; font-size: 13px;
+      font-family: inherit; outline: none; width: 100%; transition: border-color .15s;
+    }
+    .email-task-card input:focus, .email-task-card select:focus { border-color: #3b82f6; }
+    .email-task-card-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .email-task-card-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; align-items: center; }
+
+    .email-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; color: #52525b; text-align: center; padding: 40px;
+    }
+    .email-empty-icon { font-size: 48px; margin-bottom: 16px; opacity: .5; }
+    .email-empty-text { font-size: 15px; color: #71717a; margin-bottom: 6px; }
+    .email-empty-sub { font-size: 12px; color: #3f3f46; }
 
     /* ── Quick links bar ─────────────────────────────────────── */
     .quick-links { display: flex; gap: 10px; padding: 8px 0 0; flex-wrap: wrap; }
@@ -1306,15 +1422,23 @@
       <div class="email-layout">
         <div class="email-list-pane" id="email-list-pane">
           <div class="email-list-toolbar">
-            <span style="font-size:13px;font-weight:600;">Inbox</span>
-            <button class="focus-btn" onclick="loadInbox().then(() => renderEmailSection())" style="padding:4px 10px;font-size:11px;">↻ Refresh</button>
-            <a href="/api/gcal-auth" style="font-size:11px;color:#52525b;text-decoration:none;margin-left:4px;" title="Re-authorize Google">🔄</a>
+            <span class="email-toolbar-title">Inbox</span>
+            <span class="email-toolbar-count" id="email-unread-count" style="display:none;">0</span>
+            <div class="email-toolbar-actions">
+              <button class="email-toolbar-btn" onclick="markAllEmailsRead().then(()=>{loadInbox().then(()=>renderEmailSection())})" title="Mark all read">✓</button>
+              <button class="email-toolbar-btn" onclick="loadInbox().then(()=>renderEmailSection())" title="Refresh">↻</button>
+              <a href="/api/gcal-auth" class="email-toolbar-btn" style="text-decoration:none;" title="Reconnect Google">⚙</a>
+            </div>
           </div>
-          <div id="email-list-items"><div class="today-empty">Loading...</div></div>
+          <div id="email-list-items"><div class="email-empty" style="height:200px;"><div class="email-body-loading">Loading inbox...</div></div></div>
         </div>
         <div class="email-resize-handle" id="email-resize-handle"></div>
         <div class="email-detail-pane" id="email-detail-pane">
-          <div class="today-empty" style="margin-top:80px;">Select an email to read it.</div>
+          <div class="email-empty" style="height:100%;">
+            <div class="email-empty-icon">✉</div>
+            <div class="email-empty-text">Select an email to read</div>
+            <div class="email-empty-sub">Choose a message from the list</div>
+          </div>
         </div>
       </div>
     </div>
@@ -3055,19 +3179,8 @@
       }
     }
 
-    function formatEmailTime(dateStr) {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      const now = new Date();
-      const diff = now - d;
-      if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-      if (diff < 86400000) {
-        let h = d.getHours(), ampm = h >= 12 ? "pm" : "am";
-        h = h % 12 || 12;
-        return `${h}:${String(d.getMinutes()).padStart(2,"0")}${ampm}`;
-      }
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    }
+    // Alias for Today tab inbox
+    function formatEmailTime(dateStr) { return formatEmailDate(dateStr); }
 
     function renderInbox(emails, notConnected, reason) {
       const badge = document.getElementById("inbox-status-badge");
@@ -3103,20 +3216,25 @@
           .map(p => `<option value="${esc(p.name)}" ${triage && triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
 
         return `
-          <div class="email-item" id="email-${email.id}">
-            <div class="email-header" style="cursor:pointer;" onclick="openEmailModal('${email.id}')">
-              ${email.unread ? `<span class="email-unread-dot"></span>` : ""}
-              <span class="email-from">${esc(email.from)}</span>
-              <span class="email-time">${formatEmailTime(email.date)}</span>
+          <div class="email-item" id="email-${email.id}" style="display:flex;gap:10px;align-items:flex-start;">
+            <div onclick="openEmailModal('${email.id}')" style="cursor:pointer;flex-shrink:0;margin-top:2px;">
+              ${emailAvatarHtml(email.from, 32)}
             </div>
-            <div class="email-subject" style="cursor:pointer;" onclick="openEmailModal('${email.id}')">${esc(email.subject)}</div>
-            <div class="email-snippet">${esc(email.snippet)}</div>
-            <div class="email-actions">
-              <button class="email-btn task-btn" onclick="toggleEmailTaskForm('${email.id}')">
-                ${showForm ? "Cancel" : "→ Task"}
-              </button>
-              <button class="email-btn read-btn" onclick="markEmailRead('${email.id}')">✓ Read</button>
-              <button class="email-btn" onclick="deleteEmail('${email.id}')" style="color:#ef4444;border-color:#ef4444;" title="Delete">🗑</button>
+            <div style="flex:1;min-width:0;">
+              <div class="email-header" style="cursor:pointer;" onclick="openEmailModal('${email.id}')">
+                <span class="email-from">${esc(email.from)}</span>
+                <span class="email-time">${formatEmailTime(email.date)}</span>
+              </div>
+              <div class="email-subject" style="cursor:pointer;" onclick="openEmailModal('${email.id}')">${esc(email.subject)}</div>
+              <div class="email-snippet">${esc(email.snippet)}</div>
+              <div class="email-actions">
+                <button class="email-btn task-btn" onclick="toggleEmailTaskForm('${email.id}')">
+                  ${showForm ? "Cancel" : "→ Task"}
+                </button>
+                <button class="email-btn read-btn" onclick="markEmailRead('${email.id}')">✓ Read</button>
+                <button class="email-btn" onclick="archiveEmail('${email.id}')" title="Archive">📥</button>
+                <button class="email-btn" onclick="deleteEmail('${email.id}')" style="color:#ef4444;border-color:#ef4444;" title="Delete">🗑</button>
+              </div>
             </div>
             ${showForm ? `
             <div class="email-task-form" id="etf-form-${email.id}" style="border:1px solid #3f3f46;border-radius:8px;">
@@ -3290,9 +3408,16 @@
     async function deleteEmail(emailId) {
       await fetch(`/api/gmail-delete/${emailId}`, { method: "POST" });
       inboxEmails = inboxEmails.filter(e => e.id !== emailId);
-      if (selectedEmailId === emailId) selectedEmailId = null;
+      if (selectedEmailId === emailId) {
+        selectedEmailId = inboxEmails.length ? inboxEmails[0].id : null;
+      }
       renderInbox(inboxEmails, false);
       renderEmailSection();
+      if (selectedEmailId) renderEmailDetail(selectedEmailId);
+      else {
+        const detailEl = document.getElementById("email-detail-pane");
+        if (detailEl) detailEl.innerHTML = `<div class="email-empty" style="height:100%;"><div class="email-empty-icon">✉</div><div class="email-empty-text">Select an email to read</div></div>`;
+      }
       renderStats();
     }
 
@@ -4157,26 +4282,90 @@
     /* ── Email section ────────────────────────────────────────── */
     let selectedEmailId = null;
 
+    // Avatar color from name
+    function emailAvatarColor(name) {
+      const colors = ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#ef4444","#06b6d4","#6366f1","#f97316","#14b8a6"];
+      let hash = 0;
+      for (let i = 0; i < (name||"").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      return colors[Math.abs(hash) % colors.length];
+    }
+    function emailInitials(name) {
+      if (!name) return "?";
+      const parts = name.replace(/['"]/g,"").trim().split(/\s+/);
+      if (parts.length >= 2) return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+      return name.substring(0,2).toUpperCase();
+    }
+    function emailAvatarHtml(name, size) {
+      const sz = size || 36;
+      return `<div class="email-avatar" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz*.4)}px;background:${emailAvatarColor(name)};">${emailInitials(name)}</div>`;
+    }
+
+    function formatEmailDate(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return "Just now";
+      if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+      if (diff < 86400000 && d.getDate() === now.getDate()) {
+        let h = d.getHours(), ampm = h >= 12 ? "PM" : "AM";
+        h = h % 12 || 12;
+        return `${h}:${String(d.getMinutes()).padStart(2,"0")} ${ampm}`;
+      }
+      const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+      if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) {
+        return "Yesterday";
+      }
+      if (d.getFullYear() === now.getFullYear()) {
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      }
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+    function formatEmailDateFull(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) +
+        " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    }
+
     function renderEmailSection() {
       const listEl = document.getElementById("email-list-items");
-      const detailEl = document.getElementById("email-detail-pane");
+      const countEl = document.getElementById("email-unread-count");
       if (!listEl) return;
 
+      // Update unread count badge
+      const unreadCount = inboxEmails.filter(e => e.unread).length;
+      if (countEl) {
+        countEl.textContent = unreadCount;
+        countEl.style.display = unreadCount > 0 ? "inline-block" : "none";
+      }
+
       if (!inboxEmails.length) {
-        listEl.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Inbox zero — nothing unread!<br><br><a href="/api/gcal-auth" style="color:#3b82f6;font-size:12px;">🔄 Reconnect Google</a></div>`;
-        if (detailEl) detailEl.innerHTML = `<div class="today-empty" style="margin-top:80px;">Select an email to read it.</div>`;
+        listEl.innerHTML = `
+          <div class="email-empty" style="height:300px;">
+            <div class="email-empty-icon">🎉</div>
+            <div class="email-empty-text">Inbox zero!</div>
+            <div class="email-empty-sub">No unread emails. You're all caught up.</div>
+          </div>`;
         return;
       }
 
-      listEl.innerHTML = inboxEmails.map(e => `
+      listEl.innerHTML = inboxEmails.map(e => {
+        const hasAttachment = e.snippet && /attach/i.test(e.snippet);
+        return `
         <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}')">
-          <div class="email-row-from">
-            <span>${esc(e.from)}</span>
-            <span style="font-size:10px;color:#3f3f46;">${formatEmailTime(e.date)}</span>
+          ${emailAvatarHtml(e.from)}
+          <div class="email-row-content">
+            <div class="email-row-top">
+              <span class="email-row-from">${esc(e.from)}</span>
+              <span class="email-row-time">${formatEmailDate(e.date)}</span>
+            </div>
+            <div class="email-row-subject">${esc(e.subject)}</div>
+            <div class="email-row-snippet">${esc(e.snippet)}</div>
+            ${hasAttachment ? `<div class="email-row-badges"><span class="email-row-badge">📎 Attachment</span></div>` : ""}
           </div>
-          <div class="email-row-subject">${esc(e.subject)}</div>
-          <div class="email-row-snippet">${esc(e.snippet)}</div>
-        </div>`).join("");
+        </div>`;
+      }).join("");
 
       if (selectedEmailId) renderEmailDetail(selectedEmailId);
     }
@@ -4185,9 +4374,30 @@
       selectedEmailId = id;
       renderEmailSection();
       await renderEmailDetail(id);
-      // Mark read automatically when opened
       const email = inboxEmails.find(e => e.id === id);
-      if (email && email.unread) markEmailRead(id);
+      if (email && email.unread) {
+        await markEmailRead(id);
+        email.unread = false;
+        // Update count badge without re-rendering whole list
+        const countEl = document.getElementById("email-unread-count");
+        const unreadCount = inboxEmails.filter(e => e.unread).length;
+        if (countEl) {
+          countEl.textContent = unreadCount;
+          countEl.style.display = unreadCount > 0 ? "inline-block" : "none";
+        }
+      }
+    }
+
+    async function archiveEmail(id) {
+      await fetch(`/api/gmail-archive/${id}`, { method: "POST" });
+      inboxEmails = inboxEmails.filter(e => e.id !== id);
+      if (selectedEmailId === id) selectedEmailId = inboxEmails.length ? inboxEmails[0].id : null;
+      renderEmailSection();
+      if (selectedEmailId) renderEmailDetail(selectedEmailId);
+      else {
+        const detailEl = document.getElementById("email-detail-pane");
+        if (detailEl) detailEl.innerHTML = `<div class="email-empty" style="height:100%;"><div class="email-empty-icon">✉</div><div class="email-empty-text">Select an email to read</div></div>`;
+      }
     }
 
     async function renderEmailDetail(id) {
@@ -4200,37 +4410,49 @@
       const projectOpts = projects.filter(p => !p.archived)
         .map(p => `<option value="${esc(p.name)}" ${triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
 
-      // Show header + actions immediately, body loading
       detailEl.innerHTML = `
-        <div class="email-detail-header">
+        <div class="email-detail-wrap">
           <div class="email-detail-subject">${esc(email.subject)}</div>
-          <div class="email-detail-meta">
-            <span>From: <strong style="color:#a1a1aa;">${esc(email.from)}</strong></span>
-            <span style="color:#52525b;">${esc(email.fromEmail || "")}</span>
-            <span>${formatEmailTime(email.date)}</span>
+          <div class="email-detail-sender">
+            ${emailAvatarHtml(email.from, 42)}
+            <div class="email-detail-sender-info">
+              <div class="email-detail-sender-name">${esc(email.from)}</div>
+              <div class="email-detail-sender-email">${esc(email.fromEmail || "")}</div>
+            </div>
+            <div class="email-detail-date">${formatEmailDateFull(email.date)}</div>
           </div>
-        </div>
-        <div class="email-detail-actions">
-          <button class="focus-btn" onclick="deleteEmail('${email.id}')" style="padding:6px 14px;font-size:12px;color:#ef4444;border-color:#ef4444;">🗑 Delete</button>
-        </div>
-        <div id="email-attach-area" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;"></div>
-        <div id="email-body-area" style="margin:12px 0;min-height:120px;color:#71717a;font-size:13px;">Loading email body...</div>
-        <div style="margin-top:8px;padding:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;">
-          <div style="font-size:12px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Create Task from Email</div>
-          <input id="etask-title-${id}" class="inp-title" value="${esc(email.subject)}" placeholder="Task title" style="margin-bottom:8px;" />
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-            <select id="etask-proj-${id}" class="filter-btn" style="background:#09090b;border:1px solid #27272a;color:#a1a1aa;border-radius:6px;padding:5px 10px;font-size:12px;">
-              <option value="">No project</option>${projectOpts}
-            </select>
-            <select id="etask-pri-${id}" class="filter-btn" style="background:#09090b;border:1px solid #27272a;color:#a1a1aa;border-radius:6px;padding:5px 10px;font-size:12px;">
-              <option value="normal" ${triage.priority === "normal" ? "selected" : ""}>Normal</option>
-              <option value="high" ${triage.priority === "high" ? "selected" : ""}>High</option>
-              <option value="urgent" ${triage.priority === "urgent" ? "selected" : ""}>Urgent</option>
-            </select>
-            <input id="etask-due-${id}" type="date" value="${triage.suggestedDue || ""}" style="background:#09090b;border:1px solid #27272a;color:#a1a1aa;border-radius:6px;padding:5px 10px;font-size:12px;" />
+          <div class="email-detail-actions">
+            <button class="email-action-btn" onclick="archiveEmail('${email.id}')">📥 Archive</button>
+            <button class="email-action-btn danger" onclick="deleteEmail('${email.id}')">🗑 Delete</button>
+            <button class="email-action-btn task-action" onclick="document.getElementById('email-task-card-${id}').style.display='block'">✚ Create Task</button>
           </div>
-          <button class="journal-save-btn" onclick="createTaskFromEmailDetail('${id}')" style="font-size:12px;padding:6px 16px;">+ Create Task</button>
-          <span id="etask-saved-${id}" style="display:none;font-size:12px;color:#34d399;margin-left:10px;">Task created ✓</span>
+          <div id="email-attach-area" class="email-attachments"></div>
+          <div id="email-body-area" class="email-body-container">
+            <div class="email-body-loading">Loading message...</div>
+          </div>
+          <div class="email-task-card" id="email-task-card-${id}" style="display:none;">
+            <div class="email-task-card-title">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              Create Task from Email
+            </div>
+            <input id="etask-title-${id}" value="${esc(triage.title || email.subject)}" placeholder="Task title" />
+            <div class="email-task-card-row">
+              <select id="etask-proj-${id}">
+                <option value="">No project</option>${projectOpts}
+              </select>
+              <select id="etask-pri-${id}">
+                <option value="normal" ${triage.priority === "normal" ? "selected" : ""}>Normal</option>
+                <option value="high" ${triage.priority === "high" ? "selected" : ""}>High</option>
+                <option value="urgent" ${triage.priority === "urgent" ? "selected" : ""}>Urgent</option>
+              </select>
+              <input id="etask-due-${id}" type="date" value="${triage.suggestedDue || ""}" />
+            </div>
+            <div class="email-task-card-actions">
+              <span id="etask-saved-${id}" style="display:none;font-size:12px;color:#34d399;">Task created ✓</span>
+              <button class="email-action-btn" onclick="document.getElementById('email-task-card-${id}').style.display='none'">Cancel</button>
+              <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${id}')" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">Create Task</button>
+            </div>
+          </div>
         </div>`;
 
       // Fetch full body + attachments
@@ -4242,13 +4464,21 @@
 
         // Attachments
         if (data.attachments?.length) {
-          const attHtml = data.attachments.map(a => {
-            const sizeKb = a.size ? ` (${Math.round(a.size / 1024)}KB)` : "";
-            const url = `/api/gmail-message/${id}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
-            return `<a class="email-attachment" href="${url}" download="${esc(a.name)}">📎 ${esc(a.name)}${sizeKb}</a>`;
-          }).join("");
           const attArea = document.getElementById("email-attach-area");
-          if (attArea) attArea.innerHTML = attHtml;
+          if (attArea) {
+            attArea.innerHTML = data.attachments.map(a => {
+              const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
+              const url = `/api/gmail-message/${id}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
+              const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
+              return `<a class="email-attachment" href="${url}" download="${esc(a.name)}">
+                <span class="email-attachment-icon">${icon}</span>
+                <span class="email-attachment-info">
+                  <span class="email-attachment-name">${esc(a.name)}</span>
+                  ${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}
+                </span>
+              </a>`;
+            }).join("");
+          }
         }
 
         if (data.body?.type === "html") {
@@ -4260,17 +4490,21 @@
           iframe.contentDocument.open();
           iframe.contentDocument.write(data.body.data);
           iframe.contentDocument.close();
-          setTimeout(() => {
-            try { iframe.style.height = iframe.contentDocument.body.scrollHeight + 40 + "px"; } catch {}
-          }, 300);
+          // Auto-resize iframe to content
+          const resizeIframe = () => {
+            try { iframe.style.height = Math.max(400, iframe.contentDocument.body.scrollHeight + 40) + "px"; } catch {}
+          };
+          setTimeout(resizeIframe, 300);
+          setTimeout(resizeIframe, 1000);
+          iframe.onload = resizeIframe;
         } else if (data.body?.type === "text") {
-          bodyArea.innerHTML = `<pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;color:#d4d4d8;line-height:1.7;">${esc(data.body.data)}</pre>`;
+          bodyArea.innerHTML = `<pre>${esc(data.body.data)}</pre>`;
         } else {
-          bodyArea.innerHTML = `<div style="color:#52525b;font-size:13px;font-style:italic;">${esc(email.snippet)}</div>`;
+          bodyArea.innerHTML = `<div style="color:#71717a;font-size:14px;font-style:italic;padding:20px 0;">${esc(email.snippet)}</div>`;
         }
       } catch {
         const bodyArea = document.getElementById("email-body-area");
-        if (bodyArea) bodyArea.innerHTML = `<div style="color:#52525b;font-size:13px;font-style:italic;">${esc(email.snippet)}</div>`;
+        if (bodyArea) bodyArea.innerHTML = `<div style="color:#71717a;font-size:14px;font-style:italic;padding:20px 0;">${esc(email.snippet)}</div>`;
       }
     }
 
@@ -4308,7 +4542,7 @@
       });
       document.addEventListener("mousemove", e => {
         if (!dragging) return;
-        const w = Math.min(Math.max(startW + (e.clientX - startX), 180), window.innerWidth * 0.6);
+        const w = Math.min(Math.max(startW + (e.clientX - startX), 260), window.innerWidth * 0.5);
         listPane.style.width = w + "px";
       });
       document.addEventListener("mouseup", () => {
@@ -4323,13 +4557,12 @@
 
     /* ── Today inbox email modal ──────────────────────────────── */
     function openEmailModal(emailId) {
-      // Switch to Email tab and select the email
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
       document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
       document.querySelector(".tab[data-tab='email']").classList.add("active");
       document.getElementById("sec-email").classList.add("active");
       const el = document.getElementById("email-list-items");
-      if (el) el.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Loading...</div>`;
+      if (el) el.innerHTML = `<div class="email-empty" style="height:200px;"><div class="email-body-loading">Loading inbox...</div></div>`;
       loadInbox().then(() => {
         renderEmailSection();
         selectEmail(emailId);
