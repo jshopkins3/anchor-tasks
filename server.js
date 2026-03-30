@@ -850,6 +850,8 @@ const server = http.createServer(async (req, res) => {
       if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
         return json(res, 500, { error: "Google OAuth not configured" });
       }
+      // Delete old token to force fresh consent with new scopes
+      try { if (fs.existsSync(GCAL_TOKEN_FILE)) fs.unlinkSync(GCAL_TOKEN_FILE); console.log("[gcal] Deleted old token for re-auth"); } catch {}
       const host = req.headers.host || "";
       const proto = IS_PRODUCTION ? "https" : "http";
       const redirectUri = `${proto}://${host}/api/gcal-callback`;
