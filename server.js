@@ -825,6 +825,91 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { task: tasks[idx] });
     }
 
+    // Dan: Google Drive access
+    if (urlPath === "/api/dan/drive-search" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected", files: [] });
+      try {
+        const q = body.query || "";
+        const mimeFilter = body.mimeType ? ` and mimeType='${body.mimeType}'` : "";
+        const searchQ = `name contains '${q.replace(/'/g, "\\'")}'${mimeFilter} and trashed=false`;
+        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(searchQ)}&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&fields=files(id,name,mimeType,webViewLink,modifiedTime,size)&orderBy=modifiedTime desc&pageSize=${body.maxResults || 10}`;
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!resp.ok) return json(res, 200, { error: `Drive API: ${resp.status}`, files: [] });
+        const data = await resp.json();
+        return json(res, 200, { files: (data.files || []).map(f => ({ id: f.id, name: f.name, type: f.mimeType, url: f.webViewLink, modified: f.modifiedTime, size: f.size })) });
+      } catch (e) { return json(res, 200, { error: e.message, files: [] }); }
+    }
+
+    if (urlPath === "/api/dan/drive-list-folder" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected", files: [] });
+      try {
+        const folderId = body.folderId || "root";
+        const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,mimeType,webViewLink,modifiedTime)&orderBy=name&pageSize=50`;
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!resp.ok) return json(res, 200, { error: `Drive API: ${resp.status}`, files: [] });
+        const data = await resp.json();
+        return json(res, 200, { folderId, files: (data.files || []).map(f => ({ id: f.id, name: f.name, type: f.mimeType, url: f.webViewLink, modified: f.modifiedTime, isFolder: f.mimeType === "application/vnd.google-apps.folder" })) });
+      } catch (e) { return json(res, 200, { error: e.message, files: [] }); }
+    }
+
+    // Dan: Gmail management (archive, delete, label)
+    if (urlPath === "/api/dan/gmail-archive" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const ok = await gmailArchive(body.messageId);
+      return json(res, 200, { ok, messageId: body.messageId });
+    }
+
+    if (urlPath === "/api/dan/gmail-delete" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
+      try {
+        const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}/trash`, {
+          method: "POST", headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        return json(res, 200, { ok: resp.ok, messageId: body.messageId });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    if (urlPath === "/api/dan/gmail-label" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
+      try {
+        const modBody = {};
+        if (body.addLabels) modBody.addLabelIds = body.addLabels;
+        if (body.removeLabels) modBody.removeLabelIds = body.removeLabels;
+        const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}/modify`, {
+          method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(modBody),
+        });
+        return json(res, 200, { ok: resp.ok, messageId: body.messageId });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    if (urlPath === "/api/dan/gmail-labels" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Gmail not connected", labels: [] });
+      try {
+        const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!resp.ok) return json(res, 200, { error: `Gmail API: ${resp.status}`, labels: [] });
+        const data = await resp.json();
+        return json(res, 200, { labels: (data.labels || []).map(l => ({ id: l.id, name: l.name, type: l.type })) });
+      } catch (e) { return json(res, 200, { error: e.message, labels: [] }); }
+    }
+
     // Dan: journal access
     if (urlPath === "/api/dan/journal-add" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
