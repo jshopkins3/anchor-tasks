@@ -734,8 +734,8 @@ const server = http.createServer(async (req, res) => {
           const end = new Date(start.getTime() + (body.duration || 60) * 60000);
           eventData = {
             summary: body.title,
-            start: { dateTime: start.toISOString(), timeZone: "America/Chicago" },
-            end: { dateTime: end.toISOString(), timeZone: "America/Chicago" },
+            start: { dateTime: start.toISOString(), timeZone: "America/New_York" },
+            end: { dateTime: end.toISOString(), timeZone: "America/New_York" },
             description: body.description || "", location: body.location || "",
           };
         } else {
@@ -1156,7 +1156,7 @@ const server = http.createServer(async (req, res) => {
       if (idx === -1) return json(res, 404, { error: "Task not found" });
       const t = tasks[idx];
       const { startTime, endTime, allDay, recurrence, timeZone } = body;
-      const tz = timeZone || "America/Chicago";
+      const tz = timeZone || "America/New_York";
       let eventData;
       if (allDay) {
         const dateStr = (startTime || "").substring(0, 10);
@@ -1389,7 +1389,7 @@ const server = http.createServer(async (req, res) => {
       // PATCH — update event
       const body = JSON.parse(await readBody(req));
       const { title, startTime, endTime, allDay, timeZone, location } = body;
-      const tz = timeZone || "America/Chicago";
+      const tz = timeZone || "America/New_York";
       let eventData;
       if (allDay) {
         const dateStr = (startTime || "").substring(0, 10);
