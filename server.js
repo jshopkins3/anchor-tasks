@@ -596,7 +596,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     /* ── Auth wall — everything below requires a valid session ──────── */
-    if (!PUBLIC_PATHS.includes(urlPath) && urlPath.startsWith("/api/")) {
+    if (!PUBLIC_PATHS.includes(urlPath) && urlPath.startsWith("/api/") && !urlPath.startsWith("/api/dan/")) {
       const session = getSession(req);
       if (!session) return json(res, 401, { error: "Not authenticated" });
       // Attach session to req for downstream handlers
@@ -734,8 +734,8 @@ const server = http.createServer(async (req, res) => {
           const end = new Date(start.getTime() + (body.duration || 60) * 60000);
           eventData = {
             summary: body.title,
-            start: { dateTime: start.toISOString(), timeZone: "America/Los_Angeles" },
-            end: { dateTime: end.toISOString(), timeZone: "America/Los_Angeles" },
+            start: { dateTime: start.toISOString(), timeZone: "America/Chicago" },
+            end: { dateTime: end.toISOString(), timeZone: "America/Chicago" },
             description: body.description || "", location: body.location || "",
           };
         } else {
