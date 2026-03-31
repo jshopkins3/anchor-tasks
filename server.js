@@ -825,6 +825,25 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { task: tasks[idx] });
     }
 
+    // Dan: journal access
+    if (urlPath === "/api/dan/journal-add" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const entries = loadJournal();
+      const entry = {
+        id: generateId(),
+        date: String(body.date || new Date().toISOString().substring(0, 10)).substring(0, 10),
+        title: String(body.title || "").substring(0, 200),
+        content: String(body.content || "").substring(0, 50000),
+        createdAt: new Date().toISOString(),
+        source: "anchor-dan",
+      };
+      entries.push(entry);
+      saveJournal(entries);
+      console.log(`[dan-journal] Added: "${(body.title || body.content || "").substring(0, 60)}"`);
+      return json(res, 201, { ok: true, entry });
+    }
+
     /* ── ANCHOR DAN PROXY (to Command API) ──────────────────────── */
     if (urlPath === "/api/anchor-dan" && req.method === "POST") {
       if (!req.session) return json(res, 401, { error: "Not authenticated" });
