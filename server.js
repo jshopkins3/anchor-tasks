@@ -730,12 +730,17 @@ const server = http.createServer(async (req, res) => {
       try {
         let eventData;
         if (body.time) {
-          const start = new Date(`${body.date}T${body.time}:00`);
-          const end = new Date(start.getTime() + (body.duration || 60) * 60000);
+          // Pass local time directly — do NOT convert through Date/UTC
+          const duration = body.duration || 60;
+          const [h, m] = body.time.split(":").map(Number);
+          const endH = h + Math.floor((m + duration) / 60);
+          const endM = (m + duration) % 60;
+          const startStr = `${body.date}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`;
+          const endStr = `${body.date}T${String(endH).padStart(2,"0")}:${String(endM).padStart(2,"0")}:00`;
           eventData = {
             summary: body.title,
-            start: { dateTime: start.toISOString(), timeZone: "America/New_York" },
-            end: { dateTime: end.toISOString(), timeZone: "America/New_York" },
+            start: { dateTime: startStr, timeZone: "America/New_York" },
+            end: { dateTime: endStr, timeZone: "America/New_York" },
             description: body.description || "", location: body.location || "",
           };
         } else {
