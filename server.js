@@ -603,6 +603,161 @@ const server = http.createServer(async (req, res) => {
       req.session = session;
     }
 
+    /* ── DAN API: Gmail & Calendar (callable from Command via API key) ── */
+    const isDanApiKey = () => {
+      const apiKey = req.headers["x-api-key"];
+      return apiKey && apiKey === (process.env.COMMAND_API_KEY || "");
+    };
+
+    // Gmail: search/inbox
+    if (urlPath === "/api/dan/gmail-search" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const query = body.query || "is:unread in:inbox";
+      const maxResults = body.maxResults || 15;
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Gmail not connected", emails: [] });
+      try {
+        const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: query, maxResults: String(maxResults) })}`;
+        const listResp = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!listResp.ok) return json(res, 200, { error: `Gmail API: ${listResp.status}`, emails: [] });
+        const listData = await listResp.json();
+        const messages = listData.messages || [];
+        const emails = await Promise.all(messages.slice(0, maxResults).map(async m => {
+          const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (!msgResp.ok) return null;
+          const msg = await msgResp.json();
+          const h = msg.payload?.headers || [];
+          return {
+            id: m.id, threadId: msg.threadId,
+            from: parseEmailHeader(h, "From"), to: parseEmailHeader(h, "To"),
+            subject: parseEmailHeader(h, "Subject") || "(No subject)",
+            date: parseEmailHeader(h, "Date"), snippet: msg.snippet || "",
+            unread: (msg.labelIds || []).includes("UNREAD"),
+          };
+        }));
+        return json(res, 200, { emails: emails.filter(Boolean) });
+      } catch (e) { return json(res, 200, { error: e.message, emails: [] }); }
+    }
+
+    // Gmail: read full message
+    if (urlPath === "/api/dan/gmail-read" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
+      try {
+        const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}?format=full`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!msgResp.ok) return json(res, 200, { error: `Gmail API: ${msgResp.status}` });
+        const msg = await msgResp.json();
+        const h = msg.payload?.headers || [];
+        const bodyContent = decodeEmailBody(msg.payload);
+        return json(res, 200, {
+          id: msg.id, threadId: msg.threadId,
+          from: parseEmailHeader(h, "From"), to: parseEmailHeader(h, "To"),
+          subject: parseEmailHeader(h, "Subject"), date: parseEmailHeader(h, "Date"),
+          body: bodyContent, snippet: msg.snippet,
+        });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    // Gmail: send email
+    if (urlPath === "/api/dan/gmail-send" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
+      try {
+        const rawEmail = [
+          `To: ${body.to}`,
+          `Subject: ${body.subject}`,
+          `Content-Type: text/plain; charset=utf-8`,
+          ``,
+          body.body,
+        ].join("\r\n");
+        const encoded = Buffer.from(rawEmail).toString("base64url");
+        const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ raw: encoded }),
+        });
+        if (!resp.ok) return json(res, 200, { error: `Send failed: ${resp.status}` });
+        const sent = await resp.json();
+        console.log(`[dan-gmail] Sent email to ${body.to}: "${body.subject}"`);
+        return json(res, 200, { success: true, messageId: sent.id, to: body.to, subject: body.subject });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    // Calendar: list events
+    if (urlPath === "/api/dan/calendar-list" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const days = body.days || 7;
+      const now = new Date();
+      const future = new Date(now); future.setDate(now.getDate() + days);
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Calendar not connected", events: [] });
+      try {
+        // Fetch from primary calendar (John's personal)
+        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?${new URLSearchParams({
+          timeMin: now.toISOString(), timeMax: future.toISOString(),
+          singleEvents: "true", orderBy: "startTime", maxResults: "50",
+        })}`;
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!resp.ok) return json(res, 200, { error: `Calendar API: ${resp.status}`, events: [] });
+        const data = await resp.json();
+        const events = (data.items || []).map(e => ({
+          id: e.id, title: e.summary || "(No title)",
+          date: e.start?.date || e.start?.dateTime?.split("T")[0],
+          time: e.start?.dateTime ? e.start.dateTime.split("T")[1]?.substring(0, 5) : "all-day",
+          endTime: e.end?.dateTime ? e.end.dateTime.split("T")[1]?.substring(0, 5) : null,
+          location: e.location || "", description: (e.description || "").substring(0, 200),
+        }));
+        return json(res, 200, { events });
+      } catch (e) { return json(res, 200, { error: e.message, events: [] }); }
+    }
+
+    // Calendar: create event
+    if (urlPath === "/api/dan/calendar-create" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Calendar not connected" });
+      try {
+        let eventData;
+        if (body.time) {
+          const start = new Date(`${body.date}T${body.time}:00`);
+          const end = new Date(start.getTime() + (body.duration || 60) * 60000);
+          eventData = {
+            summary: body.title,
+            start: { dateTime: start.toISOString(), timeZone: "America/Los_Angeles" },
+            end: { dateTime: end.toISOString(), timeZone: "America/Los_Angeles" },
+            description: body.description || "", location: body.location || "",
+          };
+        } else {
+          const nextDay = new Date(body.date + "T12:00:00Z");
+          nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+          eventData = {
+            summary: body.title, start: { date: body.date }, end: { date: nextDay.toISOString().split("T")[0] },
+            description: body.description || "",
+          };
+        }
+        const resp = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(eventData),
+        });
+        if (!resp.ok) return json(res, 200, { error: `Create failed: ${resp.status}` });
+        const created = await resp.json();
+        console.log(`[dan-calendar] Created: "${body.title}" on ${body.date}`);
+        return json(res, 200, { success: true, eventId: created.id, title: body.title, date: body.date });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
     /* ── ANCHOR DAN PROXY (to Command API) ──────────────────────── */
     if (urlPath === "/api/anchor-dan" && req.method === "POST") {
       if (!req.session) return json(res, 401, { error: "Not authenticated" });
