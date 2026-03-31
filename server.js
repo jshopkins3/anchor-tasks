@@ -758,6 +758,68 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message }); }
     }
 
+    // Dan: full Anchor Tasks data access (tasks, projects, goals)
+    if (urlPath === "/api/dan/tasks-overview" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const tasks = parseTasks();
+      const projects = parseProjects();
+      const goals = readGoals();
+      const open = tasks.filter(t => !t.done);
+      const today = open.filter(t => t.todayFocus);
+      const overdue = open.filter(t => t.due && t.due < new Date().toISOString().substring(0, 10));
+      const urgent = open.filter(t => t.urgent);
+      return json(res, 200, {
+        tasks: { total: tasks.length, open: open.length, today: today.length, overdue: overdue.length, urgent: urgent.length },
+        openTasks: open.map(t => ({ id: t.id, title: t.title, assignee: t.assignee, due: t.due, priority: t.priority, project: t.project, urgent: t.urgent, important: t.important, todayFocus: t.todayFocus, status: t.status })),
+        projects: projects.map(p => ({ id: p.id, name: p.name, status: p.status, color: p.color })),
+        goals: goals.map(g => ({ id: g.id, title: g.title, targetDate: g.targetDate, progress: g.progress, category: g.category })),
+      });
+    }
+
+    if (urlPath === "/api/dan/tasks-create" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const tasks = parseTasks();
+      const task = {
+        id: generateId(),
+        title: String(body.title || "").substring(0, 200),
+        assignee: String(body.assignee || "").substring(0, 100),
+        due: String(body.due || "").substring(0, 10),
+        priority: ["low", "normal", "high", "urgent"].includes(body.priority) ? body.priority : "normal",
+        project: String(body.project || "").substring(0, 100),
+        status: String(body.status || "").substring(0, 50),
+        personal: !!body.personal,
+        urgent: !!body.urgent,
+        important: !!body.important,
+        done: false,
+      };
+      if (!task.title) return json(res, 400, { error: "Title required" });
+      tasks.push(task);
+      writeTasks(tasks);
+      return json(res, 201, { task });
+    }
+
+    if (urlPath === "/api/dan/tasks-update" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.id) return json(res, 400, { error: "Task id required" });
+      const tasks = parseTasks();
+      const idx = tasks.findIndex(t => t.id === body.id);
+      if (idx === -1) return json(res, 404, { error: "Task not found" });
+      if (body.title !== undefined) tasks[idx].title = String(body.title).substring(0, 200);
+      if (body.assignee !== undefined) tasks[idx].assignee = String(body.assignee).substring(0, 100);
+      if (body.due !== undefined) tasks[idx].due = String(body.due).substring(0, 10);
+      if (body.priority !== undefined) tasks[idx].priority = body.priority;
+      if (body.project !== undefined) tasks[idx].project = String(body.project).substring(0, 100);
+      if (body.done !== undefined) tasks[idx].done = !!body.done;
+      if (body.status !== undefined) tasks[idx].status = String(body.status).substring(0, 50);
+      if (body.urgent !== undefined) tasks[idx].urgent = !!body.urgent;
+      if (body.important !== undefined) tasks[idx].important = !!body.important;
+      if (body.todayFocus !== undefined) tasks[idx].todayFocus = !!body.todayFocus;
+      writeTasks(tasks);
+      return json(res, 200, { task: tasks[idx] });
+    }
+
     /* ── ANCHOR DAN PROXY (to Command API) ──────────────────────── */
     if (urlPath === "/api/anchor-dan" && req.method === "POST") {
       if (!req.session) return json(res, 401, { error: "Not authenticated" });
