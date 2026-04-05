@@ -910,6 +910,21 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message, labels: [] }); }
     }
 
+    // Dan: list shared drives
+    if (urlPath === "/api/dan/drive-shared-drives" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected", drives: [] });
+      try {
+        const resp = await fetch("https://www.googleapis.com/drive/v3/drives?pageSize=50", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!resp.ok) return json(res, 200, { error: `Drive API: ${resp.status}`, drives: [] });
+        const data = await resp.json();
+        return json(res, 200, { drives: (data.drives || []).map(d => ({ id: d.id, name: d.name })) });
+      } catch (e) { return json(res, 200, { error: e.message, drives: [] }); }
+    }
+
     // Dan: create folder in Drive
     if (urlPath === "/api/dan/drive-create-folder" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
