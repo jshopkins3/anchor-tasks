@@ -910,6 +910,112 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message, labels: [] }); }
     }
 
+    // Dan: read Google Doc/Sheet content
+    if (urlPath === "/api/dan/drive-read" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const fileId = body.fileId;
+      if (!fileId) return json(res, 400, { error: "fileId required" });
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected" });
+      try {
+        // First get file metadata to determine type
+        const metaResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,size&supportsAllDrives=true`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!metaResp.ok) return json(res, 200, { error: `File not found: ${metaResp.status}` });
+        const meta = await metaResp.json();
+
+        let content = "";
+        if (meta.mimeType === "application/vnd.google-apps.document") {
+          // Google Doc → export as plain text
+          const expResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (expResp.ok) content = await expResp.text();
+          else content = `Export failed: ${expResp.status}`;
+        } else if (meta.mimeType === "application/vnd.google-apps.spreadsheet") {
+          // Google Sheet → export as CSV
+          const expResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (expResp.ok) content = await expResp.text();
+          else content = `Export failed: ${expResp.status}`;
+        } else if (meta.mimeType === "application/vnd.google-apps.presentation") {
+          // Google Slides → export as plain text
+          const expResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (expResp.ok) content = await expResp.text();
+          else content = `Export failed: ${expResp.status}`;
+        } else if (meta.mimeType === "application/pdf") {
+          content = "[PDF file - cannot read content directly. Use the link to view.]";
+        } else if (meta.mimeType?.startsWith("text/") || meta.mimeType === "application/json") {
+          // Plain text files → download directly
+          const dlResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (dlResp.ok) content = await dlResp.text();
+          else content = `Download failed: ${dlResp.status}`;
+        } else {
+          content = `[${meta.mimeType} file - cannot read content. Use the link to view.]`;
+        }
+
+        // Truncate if huge
+        if (content.length > 50000) content = content.substring(0, 50000) + "\n\n[Truncated - content exceeds 50,000 characters]";
+
+        return json(res, 200, { name: meta.name, mimeType: meta.mimeType, content, charCount: content.length });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    // Dan: search Drive content (search inside docs, not just by name)
+    if (urlPath === "/api/dan/knowledge-search" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const query = body.query || "";
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected", results: [] });
+      try {
+        // Use Drive's fullText search to find docs containing the query
+        const searchQ = `fullText contains '${query.replace(/'/g, "\\'")}' and trashed=false`;
+        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(searchQ)}&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&fields=files(id,name,mimeType,webViewLink,modifiedTime)&orderBy=modifiedTime desc&pageSize=${body.maxResults || 10}`;
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!resp.ok) return json(res, 200, { error: `Drive API: ${resp.status}`, results: [] });
+        const data = await resp.json();
+        const files = (data.files || []).map(f => ({ id: f.id, name: f.name, type: f.mimeType, url: f.webViewLink, modified: f.modifiedTime }));
+
+        // For the top results, try to read a snippet of content
+        const results = [];
+        for (const file of files.slice(0, 5)) {
+          let snippet = "";
+          if (file.type === "application/vnd.google-apps.document" || file.type === "application/vnd.google-apps.spreadsheet") {
+            try {
+              const exportType = file.type.includes("spreadsheet") ? "text/csv" : "text/plain";
+              const expResp = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${exportType}`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              if (expResp.ok) {
+                const full = await expResp.text();
+                // Find the section containing the query
+                const lower = full.toLowerCase();
+                const idx = lower.indexOf(query.toLowerCase());
+                if (idx >= 0) {
+                  const start = Math.max(0, idx - 200);
+                  const end = Math.min(full.length, idx + 500);
+                  snippet = (start > 0 ? "..." : "") + full.substring(start, end) + (end < full.length ? "..." : "");
+                } else {
+                  snippet = full.substring(0, 500) + (full.length > 500 ? "..." : "");
+                }
+              }
+            } catch (e) {}
+          }
+          results.push({ ...file, snippet });
+        }
+
+        return json(res, 200, { query, results });
+      } catch (e) { return json(res, 200, { error: e.message, results: [] }); }
+    }
+
     // Dan: journal access
     if (urlPath === "/api/dan/journal-add" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
