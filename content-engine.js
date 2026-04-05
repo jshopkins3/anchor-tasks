@@ -55,8 +55,62 @@ TEAM:
 - Brenda Corona - Processor
 - Kat Pazzaglia - LO
 
+SUBSTACK INTEGRATION:
+- Every week, the best Bus Story (Monday) or strongest Win (Friday) should be flagged as that week's Substack candidate
+- For the Substack candidate, generate TWO versions: the short punchy Facebook version AND a longer expanded Substack version
+- Same voice on Substack. More depth. More narrative. Still sounds like John, just telling the full story.
+
+TIMELY & MARKET AWARENESS:
+- Flag when to reference VA loan awareness moments, rate changes, or housing market shifts
+- NEVER frame as negativity or doom
+- ALWAYS frame as "here's what this means for your buyers right now"
+- Education first. Always.
+
+RELATIONSHIP CONTEXT:
+- Pipeline awareness isn't just deal status. Consider relationship health of the agent on each file.
+- If an agent has an active file with delays or problems, don't celebrate smooth closings that week without flagging the potential tone conflict
+- Deals and relationships are connected. Be thoughtful about what you celebrate and when.
+
 THE ONE RULE ABOVE ALL:
 Every post should sound like something John would text Jordan at 7am. If it sounds like a press release or a mortgage company's social media - rewrite it.`;
+
+const CONTENT_FEEDBACK_FILE = path.join(DATA_DIR, "content-feedback.json");
+
+function loadContentFeedback() {
+  try { return JSON.parse(fs.readFileSync(CONTENT_FEEDBACK_FILE, "utf8")); }
+  catch { return []; }
+}
+
+function saveContentFeedback(data) {
+  fs.writeFileSync(CONTENT_FEEDBACK_FILE, JSON.stringify(data, null, 2));
+}
+
+// Record feedback on a post (what John edited and why)
+function recordPostFeedback(postId, feedback) {
+  const feedbackList = loadContentFeedback();
+  feedbackList.push({
+    postId,
+    feedback,
+    timestamp: new Date().toISOString(),
+  });
+  // Keep last 100
+  if (feedbackList.length > 100) feedbackList.splice(0, feedbackList.length - 100);
+  saveContentFeedback(feedbackList);
+  return feedbackList;
+}
+
+// Build feedback context for prompt injection
+function buildFeedbackContext() {
+  const feedbackList = loadContentFeedback();
+  if (feedbackList.length === 0) return "";
+
+  const recent = feedbackList.slice(-10);
+  const lines = ["VOICE CALIBRATION FEEDBACK (learn from these edits):"];
+  for (const f of recent) {
+    lines.push(`- "${f.feedback}"`);
+  }
+  return lines.join("\n");
+}
 
 const CONTENT_FRAMEWORK = {
   monday: {
@@ -214,6 +268,10 @@ Wednesday: "My brain doesn't turn off. Ever. 4am I'm reading SEC filings. 6am I'
 Thursday: "VA loans are the most powerful mortgage product in America and the most misunderstood. No down payment. No PMI. And yes - they can be used more than once. If your veteran clients aren't using their benefit, someone didn't explain it right."
 Friday: "A client told their agent this week that we're Kobe and Shaq. I don't know if I'm Kobe or Shaq. But I know we're closing deals other people said were impossible. Happy Friday. Go close something."
 
+${buildFeedbackContext()}
+
+SUBSTACK: For each week, flag the ONE best post as the Substack candidate (usually Monday's Bus Story or Friday's Win). For that post, also include a "substackTitle" and "substackBody" - a longer expanded version. Same voice, more depth, full narrative.
+
 Respond with ONLY a JSON array (no markdown, no code fences). Each item:
 {
   "date": "YYYY-MM-DD",
@@ -221,8 +279,13 @@ Respond with ONLY a JSON array (no markdown, no code fences). Each item:
   "theme": "The Bus",
   "platform": "facebook",
   "text": "The post text exactly as it should appear. No em dashes. No AI voice.",
-  "notes": "Internal note about strategy/context for this post"
+  "notes": "Internal note about strategy/context for this post",
+  "substackCandidate": false,
+  "substackTitle": null,
+  "substackBody": null
 }
+
+Set substackCandidate=true on the ONE best post per week. For that post, include substackTitle and substackBody with the expanded Substack version.
 
 Generate exactly ${dates.length} posts. One per day, Monday through Friday, for two weeks. Every post must pass the test: "Would John text this to Jordan at 7am?" If no, rewrite it.`;
 
@@ -382,4 +445,6 @@ module.exports = {
   generateSinglePost,
   fetchPipelineContext,
   getNextTwoWeeksDates,
+  recordPostFeedback,
+  loadContentFeedback,
 };

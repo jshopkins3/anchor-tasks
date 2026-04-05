@@ -4762,6 +4762,19 @@
       } catch (e) { alert("Error: " + e.message); }
     }
 
+    async function feedbackOnPost(postId) {
+      const feedback = prompt("I edited this post because...", "");
+      if (!feedback) return;
+      try {
+        await fetch("/api/content/feedback", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postId, feedback }) });
+        const toast = document.createElement("div");
+        toast.textContent = "Feedback saved. Dan will learn from this.";
+        toast.style.cssText = "position:fixed;bottom:20px;right:20px;background:#a855f7;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;";
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+      } catch (e) { alert("Error: " + e.message); }
+    }
+
     function copyPost(text) {
       navigator.clipboard.writeText(text).then(() => {
         const toast = document.createElement("div");
@@ -4824,11 +4837,19 @@
             <div style="padding:12px 14px;">
               <div id="content-text-${post.id}" style="font-size:14px;line-height:1.7;color:#f5f0e8;white-space:pre-wrap;">${escapeHTML(post.text)}</div>
               ${post.notes ? `<div style="margin-top:8px;font-size:11px;color:#8a8a8a;font-style:italic;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">${escapeHTML(post.notes)}</div>` : ""}
-              <div style="display:flex;gap:6px;margin-top:10px;">
+              ${post.substackCandidate ? `
+                <div style="margin-top:10px;padding:10px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:6px;">
+                  <div style="font-size:11px;font-weight:700;color:#c9a84c;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Substack Version${post.substackTitle ? ': ' + escapeHTML(post.substackTitle) : ''}</div>
+                  ${post.substackBody ? `<div style="font-size:13px;line-height:1.7;color:#f5f0e8;white-space:pre-wrap;">${escapeHTML(post.substackBody)}</div>
+                  <button onclick="copyPost(${JSON.stringify(post.substackBody || '').replace(/"/g, '&quot;')})" style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(201,168,76,0.2);color:#c9a84c;cursor:pointer;font-weight:600;">Copy Substack</button>` : '<div style="font-size:11px;color:#8a8a8a;">Flagged for Substack expansion</div>'}
+                </div>
+              ` : ""}
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
                 <button onclick="copyPost(${JSON.stringify(post.text).replace(/"/g, '&quot;')})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(56,189,248,0.15);color:#38bdf8;cursor:pointer;font-weight:600;">Copy</button>
                 <button onclick="updateContentPost('${post.id}',{status:'approved'})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(74,222,128,0.15);color:#4ade80;cursor:pointer;font-weight:600;">Approve</button>
                 <button onclick="updateContentPost('${post.id}',{status:'posted'})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(107,114,128,0.15);color:#6b7280;cursor:pointer;font-weight:600;">Mark Posted</button>
                 <button onclick="regeneratePost('${post.id}','${post.date}','${post.dayName}','${post.theme}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(251,191,36,0.15);color:#fbbf24;cursor:pointer;font-weight:600;">Regenerate</button>
+                <button onclick="feedbackOnPost('${post.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(168,85,247,0.15);color:#a855f7;cursor:pointer;font-weight:600;">Feedback</button>
                 <button onclick="deleteContentPost('${post.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(239,68,68,0.1);color:#ef4444;cursor:pointer;font-weight:600;">Delete</button>
               </div>
             </div>

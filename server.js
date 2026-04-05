@@ -1528,6 +1528,14 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    if (urlPath === "/api/content/feedback" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const contentEngine = require("./content-engine");
+      if (!body.postId || !body.feedback) return json(res, 400, { error: "postId and feedback required" });
+      contentEngine.recordPostFeedback(body.postId, body.feedback);
+      return json(res, 200, { ok: true });
+    }
+
     // Dan API: content access
     if (urlPath === "/api/dan/content-upcoming" && (req.method === "GET" || req.method === "POST")) {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
