@@ -910,6 +910,57 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message, labels: [] }); }
     }
 
+    // Dan: create folder in Drive
+    if (urlPath === "/api/dan/drive-create-folder" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected" });
+      try {
+        const metadata = {
+          name: body.name,
+          mimeType: "application/vnd.google-apps.folder",
+        };
+        if (body.parentId) metadata.parents = [body.parentId];
+        const resp = await fetch("https://www.googleapis.com/drive/v3/files?supportsAllDrives=true", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(metadata),
+        });
+        if (!resp.ok) return json(res, 200, { error: `Create failed: ${resp.status}` });
+        const folder = await resp.json();
+        console.log(`[dan-drive] Created folder: ${body.name} (${folder.id})`);
+        return json(res, 200, { success: true, folderId: folder.id, name: body.name });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    // Dan: move file to a different folder
+    if (urlPath === "/api/dan/drive-move" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected" });
+      try {
+        // Get current parents
+        const metaResp = await fetch(`https://www.googleapis.com/drive/v3/files/${body.fileId}?fields=parents&supportsAllDrives=true`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!metaResp.ok) return json(res, 200, { error: `File not found: ${metaResp.status}` });
+        const meta = await metaResp.json();
+        const previousParents = (meta.parents || []).join(",");
+
+        // Move to new parent
+        const moveResp = await fetch(`https://www.googleapis.com/drive/v3/files/${body.fileId}?addParents=${body.targetFolderId}&removeParents=${previousParents}&supportsAllDrives=true`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!moveResp.ok) return json(res, 200, { error: `Move failed: ${moveResp.status}` });
+        console.log(`[dan-drive] Moved ${body.fileId} to folder ${body.targetFolderId}`);
+        return json(res, 200, { success: true, fileId: body.fileId, targetFolderId: body.targetFolderId });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
     // Dan: read Google Doc/Sheet content
     if (urlPath === "/api/dan/drive-read" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
