@@ -925,6 +925,41 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message, drives: [] }); }
     }
 
+    // Dan: rename shared drive
+    if (urlPath === "/api/dan/drive-rename" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected" });
+      try {
+        const resp = await fetch(`https://www.googleapis.com/drive/v3/drives/${body.driveId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: body.name }),
+        });
+        if (!resp.ok) return json(res, 200, { error: `Rename failed: ${resp.status}` });
+        console.log(`[dan-drive] Renamed shared drive ${body.driveId} to "${body.name}"`);
+        return json(res, 200, { success: true, driveId: body.driveId, name: body.name });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    // Dan: delete file/folder from Drive
+    if (urlPath === "/api/dan/drive-delete" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Drive not connected" });
+      try {
+        const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${body.fileId}?supportsAllDrives=true`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!resp.ok && resp.status !== 204) return json(res, 200, { error: `Delete failed: ${resp.status}` });
+        console.log(`[dan-drive] Deleted file/folder ${body.fileId}`);
+        return json(res, 200, { success: true, fileId: body.fileId });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
     // Dan: create folder in Drive
     if (urlPath === "/api/dan/drive-create-folder" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
