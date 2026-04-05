@@ -1184,6 +1184,7 @@
       <div class="tab" data-tab="projects">Projects</div>
       <div class="tab" data-tab="journal">Journal</div>
       <div class="tab" data-tab="email">Email</div>
+      <div class="tab" data-tab="content">Content</div>
       <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
     </div>
     <div class="quick-links">
@@ -1449,6 +1450,21 @@
             <div class="email-empty-text">Select an email to read</div>
             <div class="email-empty-sub">Choose a message from the list</div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Content Calendar section ────────────────────────────── -->
+    <div class="section" id="sec-content">
+      <div style="max-width:900px;margin:0 auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Content Calendar</h2>
+          <div style="display:flex;gap:8px;">
+            <button onclick="generateContentPlan()" id="content-gen-btn" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Generate 2-Week Plan</button>
+          </div>
+        </div>
+        <div id="content-calendar-grid" style="display:flex;flex-direction:column;gap:10px;">
+          <div style="text-align:center;padding:40px;color:#71717a;">Click "Generate 2-Week Plan" to create your content calendar.</div>
         </div>
       </div>
     </div>
@@ -2526,6 +2542,9 @@
             calCursor = new Date();
             if (calView === "month") calCursor.setDate(1);
             renderCalendarView();
+          }
+          if (tab.dataset.tab === "content") {
+            loadContentCalendar();
           }
           if (tab.dataset.tab === "journal") {
             if (!currentJournalDate) newJournalEntry();
@@ -4686,6 +4705,139 @@
     }
 
     createDanPanel();
+
+    /* ── Content Calendar ────────────────────────────────────── */
+    let contentPosts = [];
+
+    async function loadContentCalendar() {
+      try {
+        const resp = await fetch("/api/content", { credentials: "include" });
+        const data = await resp.json();
+        contentPosts = data.posts || [];
+        renderContentCalendar();
+      } catch (e) { console.error("[content] Load error:", e); }
+    }
+
+    async function generateContentPlan() {
+      const btn = document.getElementById("content-gen-btn");
+      btn.textContent = "Generating...";
+      btn.disabled = true;
+      try {
+        const resp = await fetch("/api/content/generate", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        const data = await resp.json();
+        if (data.ok) { contentPosts = data.posts; renderContentCalendar(); }
+        else alert("Error: " + (data.error || "Unknown"));
+      } catch (e) { alert("Error: " + e.message); }
+      btn.textContent = "Generate 2-Week Plan";
+      btn.disabled = false;
+    }
+
+    async function updateContentPost(postId, updates) {
+      try {
+        await fetch(`/api/content/${postId}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+        loadContentCalendar();
+      } catch (e) { console.error("[content] Update error:", e); }
+    }
+
+    async function deleteContentPost(postId) {
+      if (!confirm("Delete this post?")) return;
+      try {
+        await fetch(`/api/content/${postId}`, { method: "DELETE", credentials: "include" });
+        loadContentCalendar();
+      } catch (e) { console.error("[content] Delete error:", e); }
+    }
+
+    async function regeneratePost(postId, date, dayName, theme) {
+      const post = contentPosts.find(p => p.id === postId);
+      const instructions = prompt("Any specific instructions for this post?", "");
+      if (instructions === null) return;
+      try {
+        const resp = await fetch("/api/content/generate-single", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, dayName, theme, instructions }) });
+        const data = await resp.json();
+        if (data.ok) {
+          // Remove old post
+          await fetch(`/api/content/${postId}`, { method: "DELETE", credentials: "include" });
+          loadContentCalendar();
+        }
+      } catch (e) { alert("Error: " + e.message); }
+    }
+
+    function copyPost(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const toast = document.createElement("div");
+        toast.textContent = "Copied!";
+        toast.style.cssText = "position:fixed;bottom:20px;right:20px;background:#22c55e;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;";
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+      });
+    }
+
+    const THEME_COLORS = {
+      "The Bus": { bg: "rgba(45,90,142,0.25)", dot: "#2d5a8e", tag: "rgba(45,90,142,0.3)", tagText: "#7ab3e8" },
+      "The Truth": { bg: "rgba(142,45,45,0.25)", dot: "#8e2d2d", tag: "rgba(142,45,45,0.3)", tagText: "#e87a7a" },
+      "The Person": { bg: "rgba(45,142,90,0.25)", dot: "#2d8e5a", tag: "rgba(45,142,90,0.3)", tagText: "#7ae8b3" },
+      "The Lesson": { bg: "rgba(90,45,142,0.25)", dot: "#5a2d8e", tag: "rgba(90,45,142,0.3)", tagText: "#b37ae8" },
+      "The Win": { bg: "rgba(142,107,45,0.25)", dot: "#8e6b2d", tag: "rgba(142,107,45,0.3)", tagText: "#e8c47a" },
+    };
+
+    const STATUS_LABELS = { draft: "Draft", approved: "Approved", posted: "Posted" };
+    const STATUS_COLORS = { draft: "#fbbf24", approved: "#4ade80", posted: "#6b7280" };
+
+    function renderContentCalendar() {
+      const grid = document.getElementById("content-calendar-grid");
+      if (!contentPosts.length) {
+        grid.innerHTML = '<div style="text-align:center;padding:40px;color:#71717a;">No content scheduled. Click "Generate 2-Week Plan" to get started.</div>';
+        return;
+      }
+
+      // Group by week
+      const weeks = {};
+      contentPosts.forEach(p => {
+        const d = new Date(p.date + "T12:00:00");
+        const weekStart = new Date(d);
+        weekStart.setDate(d.getDate() - d.getDay() + 1); // Monday
+        const weekKey = weekStart.toISOString().split("T")[0];
+        if (!weeks[weekKey]) weeks[weekKey] = [];
+        weeks[weekKey].push(p);
+      });
+
+      let html = "";
+      for (const [weekStart, posts] of Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0]))) {
+        const weekEnd = new Date(weekStart + "T12:00:00");
+        weekEnd.setDate(weekEnd.getDate() + 4);
+        html += `<div style="font-size:14px;font-weight:700;color:#c9a84c;padding:8px 0;border-bottom:1px solid rgba(201,168,76,0.15);">Week of ${new Date(weekStart + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}</div>`;
+
+        for (const post of posts) {
+          const tc = THEME_COLORS[post.theme] || THEME_COLORS["The Bus"];
+          const dayLabel = (post.dayName || "").charAt(0).toUpperCase() + (post.dayName || "").slice(1);
+          const dateLabel = new Date(post.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          const statusColor = STATUS_COLORS[post.status] || "#6b7280";
+
+          html += `
+          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.15);border-radius:6px;overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${tc.bg};">
+              <div style="width:10px;height:10px;border-radius:50%;background:${tc.dot};flex-shrink:0;"></div>
+              <div style="font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;flex:1;">${dayLabel} - ${dateLabel}</div>
+              <span style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;padding:2px 8px;border-radius:12px;font-weight:600;background:${tc.tag};color:${tc.tagText};">${post.theme}</span>
+              <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,0.3);color:${statusColor};font-weight:600;">${STATUS_LABELS[post.status] || post.status}</span>
+            </div>
+            <div style="padding:12px 14px;">
+              <div id="content-text-${post.id}" style="font-size:14px;line-height:1.7;color:#f5f0e8;white-space:pre-wrap;">${escapeHTML(post.text)}</div>
+              ${post.notes ? `<div style="margin-top:8px;font-size:11px;color:#8a8a8a;font-style:italic;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">${escapeHTML(post.notes)}</div>` : ""}
+              <div style="display:flex;gap:6px;margin-top:10px;">
+                <button onclick="copyPost(${JSON.stringify(post.text).replace(/"/g, '&quot;')})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(56,189,248,0.15);color:#38bdf8;cursor:pointer;font-weight:600;">Copy</button>
+                <button onclick="updateContentPost('${post.id}',{status:'approved'})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(74,222,128,0.15);color:#4ade80;cursor:pointer;font-weight:600;">Approve</button>
+                <button onclick="updateContentPost('${post.id}',{status:'posted'})" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(107,114,128,0.15);color:#6b7280;cursor:pointer;font-weight:600;">Mark Posted</button>
+                <button onclick="regeneratePost('${post.id}','${post.date}','${post.dayName}','${post.theme}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(251,191,36,0.15);color:#fbbf24;cursor:pointer;font-weight:600;">Regenerate</button>
+                <button onclick="deleteContentPost('${post.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(239,68,68,0.1);color:#ef4444;cursor:pointer;font-weight:600;">Delete</button>
+              </div>
+            </div>
+          </div>`;
+        }
+      }
+
+      grid.innerHTML = html;
+    }
 
     init();
   </script>

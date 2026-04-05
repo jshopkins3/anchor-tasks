@@ -1478,6 +1478,74 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── CONTENT ENGINE ─────────────────────────────────────────────── */
+    if (urlPath === "/api/content" && req.method === "GET") {
+      const contentEngine = require("./content-engine");
+      const params = url.searchParams;
+      const start = params.get("start");
+      const end = params.get("end");
+      if (start && end) return json(res, 200, { posts: contentEngine.getPostsByDateRange(start, end) });
+      return json(res, 200, { posts: contentEngine.getUpcomingPosts(14), framework: contentEngine.CONTENT_FRAMEWORK });
+    }
+
+    if (urlPath === "/api/content/generate" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const contentEngine = require("./content-engine");
+      try {
+        console.log("[content] Generating two-week plan...");
+        const pipelineCtx = await contentEngine.fetchPipelineContext();
+        const posts = await contentEngine.generateTwoWeekPlan(pipelineCtx, body.instructions || "");
+        console.log(`[content] Generated ${posts.length} posts`);
+        return json(res, 200, { ok: true, posts });
+      } catch (e) {
+        console.error("[content] Generation error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    if (urlPath === "/api/content/generate-single" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const contentEngine = require("./content-engine");
+      try {
+        const pipelineCtx = await contentEngine.fetchPipelineContext();
+        const post = await contentEngine.generateSinglePost(body.date, body.dayName, body.theme, pipelineCtx, body.instructions || "");
+        return json(res, 200, { ok: true, post });
+      } catch (e) { return json(res, 500, { error: e.message }); }
+    }
+
+    const contentPostMatch = urlPath.match(/^\/api\/content\/([a-z0-9-]+)$/);
+    if (contentPostMatch && req.method === "PATCH") {
+      const body = JSON.parse(await readBody(req));
+      const contentEngine = require("./content-engine");
+      const post = contentEngine.updatePost(contentPostMatch[1], body);
+      if (!post) return json(res, 404, { error: "Post not found" });
+      return json(res, 200, { ok: true, post });
+    }
+
+    if (contentPostMatch && req.method === "DELETE") {
+      const contentEngine = require("./content-engine");
+      contentEngine.deletePost(contentPostMatch[1]);
+      return json(res, 200, { ok: true });
+    }
+
+    // Dan API: content access
+    if (urlPath === "/api/dan/content-upcoming" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const contentEngine = require("./content-engine");
+      return json(res, 200, { posts: contentEngine.getUpcomingPosts(14) });
+    }
+
+    if (urlPath === "/api/dan/content-generate" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const contentEngine = require("./content-engine");
+      try {
+        const pipelineCtx = await contentEngine.fetchPipelineContext();
+        const posts = await contentEngine.generateTwoWeekPlan(pipelineCtx, body.instructions || "");
+        return json(res, 200, { ok: true, posts });
+      } catch (e) { return json(res, 500, { error: e.message }); }
+    }
+
     /* ── GCAL EVENT EDIT ────────────────────────────────────────────── */
     const gcalEventMatch = urlPath.match(/^\/api\/gcal-event\/([^/]+)$/);
     if (gcalEventMatch && (req.method === "PATCH" || req.method === "DELETE")) {
