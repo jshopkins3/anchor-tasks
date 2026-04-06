@@ -1685,6 +1685,172 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── NOTEBOOK ─────────────────────────────────────────────────── */
+    const NOTEBOOK_FILE = path.join(DATA_DIR, "notebook.json");
+    function loadNotebook() { try { return JSON.parse(fs.readFileSync(NOTEBOOK_FILE, "utf8")); } catch { return { tabs: [{ id: "tab-general", name: "General", color: "#3b82f6" }], notes: [] }; } }
+    function saveNotebook(nb) { fs.writeFileSync(NOTEBOOK_FILE, JSON.stringify(nb, null, 2)); }
+
+    // Get full notebook
+    if (urlPath === "/api/notebook" && req.method === "GET") {
+      return json(res, 200, loadNotebook());
+    }
+
+    // Add/update/delete tabs
+    if (urlPath === "/api/notebook/tabs" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const nb = loadNotebook();
+      const tab = { id: `tab-${generateId()}`, name: body.name || "New Tab", color: body.color || "#3b82f6" };
+      nb.tabs.push(tab);
+      saveNotebook(nb);
+      return json(res, 201, { ok: true, tab });
+    }
+
+    if (urlPath.match(/^\/api\/notebook\/tabs\//) && req.method === "PATCH") {
+      const id = urlPath.split("/").pop();
+      const body = JSON.parse(await readBody(req));
+      const nb = loadNotebook();
+      const idx = nb.tabs.findIndex(t => t.id === id);
+      if (idx === -1) return json(res, 404, { error: "Tab not found" });
+      if (body.name !== undefined) nb.tabs[idx].name = body.name;
+      if (body.color !== undefined) nb.tabs[idx].color = body.color;
+      saveNotebook(nb);
+      return json(res, 200, { ok: true, tab: nb.tabs[idx] });
+    }
+
+    if (urlPath.match(/^\/api\/notebook\/tabs\//) && req.method === "DELETE") {
+      const id = urlPath.split("/").pop();
+      const nb = loadNotebook();
+      if (nb.tabs.length <= 1) return json(res, 400, { error: "Cannot delete last tab" });
+      nb.tabs = nb.tabs.filter(t => t.id !== id);
+      nb.notes = nb.notes.filter(n => n.tabId !== id);
+      saveNotebook(nb);
+      return json(res, 200, { ok: true });
+    }
+
+    // Add note
+    if (urlPath === "/api/notebook/notes" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const nb = loadNotebook();
+      const note = {
+        id: `note-${generateId()}`,
+        tabId: body.tabId || nb.tabs[0]?.id || "tab-general",
+        content: String(body.content || "").substring(0, 50000),
+        projectId: body.projectId || null,
+        projectName: body.projectName || null,
+        followUp: !!body.followUp,
+        followUpDate: body.followUpDate || null,
+        pinned: !!body.pinned,
+        tags: Array.isArray(body.tags) ? body.tags : [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      nb.notes.push(note);
+      saveNotebook(nb);
+      return json(res, 201, { ok: true, note });
+    }
+
+    // Update note
+    if (urlPath.match(/^\/api\/notebook\/notes\//) && !urlPath.includes("/to-task") && req.method === "PATCH") {
+      const id = urlPath.split("/").pop();
+      const body = JSON.parse(await readBody(req));
+      const nb = loadNotebook();
+      const idx = nb.notes.findIndex(n => n.id === id);
+      if (idx === -1) return json(res, 404, { error: "Note not found" });
+      const allowed = ["content", "tabId", "projectId", "projectName", "followUp", "followUpDate", "pinned", "tags"];
+      for (const key of allowed) {
+        if (body[key] !== undefined) nb.notes[idx][key] = body[key];
+      }
+      nb.notes[idx].updatedAt = new Date().toISOString();
+      saveNotebook(nb);
+      return json(res, 200, { ok: true, note: nb.notes[idx] });
+    }
+
+    // Delete note
+    if (urlPath.match(/^\/api\/notebook\/notes\//) && !urlPath.includes("/to-task") && req.method === "DELETE") {
+      const id = urlPath.split("/").pop();
+      const nb = loadNotebook();
+      nb.notes = nb.notes.filter(n => n.id !== id);
+      saveNotebook(nb);
+      return json(res, 200, { ok: true });
+    }
+
+    // Convert note to task
+    if (urlPath.match(/^\/api\/notebook\/notes\/[^/]+\/to-task$/) && req.method === "POST") {
+      const parts = urlPath.split("/");
+      const noteId = parts[4];
+      const nb = loadNotebook();
+      const note = nb.notes.find(n => n.id === noteId);
+      if (!note) return json(res, 404, { error: "Note not found" });
+      const tasks = parseTasks();
+      const task = {
+        id: generateId(),
+        title: note.content.split("\n")[0].substring(0, 200),
+        assignee: req.session?.name || "",
+        due: note.followUpDate || "",
+        priority: "normal",
+        project: note.projectName || "",
+        status: "",
+        personal: false,
+        urgent: false,
+        important: false,
+        done: false,
+        fromNote: noteId,
+      };
+      tasks.push(task);
+      writeTasks(tasks);
+      // Mark note as converted
+      const idx = nb.notes.findIndex(n => n.id === noteId);
+      if (idx >= 0) { nb.notes[idx].convertedToTask = task.id; nb.notes[idx].updatedAt = new Date().toISOString(); }
+      saveNotebook(nb);
+      return json(res, 200, { ok: true, task });
+    }
+
+    // Search notes
+    if (urlPath === "/api/notebook/search" && req.method === "GET") {
+      const q = (url.searchParams.get("q") || "").toLowerCase();
+      const nb = loadNotebook();
+      const results = nb.notes.filter(n => n.content.toLowerCase().includes(q) || (n.tags || []).some(t => t.toLowerCase().includes(q)));
+      return json(res, 200, { query: q, results });
+    }
+
+    // Dan API: notebook
+    if (urlPath === "/api/dan/notebook-full" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const nb = loadNotebook();
+      // Return summary: tabs + recent notes + follow-ups
+      const followUps = nb.notes.filter(n => n.followUp && !n.convertedToTask);
+      const recent = nb.notes.slice(-20);
+      return json(res, 200, { tabs: nb.tabs, totalNotes: nb.notes.length, followUps, recentNotes: recent });
+    }
+
+    if (urlPath === "/api/dan/notebook-add" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const nb = loadNotebook();
+      // Find tab by name if provided
+      let tabId = body.tabId;
+      if (body.tabName && !tabId) {
+        const tab = nb.tabs.find(t => t.name.toLowerCase() === body.tabName.toLowerCase());
+        if (tab) tabId = tab.id;
+      }
+      const note = {
+        id: `note-${generateId()}`,
+        tabId: tabId || nb.tabs[0]?.id || "tab-general",
+        content: body.content || "",
+        projectId: body.projectId || null,
+        projectName: body.projectName || null,
+        followUp: !!body.followUp,
+        followUpDate: body.followUpDate || null,
+        pinned: false,
+        tags: body.tags ? body.tags.split(",").map(t => t.trim()) : [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      nb.notes.push(note);
+      saveNotebook(nb);
+      return json(res, 200, { ok: true, note });
+    }
+
     /* ── TAGLINE BANK ──────────────────────────────────────────────── */
     const TAGLINES_FILE = path.join(DATA_DIR, "taglines.json");
     function loadTaglines() { try { return JSON.parse(fs.readFileSync(TAGLINES_FILE, "utf8")); } catch { return []; } }
