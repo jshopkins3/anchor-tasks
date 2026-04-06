@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tag-001",
+    "line": "Some people collect baseball cards. I collect impossible closes.",
+    "category": "signature",
+    "locked": true,
+    "source": "John",
+    "addedAt": "2026-04-05"
+  },
+  {
+    "id": "tag-002",
+    "line": "When the bus pulls up, it closes.",
+    "category": "bus",
+    "locked": true,
+    "source": "John + Jordan",
+    "addedAt": "2026-04-05"
+  },
+  {
+    "id": "tag-003",
+    "line": "A lot of families are counting on us right now. That's not pressure. That's purpose.",
+    "category": "mission",
+    "locked": false,
+    "source": "John",
+    "addedAt": "2026-04-05"
+  },
+  {
+    "id": "tag-004",
+    "line": "Build a castle that can't be penetrated and you won't have to worry about anything else.",
+    "category": "philosophy",
+    "locked": true,
+    "source": "Jordan Gerard",
+    "addedAt": "2026-04-05"
+  },
+  {
+    "id": "tag-005",
+    "line": "We don't motivate people. We design systems that remove the need for fear.",
+    "category": "philosophy",
+    "locked": true,
+    "source": "John",
+    "addedAt": "2026-04-05"
+  },
+  {
+    "id": "tag-006",
+    "line": "If you see weakness, leverage it in your activities — not out your mouth.",
+    "category": "philosophy",
+    "locked": true,
+    "source": "Jordan Gerard",
+    "addedAt": "2026-04-05"
+  }
+]

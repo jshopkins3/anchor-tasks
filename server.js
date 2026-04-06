@@ -1685,6 +1685,56 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── TAGLINE BANK ──────────────────────────────────────────────── */
+    const TAGLINES_FILE = path.join(DATA_DIR, "taglines.json");
+    function loadTaglines() { try { return JSON.parse(fs.readFileSync(TAGLINES_FILE, "utf8")); } catch { return []; } }
+    function saveTaglines(t) { fs.writeFileSync(TAGLINES_FILE, JSON.stringify(t, null, 2)); }
+
+    if (urlPath === "/api/taglines" && req.method === "GET") {
+      return json(res, 200, { taglines: loadTaglines() });
+    }
+
+    if (urlPath === "/api/taglines" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const taglines = loadTaglines();
+      const tag = {
+        id: `tag-${Date.now().toString(36)}`,
+        line: body.line,
+        category: body.category || "general",
+        locked: !!body.locked,
+        source: body.source || "John",
+        addedAt: new Date().toISOString().split("T")[0],
+      };
+      taglines.push(tag);
+      saveTaglines(taglines);
+      return json(res, 201, { ok: true, tagline: tag });
+    }
+
+    if (urlPath.match(/^\/api\/taglines\//) && req.method === "DELETE") {
+      const id = urlPath.split("/").pop();
+      const taglines = loadTaglines();
+      const t = taglines.find(t => t.id === id);
+      if (t && t.locked) return json(res, 400, { error: "This tagline is locked and cannot be deleted" });
+      saveTaglines(taglines.filter(t => t.id !== id));
+      return json(res, 200, { ok: true });
+    }
+
+    // Dan API: taglines
+    if (urlPath === "/api/dan/taglines" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      if (req.method === "POST") {
+        const body = JSON.parse(await readBody(req));
+        if (body.add) {
+          const taglines = loadTaglines();
+          const tag = { id: `tag-${Date.now().toString(36)}`, line: body.add, category: body.category || "general", locked: false, source: body.source || "Dan", addedAt: new Date().toISOString().split("T")[0] };
+          taglines.push(tag);
+          saveTaglines(taglines);
+          return json(res, 200, { ok: true, tagline: tag });
+        }
+      }
+      return json(res, 200, { taglines: loadTaglines() });
+    }
+
     /* ── CONTENT ENGINE ─────────────────────────────────────────────── */
     if (urlPath === "/api/content" && req.method === "GET") {
       const contentEngine = require("./content-engine");
