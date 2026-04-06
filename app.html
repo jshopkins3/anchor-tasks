@@ -4737,8 +4737,8 @@
       // Floating button
       const fab = document.createElement("div");
       fab.id = "dan-fab";
-      fab.innerHTML = `<div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d7a9a);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(27,58,107,0.4);transition:all 0.2s;position:fixed;bottom:24px;right:24px;z-index:9999;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">⚓</span>
+      fab.innerHTML = `<div style="width:56px;height:56px;border-radius:50%;overflow:hidden;cursor:pointer;box-shadow:0 4px 20px rgba(27,58,107,0.4),0 0 0 2px #d4af37;transition:all 0.2s;position:fixed;bottom:24px;right:24px;z-index:9999;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+        <img src="/dan-avatar.svg" alt="Dan" style="width:100%;height:100%;" />
       </div>`;
       fab.onclick = toggleDan;
       document.body.appendChild(fab);
@@ -4750,10 +4750,10 @@
       panel.innerHTML = `
         <div style="padding:16px 20px;background:linear-gradient(135deg,#1B3A6B,#2d7a9a);display:flex;align-items:center;justify-content:space-between;">
           <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:20px;">⚓</span>
+            <img src="/dan-avatar.svg" alt="Dan" style="width:36px;height:36px;border-radius:50%;border:1.5px solid #d4af37;" />
             <div>
               <div style="font-size:15px;font-weight:700;color:#fff;">Anchor Dan</div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.6);">AI Assistant — Ask about loans, pipeline, processes</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.6);">Your first mate. Ask me anything.</div>
             </div>
           </div>
           <button onclick="toggleDan()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:18px;cursor:pointer;">✕</button>

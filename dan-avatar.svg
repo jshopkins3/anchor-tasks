@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="100" fill="#0f172a"/>
+
+  <!-- Neck -->
+  <rect x="75" y="145" width="50" height="25" rx="4" fill="#c4956a"/>
+
+  <!-- Collar / Shirt -->
+  <path d="M60 165 Q60 190 100 195 Q140 190 140 165 L135 155 Q100 170 65 155 Z" fill="#1e3a5f"/>
+  <path d="M90 165 L100 180 L110 165" fill="none" stroke="#d4af37" stroke-width="1.5"/>
+
+  <!-- Face -->
+  <ellipse cx="100" cy="115" rx="42" ry="48" fill="#d4a574"/>
+
+  <!-- Jaw / Chin shape -->
+  <ellipse cx="100" cy="135" rx="35" ry="20" fill="#c4956a"/>
+
+  <!-- Beard -->
+  <path d="M68 120 Q68 155 100 162 Q132 155 132 120" fill="#8b7b6b" opacity="0.7"/>
+  <path d="M72 125 Q72 150 100 157 Q128 150 128 125" fill="#9b8b7b" opacity="0.5"/>
+  <!-- Beard texture -->
+  <path d="M78 130 Q80 148 100 153 Q120 148 122 130" fill="none" stroke="#a09080" stroke-width="0.5" opacity="0.6"/>
+  <path d="M82 133 Q84 146 100 150 Q116 146 118 133" fill="none" stroke="#b0a090" stroke-width="0.5" opacity="0.4"/>
+
+  <!-- Mustache -->
+  <path d="M85 118 Q92 124 100 120 Q108 124 115 118" fill="#7b6b5b" stroke="#6b5b4b" stroke-width="0.5"/>
+
+  <!-- Eyes -->
+  <ellipse cx="85" cy="105" rx="8" ry="6" fill="white"/>
+  <ellipse cx="115" cy="105" rx="8" ry="6" fill="white"/>
+  <circle cx="87" cy="105" r="4" fill="#4a7fb5"/>
+  <circle cx="117" cy="105" r="4" fill="#4a7fb5"/>
+  <circle cx="88" cy="104" r="1.5" fill="#1a3050"/>
+  <circle cx="118" cy="104" r="1.5" fill="#1a3050"/>
+  <!-- Eye highlights -->
+  <circle cx="89" cy="103" r="1" fill="white" opacity="0.8"/>
+  <circle cx="119" cy="103" r="1" fill="white" opacity="0.8"/>
+
+  <!-- Eyebrows -->
+  <path d="M74 96 Q80 92 94 95" fill="none" stroke="#5b4b3b" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M106 95 Q120 92 126 96" fill="none" stroke="#5b4b3b" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Nose -->
+  <path d="M100 107 L97 116 Q100 118 103 116 Z" fill="#b8895a" opacity="0.5"/>
+
+  <!-- Confident half-smirk -->
+  <path d="M88 128 Q100 135 116 130" fill="none" stroke="#8b5a3a" stroke-width="1.8" stroke-linecap="round"/>
+
+  <!-- Laugh lines -->
+  <path d="M74 112 Q72 120 74 125" fill="none" stroke="#b08060" stroke-width="0.5" opacity="0.4"/>
+  <path d="M126 112 Q128 120 126 125" fill="none" stroke="#b08060" stroke-width="0.5" opacity="0.4"/>
+
+  <!-- Ears -->
+  <ellipse cx="57" cy="110" rx="6" ry="10" fill="#c4956a"/>
+  <ellipse cx="143" cy="110" rx="6" ry="10" fill="#c4956a"/>
+
+  <!-- Beanie / Cap -->
+  <path d="M55 95 Q55 55 100 48 Q145 55 145 95" fill="#1e3a5f"/>
+  <rect x="55" y="90" width="90" height="10" rx="3" fill="#162d4a"/>
+  <!-- Cap brim -->
+  <path d="M55 95 Q55 100 58 100 L142 100 Q145 100 145 95" fill="#142640"/>
+
+  <!-- Gold anchor on cap -->
+  <circle cx="100" cy="72" r="4" fill="none" stroke="#d4af37" stroke-width="1.5"/>
+  <line x1="100" y1="76" x2="100" y2="88" stroke="#d4af37" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="94" y1="80" x2="106" y2="80" stroke="#d4af37" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M93 85 Q93 90 100 91 Q107 90 107 85" fill="none" stroke="#d4af37" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Anchor pin on collar -->
+  <circle cx="95" cy="172" r="2" fill="#d4af37"/>
+</svg>
