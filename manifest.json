@@ -1,0 +1,36 @@
+{
+  "name": "Anchor Tasks",
+  "short_name": "Tasks",
+  "description": "Anchor Mortgage — Tasks, Calendar, Content, Finance, Notebook",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f11",
+  "theme_color": "#0f0f11",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "shortcuts": [
+    {
+      "name": "Today",
+      "url": "/?tab=today",
+      "description": "Today's focus"
+    },
+    {
+      "name": "Notebook",
+      "url": "/?tab=notebook",
+      "description": "Quick note"
+    },
+    {
+      "name": "Content",
+      "url": "/?tab=content",
+      "description": "Content calendar"
+    }
+  ]
+}
