@@ -1185,6 +1185,7 @@
       <div class="tab" data-tab="journal">Journal</div>
       <div class="tab" data-tab="email">Email</div>
       <div class="tab" data-tab="notebook">Notebook</div>
+      <div class="tab" data-tab="finance">Finance</div>
       <div class="tab" data-tab="content">Content</div>
       <div class="tab" data-tab="taglines">Taglines</div>
       <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
@@ -1453,6 +1454,49 @@
             <div class="email-empty-sub">Choose a message from the list</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Finance section ─────────────────────────────────────── -->
+    <div class="section" id="sec-finance">
+      <div style="max-width:900px;margin:0 auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Finance</h2>
+          <div style="display:flex;gap:8px;">
+            <select id="fin-month-select" onchange="loadFinanceMonth()" style="padding:6px 12px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;"></select>
+            <button onclick="document.getElementById('fin-import-form').style.display=document.getElementById('fin-import-form').style.display==='none'?'flex':'none'" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Import CSV</button>
+          </div>
+        </div>
+        <!-- Import form -->
+        <div id="fin-import-form" style="display:none;flex-direction:column;gap:10px;margin-bottom:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;padding:16px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="fin-import-account" style="flex:1;padding:8px 12px;font-size:13px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;">
+              <option value="">Select account...</option>
+            </select>
+            <button onclick="document.getElementById('fin-add-acct').style.display='flex'" style="font-size:12px;padding:6px 12px;background:rgba(148,163,184,0.15);color:#94a3b8;border:none;border-radius:6px;cursor:pointer;">+ Account</button>
+          </div>
+          <div id="fin-add-acct" style="display:none;gap:8px;align-items:center;">
+            <input id="fin-acct-name" placeholder="Account name" style="flex:1;padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;outline:none;" />
+            <select id="fin-acct-type" style="padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;">
+              <option value="checking">Checking</option><option value="savings">Savings</option><option value="credit">Credit Card</option>
+            </select>
+            <input id="fin-acct-institution" placeholder="Bank name" style="width:120px;padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;outline:none;" />
+            <button onclick="addFinanceAccount()" style="font-size:12px;padding:6px 12px;background:#22c55e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Add</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="file" id="fin-csv-file" accept=".csv" style="flex:1;font-size:12px;color:#94a3b8;" />
+            <button onclick="importFinanceCSV()" id="fin-import-btn" style="padding:8px 16px;font-size:13px;font-weight:600;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;">Upload & Import</button>
+          </div>
+          <div id="fin-import-status" style="font-size:12px;color:#71717a;"></div>
+        </div>
+        <!-- Summary cards -->
+        <div id="fin-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;"></div>
+        <!-- Budget status -->
+        <div id="fin-budgets" style="margin-bottom:16px;"></div>
+        <!-- Trends -->
+        <div id="fin-trends" style="margin-bottom:16px;"></div>
+        <!-- Transactions -->
+        <div id="fin-transactions" style="display:flex;flex-direction:column;gap:4px;"></div>
       </div>
     </div>
 
@@ -2612,6 +2656,9 @@
           }
           if (tab.dataset.tab === "content") {
             loadContentCalendar();
+          }
+          if (tab.dataset.tab === "finance") {
+            loadFinanceData();
           }
           if (tab.dataset.tab === "notebook") {
             loadNotebook();
@@ -4778,6 +4825,153 @@
     }
 
     createDanPanel();
+
+    /* ── Finance Manager ────────────────────────────────────── */
+    let finData = {};
+    let finMonth = new Date().toISOString().substring(0, 7);
+
+    async function loadFinanceData() {
+      try {
+        const [overviewResp, monthResp, trendResp, budgetResp] = await Promise.all([
+          fetch("/api/finance", { credentials: "include" }),
+          fetch(`/api/finance/monthly?month=${finMonth}`, { credentials: "include" }),
+          fetch("/api/finance/trends?months=6", { credentials: "include" }),
+          fetch(`/api/finance/budget-status?month=${finMonth}`, { credentials: "include" }),
+        ]);
+        finData.overview = await overviewResp.json();
+        finData.monthly = await monthResp.json();
+        finData.trends = await trendResp.json();
+        finData.budgetStatus = await budgetResp.json();
+        // Populate account dropdown
+        const sel = document.getElementById("fin-import-account");
+        sel.innerHTML = '<option value="">Select account...</option>' + (finData.overview.accounts || []).map(a => `<option value="${a.id}">${escapeHTML(a.name)} (${a.type})</option>`).join("");
+        // Populate month selector
+        populateMonthSelector();
+        renderFinance();
+      } catch (e) { console.error("[finance] Load error:", e); }
+    }
+
+    function populateMonthSelector() {
+      const sel = document.getElementById("fin-month-select");
+      const months = (finData.trends?.trends || []).map(t => t.month);
+      if (!months.includes(finMonth)) months.push(finMonth);
+      months.sort().reverse();
+      sel.innerHTML = months.map(m => `<option value="${m}" ${m === finMonth ? "selected" : ""}>${new Date(m + "-15").toLocaleDateString("en-US", { month: "long", year: "numeric" })}</option>`).join("");
+    }
+
+    async function loadFinanceMonth() {
+      finMonth = document.getElementById("fin-month-select").value;
+      loadFinanceData();
+    }
+
+    async function addFinanceAccount() {
+      const name = document.getElementById("fin-acct-name").value.trim();
+      if (!name) return;
+      const type = document.getElementById("fin-acct-type").value;
+      const institution = document.getElementById("fin-acct-institution").value.trim();
+      await fetch("/api/finance/accounts", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, type, institution }) });
+      document.getElementById("fin-acct-name").value = "";
+      document.getElementById("fin-add-acct").style.display = "none";
+      loadFinanceData();
+    }
+
+    async function importFinanceCSV() {
+      const accountId = document.getElementById("fin-import-account").value;
+      if (!accountId) { alert("Select an account first"); return; }
+      const fileInput = document.getElementById("fin-csv-file");
+      if (!fileInput.files.length) { alert("Select a CSV file"); return; }
+      const btn = document.getElementById("fin-import-btn");
+      btn.textContent = "Importing..."; btn.disabled = true;
+      const statusEl = document.getElementById("fin-import-status");
+      try {
+        const csv = await fileInput.files[0].text();
+        const resp = await fetch("/api/finance/import", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv, accountId }) });
+        const data = await resp.json();
+        statusEl.textContent = data.error || `Imported ${data.imported} transactions (${data.total} total). AI categorizing...`;
+        statusEl.style.color = data.error ? "#ef4444" : "#4ade80";
+        setTimeout(() => loadFinanceData(), 3000);
+      } catch (e) { statusEl.textContent = "Error: " + e.message; statusEl.style.color = "#ef4444"; }
+      btn.textContent = "Upload & Import"; btn.disabled = false;
+    }
+
+    async function updateTxnCategory(id, category) {
+      await fetch(`/api/finance/transactions/${id}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category }) });
+    }
+
+    function renderFinance() {
+      const m = finData.monthly || {};
+      const sumEl = document.getElementById("fin-summary");
+      const cardStyle = "background:#18181b;border:1px solid #27272a;border-radius:10px;padding:14px 16px;text-align:center;";
+      sumEl.innerHTML = `
+        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Income</div><div style="font-size:22px;font-weight:700;color:#4ade80;">$${(m.totalIncome||0).toLocaleString()}</div></div>
+        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Expenses</div><div style="font-size:22px;font-weight:700;color:#ef4444;">$${(m.totalExpenses||0).toLocaleString()}</div></div>
+        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Net</div><div style="font-size:22px;font-weight:700;color:${(m.net||0)>=0?'#4ade80':'#ef4444'};">$${(m.net||0).toLocaleString()}</div></div>
+        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Transactions</div><div style="font-size:22px;font-weight:700;color:#e4e4e7;">${m.transactionCount||0}</div></div>
+      `;
+
+      // Trends
+      const trends = finData.trends?.trends || [];
+      const trendsEl = document.getElementById("fin-trends");
+      if (trends.length > 1) {
+        trendsEl.innerHTML = `<div style="font-size:13px;font-weight:600;color:#e4e4e7;margin-bottom:8px;">Monthly Trends</div>
+          <div style="display:flex;gap:8px;overflow-x:auto;">${trends.map(t => `
+            <div style="${cardStyle}min-width:120px;flex-shrink:0;">
+              <div style="font-size:11px;color:#71717a;">${new Date(t.month+"-15").toLocaleDateString("en-US",{month:"short"})}</div>
+              <div style="font-size:13px;color:#4ade80;">+$${t.income.toLocaleString()}</div>
+              <div style="font-size:13px;color:#ef4444;">-$${t.expenses.toLocaleString()}</div>
+              <div style="font-size:11px;color:${t.net>=0?'#4ade80':'#ef4444'};font-weight:600;margin-top:4px;">$${t.net.toLocaleString()}</div>
+            </div>`).join("")}</div>`;
+      } else { trendsEl.innerHTML = ""; }
+
+      // Budget status
+      const budgets = finData.budgetStatus?.budgets || [];
+      const budgetsEl = document.getElementById("fin-budgets");
+      if (budgets.length) {
+        budgetsEl.innerHTML = `<div style="font-size:13px;font-weight:600;color:#e4e4e7;margin-bottom:8px;">Budget</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">${budgets.map(b => `
+            <div style="background:#18181b;border:1px solid ${b.over?'#ef444444':'#27272a'};border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
+              <span style="font-size:16px;">${b.icon}</span>
+              <div style="flex:1;">
+                <div style="font-size:12px;color:#e4e4e7;font-weight:600;">${b.category}</div>
+                <div style="height:4px;background:#27272a;border-radius:2px;margin-top:4px;overflow:hidden;">
+                  <div style="height:100%;width:${Math.min(b.percent,100)}%;background:${b.over?'#ef4444':b.percent>80?'#fbbf24':'#4ade80'};border-radius:2px;"></div>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:12px;color:${b.over?'#ef4444':'#e4e4e7'};font-weight:600;">$${b.spent} / $${b.limit}</div>
+                <div style="font-size:10px;color:#71717a;">${b.percent}%</div>
+              </div>
+            </div>`).join("")}</div>`;
+      } else { budgetsEl.innerHTML = ""; }
+
+      // Category breakdown as transaction groups
+      const cats = m.byCategory || {};
+      const txnEl = document.getElementById("fin-transactions");
+      const catEntries = Object.entries(cats).filter(([,v]) => v.total < 0).sort((a, b) => a[1].total - b[1].total);
+      const incomeEntries = Object.entries(cats).filter(([,v]) => v.total > 0);
+
+      let html = "";
+      if (incomeEntries.length) {
+        html += `<div style="font-size:13px;font-weight:600;color:#4ade80;margin:8px 0 4px;">Income</div>`;
+        for (const [cat, data] of incomeEntries) {
+          html += `<div style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;color:#e4e4e7;">${cat}</span>
+            <span style="font-size:13px;color:#4ade80;font-weight:600;">+$${Math.abs(data.total).toLocaleString(undefined,{minimumFractionDigits:2})}</span>
+          </div>`;
+        }
+      }
+      if (catEntries.length) {
+        html += `<div style="font-size:13px;font-weight:600;color:#ef4444;margin:12px 0 4px;">Expenses by Category</div>`;
+        for (const [cat, data] of catEntries) {
+          html += `<div style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;color:#e4e4e7;">${cat} <span style="color:#52525b;font-size:11px;">(${data.count})</span></span>
+            <span style="font-size:13px;color:#ef4444;font-weight:600;">-$${Math.abs(data.total).toLocaleString(undefined,{minimumFractionDigits:2})}</span>
+          </div>`;
+        }
+      }
+      if (!html) html = '<div style="text-align:center;padding:40px;color:#71717a;">No transactions for this month. Import a CSV to get started.</div>';
+      txnEl.innerHTML = html;
+    }
 
     /* ── Notebook ──────────────────────────────────────────── */
     let nbData = { tabs: [], notes: [] };

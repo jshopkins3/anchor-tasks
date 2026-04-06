@@ -1685,6 +1685,107 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── FINANCE MANAGER ────────────────────────────────────────── */
+    if (urlPath === "/api/finance" && req.method === "GET") {
+      const fm = require("./finance-manager");
+      const fin = fm.loadFinance();
+      return json(res, 200, { accounts: fin.accounts, categories: fin.categories || fm.DEFAULT_CATEGORIES, salary: fin.salary, budgets: fin.budgets || [], transactionCount: (fin.transactions || []).length });
+    }
+
+    if (urlPath === "/api/finance/accounts" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const fm = require("./finance-manager");
+      const account = fm.addAccount(body);
+      return json(res, 201, { ok: true, account });
+    }
+
+    if (urlPath === "/api/finance/import" && req.method === "POST") {
+      const body = await readBody(req);
+      const parsed = JSON.parse(body);
+      const fm = require("./finance-manager");
+      const result = fm.importCSV(parsed.csv, parsed.accountId);
+      if (result.imported > 0) {
+        // AI categorize in background
+        const fin = fm.loadFinance();
+        fm.categorizeTransactions(fin.transactions).then(txns => {
+          fin.transactions = txns;
+          fm.saveFinance(fin);
+          console.log(`[finance] Categorized ${result.imported} transactions`);
+        }).catch(e => console.error("[finance] Categorization error:", e.message));
+      }
+      return json(res, 200, result);
+    }
+
+    if (urlPath === "/api/finance/transactions" && req.method === "GET") {
+      const fm = require("./finance-manager");
+      const fin = fm.loadFinance();
+      const params = url.searchParams;
+      let txns = fin.transactions || [];
+      if (params.get("account")) txns = txns.filter(t => t.accountId === params.get("account"));
+      if (params.get("month")) txns = txns.filter(t => t.date.substring(0, 7) === params.get("month"));
+      if (params.get("category")) txns = txns.filter(t => t.category === params.get("category"));
+      const page = parseInt(params.get("page") || "0");
+      const limit = parseInt(params.get("limit") || "100");
+      return json(res, 200, { transactions: txns.slice(page * limit, (page + 1) * limit), total: txns.length, page, limit });
+    }
+
+    if (urlPath.match(/^\/api\/finance\/transactions\//) && req.method === "PATCH") {
+      const id = urlPath.split("/").pop();
+      const body = JSON.parse(await readBody(req));
+      const fm = require("./finance-manager");
+      const fin = fm.loadFinance();
+      const idx = fin.transactions.findIndex(t => t.id === id);
+      if (idx === -1) return json(res, 404, { error: "Transaction not found" });
+      if (body.category !== undefined) { fin.transactions[idx].category = body.category; fin.transactions[idx].categoryOverride = true; }
+      if (body.description !== undefined) fin.transactions[idx].description = body.description;
+      fm.saveFinance(fin);
+      return json(res, 200, { ok: true });
+    }
+
+    if (urlPath === "/api/finance/monthly" && req.method === "GET") {
+      const fm = require("./finance-manager");
+      const params = url.searchParams;
+      const breakdown = fm.getMonthlyBreakdown(params.get("account"), params.get("month"));
+      return json(res, 200, breakdown);
+    }
+
+    if (urlPath === "/api/finance/trends" && req.method === "GET") {
+      const fm = require("./finance-manager");
+      const params = url.searchParams;
+      return json(res, 200, { trends: fm.getMonthlyTrends(params.get("account"), parseInt(params.get("months") || "6")) });
+    }
+
+    if (urlPath === "/api/finance/budget" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const fm = require("./finance-manager");
+      fm.setBudget(body.categoryId, body.monthlyLimit);
+      return json(res, 200, { ok: true });
+    }
+
+    if (urlPath === "/api/finance/budget-status" && req.method === "GET") {
+      const fm = require("./finance-manager");
+      return json(res, 200, { budgets: fm.getBudgetStatus(url.searchParams.get("month")) });
+    }
+
+    if (urlPath === "/api/finance/salary" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const fm = require("./finance-manager");
+      const salary = fm.setSalaryPlan(body.monthly, body.notes);
+      return json(res, 200, { ok: true, salary });
+    }
+
+    // Dan API: finance
+    if (urlPath === "/api/dan/finance-summary" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const fm = require("./finance-manager");
+      const fin = fm.loadFinance();
+      const currentMonth = new Date().toISOString().substring(0, 7);
+      const breakdown = fm.getMonthlyBreakdown(null, currentMonth);
+      const trends = fm.getMonthlyTrends(null, 3);
+      const budgets = fm.getBudgetStatus(currentMonth);
+      return json(res, 200, { accounts: fin.accounts.length, currentMonth: breakdown, trends, budgets, salary: fin.salary });
+    }
+
     /* ── NOTEBOOK ─────────────────────────────────────────────────── */
     const NOTEBOOK_FILE = path.join(DATA_DIR, "notebook.json");
     function loadNotebook() { try { return JSON.parse(fs.readFileSync(NOTEBOOK_FILE, "utf8")); } catch { return { tabs: [{ id: "tab-general", name: "General", color: "#3b82f6" }], notes: [] }; } }
