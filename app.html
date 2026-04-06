@@ -1185,6 +1185,7 @@
       <div class="tab" data-tab="journal">Journal</div>
       <div class="tab" data-tab="email">Email</div>
       <div class="tab" data-tab="content">Content</div>
+      <div class="tab" data-tab="taglines">Taglines</div>
       <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
     </div>
     <div class="quick-links">
@@ -1450,6 +1451,27 @@
             <div class="email-empty-text">Select an email to read</div>
             <div class="email-empty-sub">Choose a message from the list</div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tagline Library section ─────────────────────────────── -->
+    <div class="section" id="sec-taglines">
+      <div style="max-width:700px;margin:0 auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Tagline Library</h2>
+          <button onclick="document.getElementById('tagline-add-form').style.display=document.getElementById('tagline-add-form').style.display==='none'?'flex':'none'" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">+ Add Tagline</button>
+        </div>
+        <div id="tagline-add-form" style="display:none;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <input id="tagline-input" placeholder="The line..." style="flex:1;min-width:250px;padding:10px 14px;font-size:13px;background:#1e1e22;border:1px solid #3f3f46;border-radius:8px;color:#e4e4e7;outline:none;font-family:inherit;" />
+          <select id="tagline-category" style="padding:8px 12px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:8px;color:#e4e4e7;">
+            <option value="general">General</option><option value="signature">Signature</option><option value="bus">The Bus</option><option value="mission">Mission</option><option value="philosophy">Philosophy</option><option value="truth">Truth</option><option value="win">Win</option>
+          </select>
+          <input id="tagline-source" placeholder="Source (default: John)" style="width:140px;padding:8px 12px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:8px;color:#e4e4e7;outline:none;" />
+          <button onclick="addTagline()" style="padding:8px 16px;font-size:13px;font-weight:600;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;">Save</button>
+        </div>
+        <div id="tagline-list" style="display:flex;flex-direction:column;gap:8px;">
+          <div style="text-align:center;padding:40px;color:#71717a;">Loading...</div>
         </div>
       </div>
     </div>
@@ -2545,6 +2567,9 @@
           }
           if (tab.dataset.tab === "content") {
             loadContentCalendar();
+          }
+          if (tab.dataset.tab === "taglines") {
+            loadTaglines();
           }
           if (tab.dataset.tab === "journal") {
             if (!currentJournalDate) newJournalEntry();
@@ -4705,6 +4730,77 @@
     }
 
     createDanPanel();
+
+    /* ── Tagline Library ───────────────────────────────────── */
+    let taglines = [];
+
+    async function loadTaglines() {
+      try {
+        const resp = await fetch("/api/taglines", { credentials: "include" });
+        const data = await resp.json();
+        taglines = data.taglines || [];
+        renderTaglines();
+      } catch (e) { console.error("[taglines] Load error:", e); }
+    }
+
+    async function addTagline() {
+      const line = document.getElementById("tagline-input").value.trim();
+      if (!line) return;
+      const category = document.getElementById("tagline-category").value;
+      const source = document.getElementById("tagline-source").value.trim() || "John";
+      try {
+        await fetch("/api/taglines", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ line, category, source }) });
+        document.getElementById("tagline-input").value = "";
+        document.getElementById("tagline-source").value = "";
+        loadTaglines();
+      } catch (e) { alert("Error: " + e.message); }
+    }
+
+    async function deleteTagline(id) {
+      if (!confirm("Delete this tagline?")) return;
+      try {
+        const resp = await fetch(`/api/taglines/${id}`, { method: "DELETE", credentials: "include" });
+        const data = await resp.json();
+        if (data.error) { alert(data.error); return; }
+        loadTaglines();
+      } catch (e) { alert("Error: " + e.message); }
+    }
+
+    const TAG_COLORS = {
+      signature: { bg: "rgba(201,168,76,0.15)", color: "#c9a84c" },
+      bus: { bg: "rgba(45,90,142,0.2)", color: "#7ab3e8" },
+      mission: { bg: "rgba(74,222,128,0.12)", color: "#4ade80" },
+      philosophy: { bg: "rgba(167,139,250,0.15)", color: "#a78bfa" },
+      truth: { bg: "rgba(142,45,45,0.2)", color: "#e87a7a" },
+      win: { bg: "rgba(142,107,45,0.2)", color: "#e8c47a" },
+      general: { bg: "rgba(148,163,184,0.1)", color: "#94a3b8" },
+    };
+
+    function renderTaglines() {
+      const list = document.getElementById("tagline-list");
+      if (!taglines.length) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#71717a;">No taglines yet. Add your first one above.</div>';
+        return;
+      }
+      list.innerHTML = taglines.map(t => {
+        const tc = TAG_COLORS[t.category] || TAG_COLORS.general;
+        return `
+        <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:16px 20px;display:flex;align-items:flex-start;gap:14px;">
+          <div style="flex:1;">
+            <div style="font-size:15px;color:#f4f4f5;line-height:1.6;font-style:italic;">"${escapeHTML(t.line)}"</div>
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;background:${tc.bg};color:${tc.color};">${t.category}</span>
+              <span style="font-size:11px;color:#71717a;">— ${escapeHTML(t.source || "John")}</span>
+              ${t.locked ? '<span style="font-size:10px;color:#c9a84c;">🔒 Locked</span>' : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button onclick="navigator.clipboard.writeText(${JSON.stringify(t.line).replace(/"/g,'&quot;')});this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(56,189,248,0.12);color:#38bdf8;cursor:pointer;font-weight:600;">Copy</button>
+            ${!t.locked ? `<button onclick="deleteTagline('${t.id}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(239,68,68,0.1);color:#ef4444;cursor:pointer;font-weight:600;">Delete</button>` : ''}
+          </div>
+        </div>`;
+      }).join("");
+    }
 
     /* ── Content Calendar ────────────────────────────────────── */
     let contentPosts = [];
