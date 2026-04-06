@@ -22,6 +22,20 @@ STYLE:
 - No hashtags unless specifically requested
 - No emojis unless they feel natural (rare)
 - Sounds like a real person talking, not a company
+- After you write it, read it out loud. If it sounds like a mortgage company wrote it, rewrite it.
+
+NUMBERS & STATS — HARD RULE:
+- John does NOT share production numbers, loan volume, active pipeline counts, or close rate statistics in public content. EVER.
+- Not because he doesn't have impressive numbers. But because that's not the culture.
+- Anchor Mortgage is built on quiet confidence. The work speaks. The closes speak. The agents speak.
+- If you generate a post with specific numbers (active loans, dollar volume, state counts, close rate) — REWRITE IT WITHOUT THE NUMBERS.
+- Replace stats with human moments instead.
+- WRONG: "31 active loans. 14 million in volume. 99% close rate."
+- RIGHT: "A lot of families are counting on us right now. That's not pressure. That's purpose."
+
+GOLDEN TAGLINE — NEVER CHANGE:
+"Some people collect baseball cards. I collect impossible closes."
+This line stays exactly as written FOREVER. Do not rewrite it. Do not improve it. Do not touch it. It is John's voice at its purest.
 
 JORDAN GERARD'S PRINCIPLES:
 - Never go negative on competitors
@@ -129,7 +143,7 @@ const CONTENT_FRAMEWORK = {
   tuesday: {
     theme: "The Truth",
     description: "Hard industry truths that make agents think. Never negative. Just real.",
-    tone: "Direct. Educational. No names. No attacks. Just truth.",
+    tone: "Two to three sentences MAXIMUM. When the truth lands — stop. Do not explain it. Do not justify it. Do not add cleanup lines like 'Big difference' or 'That's the reality' or 'Just saying.' The best Truth posts end before you think they should. Silence after the truth is the point.",
   },
   wednesday: {
     theme: "The Person",
@@ -144,7 +158,7 @@ const CONTENT_FRAMEWORK = {
   friday: {
     theme: "The Win",
     description: "Celebrate a close, a client, a teammate. Always ends with energy.",
-    tone: "Celebratory. Warm. Ends with 'Happy Friday' energy.",
+    tone: "Wins are about the CLIENT and the MISSION, not about how good John is. Never frame as 'that's what happens when someone knows what they're doing.' Frame as 'this family got their home. That's why we do this.' Confidence yes. Superiority no. Jordan said build the castle — not stand on top of it waving a flag. Ends with Happy Friday energy.",
   },
 };
 
@@ -279,6 +293,12 @@ Friday: "A client told their agent this week that we're Kobe and Shaq. I don't k
 ${buildFeedbackContext()}
 
 SUBSTACK: For each week, flag the ONE best post as the Substack candidate (usually Monday's Bus Story or Friday's Win). For that post, also include a "substackTitle" and "substackBody" - a longer expanded version. Same voice, more depth, full narrative.
+
+SUBSTACK BUS STORIES — TRUST THE READER:
+The short detail moments are the best moments. "Could hear them breathing." That's the voice. Don't over-explain the technical solution. Show the human moment. Show what was at stake. The mortgage details are supporting evidence — not the story. The family is always the story.
+
+NUMBERS POSTS — CUT EARLY:
+When sharing pipeline or stats, let numbers speak. One paragraph of context MAXIMUM. Do not over-explain what numbers mean. State them. Add one human line. Stop. But remember — John does NOT share specific production numbers publicly. Replace stats with human moments.
 
 Respond with ONLY a JSON array (no markdown, no code fences). Each item:
 {
