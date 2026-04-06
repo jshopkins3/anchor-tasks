@@ -530,7 +530,7 @@ function saveJournal(entries) {
 }
 
 /* ─── Auth bypass paths ──────────────────────────────────────────────── */
-const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico", "/api/gcal-callback"];
+const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico", "/api/gcal-callback", "/manifest.json", "/sw.js", "/icon.svg", "/icon-192.png", "/icon-512.png", "/dan-icon-180.png", "/dan-avatar.svg"];
 
 /* ─── HTTP server ────────────────────────────────────────────────────── */
 const server = http.createServer(async (req, res) => {
