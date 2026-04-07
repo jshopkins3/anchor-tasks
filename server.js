@@ -13,6 +13,8 @@ const PROJECTS_FILE = path.join(DATA_DIR, "projects.md");
 const GOALS_FILE = path.join(DATA_DIR, "goals.json");
 const JOURNAL_FILE = path.join(DATA_DIR, "journal.json");
 const GCAL_TOKEN_FILE = path.join(DATA_DIR, "gcal-token.json");
+const EMAIL_CONTACTS_FILE = path.join(DATA_DIR, "email-contacts.json");
+const EMAIL_SIGNATURE_FILE = path.join(DATA_DIR, "email-signature.json");
 
 // Google Calendar config
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -24,6 +26,7 @@ const GCAL_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/drive",
 ].join(" ");
 
@@ -498,6 +501,295 @@ async function gmailArchive(messageId) {
     console.error("[gmail] Archive error:", err.message);
     return false;
   }
+}
+
+/* ─── Gmail: list messages by label with pagination ────────────────────── */
+async function gmailListMessages(labelId, pageToken, maxResults = 50, query = "") {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  try {
+    const params = { maxResults: String(maxResults) };
+    if (labelId) params.labelIds = labelId;
+    if (pageToken) params.pageToken = pageToken;
+    if (query) params.q = query;
+    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams(params)}`;
+    const listResp = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!listResp.ok) {
+      if (listResp.status === 401 || listResp.status === 403) return { needsReauth: true };
+      return null;
+    }
+    const listData = await listResp.json();
+    const messages = listData.messages || [];
+    if (!messages.length) return { emails: [], nextPageToken: null };
+    const emails = await Promise.all(messages.map(async m => {
+      const msgUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata` +
+        `&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Cc`;
+      const msgResp = await fetch(msgUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!msgResp.ok) return null;
+      const msg = await msgResp.json();
+      const headers = msg.payload?.headers || [];
+      const from = parseEmailHeader(headers, "From");
+      const fromMatch = from.match(/^"?([^"<]+)"?\s*<?([^>]*)>?$/);
+      const fromName = fromMatch ? fromMatch[1].trim() : from;
+      const fromEmail = fromMatch ? fromMatch[2].trim() : from;
+      return {
+        id: m.id, threadId: msg.threadId,
+        subject: parseEmailHeader(headers, "Subject") || "(No subject)",
+        from: fromName || fromEmail, fromEmail,
+        to: parseEmailHeader(headers, "To"),
+        snippet: msg.snippet || "",
+        date: parseEmailHeader(headers, "Date"),
+        unread: (msg.labelIds || []).includes("UNREAD"),
+        starred: (msg.labelIds || []).includes("STARRED"),
+        labelIds: msg.labelIds || [],
+      };
+    }));
+    return { emails: emails.filter(Boolean), nextPageToken: listData.nextPageToken || null };
+  } catch (err) {
+    console.error("[gmail] List messages error:", err.message);
+    return null;
+  }
+}
+
+/* ─── Gmail: get full thread ───────────────────────────────────────────── */
+async function gmailGetThread(threadId) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  try {
+    const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) return null;
+    const thread = await resp.json();
+    const messages = (thread.messages || []).map(msg => {
+      const h = msg.payload?.headers || [];
+      const from = parseEmailHeader(h, "From");
+      const fromMatch = from.match(/^"?([^"<]+)"?\s*<?([^>]*)>?$/);
+      const fromName = fromMatch ? fromMatch[1].trim() : from;
+      const fromEmail = fromMatch ? fromMatch[2].trim() : from;
+      const body = gmailExtractBody(msg.payload);
+      const attachments = [];
+      function findAttachments(p) {
+        if (!p) return;
+        if (p.filename && p.body?.attachmentId) {
+          attachments.push({ name: p.filename, attachmentId: p.body.attachmentId, mimeType: p.mimeType, size: p.body.size || 0 });
+        }
+        if (p.parts) p.parts.forEach(findAttachments);
+      }
+      findAttachments(msg.payload);
+      return {
+        id: msg.id, threadId: msg.threadId,
+        from: fromName || fromEmail, fromEmail,
+        to: parseEmailHeader(h, "To"),
+        cc: parseEmailHeader(h, "Cc"),
+        bcc: parseEmailHeader(h, "Bcc"),
+        replyTo: parseEmailHeader(h, "Reply-To"),
+        subject: parseEmailHeader(h, "Subject") || "(No subject)",
+        date: parseEmailHeader(h, "Date"),
+        messageId: parseEmailHeader(h, "Message-ID"),
+        inReplyTo: parseEmailHeader(h, "In-Reply-To"),
+        references: parseEmailHeader(h, "References"),
+        body, attachments,
+        unread: (msg.labelIds || []).includes("UNREAD"),
+        starred: (msg.labelIds || []).includes("STARRED"),
+        labelIds: msg.labelIds || [],
+      };
+    });
+    return { id: thread.id, messages };
+  } catch (err) {
+    console.error("[gmail] Thread fetch error:", err.message);
+    return null;
+  }
+}
+
+/* ─── Gmail: send email (full RFC 2822) ────────────────────────────────── */
+async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId }) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  try {
+    const boundary = `boundary_${crypto.randomBytes(16).toString("hex")}`;
+    const headers = [`MIME-Version: 1.0`];
+    if (to) headers.push(`To: ${to}`);
+    if (cc) headers.push(`Cc: ${cc}`);
+    if (bcc) headers.push(`Bcc: ${bcc}`);
+    headers.push(`Subject: ${subject || ""}`);
+    if (inReplyTo) headers.push(`In-Reply-To: ${inReplyTo}`);
+    if (references) headers.push(`References: ${references}`);
+    if (bodyHtml) {
+      headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+      const rawEmail = [
+        ...headers, "", `--${boundary}`,
+        `Content-Type: text/plain; charset=utf-8`, "", body || "",
+        `--${boundary}`,
+        `Content-Type: text/html; charset=utf-8`, "", bodyHtml,
+        `--${boundary}--`,
+      ].join("\r\n");
+      const encoded = Buffer.from(rawEmail).toString("base64url");
+      const payload = { raw: encoded };
+      if (threadId) payload.threadId = threadId;
+      const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) { console.error("[gmail] Send failed:", resp.status); return null; }
+      return await resp.json();
+    } else {
+      headers.push(`Content-Type: text/plain; charset=utf-8`);
+      const rawEmail = [...headers, "", body || ""].join("\r\n");
+      const encoded = Buffer.from(rawEmail).toString("base64url");
+      const payload = { raw: encoded };
+      if (threadId) payload.threadId = threadId;
+      const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) { console.error("[gmail] Send failed:", resp.status); return null; }
+      return await resp.json();
+    }
+  } catch (err) {
+    console.error("[gmail] Send error:", err.message);
+    return null;
+  }
+}
+
+/* ─── Gmail: draft management ──────────────────────────────────────────── */
+async function gmailCreateDraft({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId }) {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  try {
+    const headers = [`MIME-Version: 1.0`];
+    if (to) headers.push(`To: ${to}`);
+    if (cc) headers.push(`Cc: ${cc}`);
+    if (bcc) headers.push(`Bcc: ${bcc}`);
+    headers.push(`Subject: ${subject || ""}`);
+    if (inReplyTo) headers.push(`In-Reply-To: ${inReplyTo}`);
+    if (references) headers.push(`References: ${references}`);
+    headers.push(`Content-Type: text/plain; charset=utf-8`);
+    const rawEmail = [...headers, "", body || ""].join("\r\n");
+    const encoded = Buffer.from(rawEmail).toString("base64url");
+    const message = { raw: encoded };
+    if (threadId) message.threadId = threadId;
+    const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch (err) {
+    console.error("[gmail] Create draft error:", err.message);
+    return null;
+  }
+}
+
+async function gmailListDrafts() {
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  try {
+    const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=50", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const drafts = data.drafts || [];
+    // Fetch metadata for each draft
+    const detailed = await Promise.all(drafts.map(async d => {
+      const dResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${d.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!dResp.ok) return null;
+      const draft = await dResp.json();
+      const h = draft.message?.payload?.headers || [];
+      return {
+        draftId: d.id,
+        messageId: draft.message?.id,
+        threadId: draft.message?.threadId,
+        to: parseEmailHeader(h, "To"),
+        subject: parseEmailHeader(h, "Subject") || "(No subject)",
+        date: parseEmailHeader(h, "Date"),
+        snippet: draft.message?.snippet || "",
+      };
+    }));
+    return detailed.filter(Boolean);
+  } catch (err) {
+    console.error("[gmail] List drafts error:", err.message);
+    return null;
+  }
+}
+
+/* ─── Gmail: get labels with counts ────────────────────────────────────── */
+let labelCache = null;
+let labelCacheTime = 0;
+async function gmailGetLabels(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && labelCache && (now - labelCacheTime) < 60000) return labelCache;
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return null;
+  try {
+    const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const labels = data.labels || [];
+    // Fetch detail for system labels and user labels to get counts
+    const detailed = await Promise.all(labels.map(async l => {
+      const lResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/labels/${l.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!lResp.ok) return { id: l.id, name: l.name, type: l.type, total: 0, unread: 0 };
+      const detail = await lResp.json();
+      return {
+        id: l.id, name: l.name, type: l.type,
+        total: detail.messagesTotal || 0,
+        unread: detail.messagesUnread || 0,
+      };
+    }));
+    labelCache = detailed;
+    labelCacheTime = now;
+    return detailed;
+  } catch (err) {
+    console.error("[gmail] Labels error:", err.message);
+    return null;
+  }
+}
+
+/* ─── Email contacts cache ─────────────────────────────────────────────── */
+function loadEmailContacts() {
+  try { return JSON.parse(fs.readFileSync(EMAIL_CONTACTS_FILE, "utf8")); } catch { return []; }
+}
+function saveEmailContacts(contacts) {
+  // Keep max 500, sorted by lastUsed desc
+  contacts.sort((a, b) => b.lastUsed - a.lastUsed);
+  if (contacts.length > 500) contacts = contacts.slice(0, 500);
+  fs.writeFileSync(EMAIL_CONTACTS_FILE, JSON.stringify(contacts, null, 2), "utf8");
+}
+function updateEmailContact(email, name) {
+  if (!email) return;
+  email = email.trim().toLowerCase();
+  const contacts = loadEmailContacts();
+  const existing = contacts.find(c => c.email === email);
+  if (existing) {
+    existing.name = name || existing.name;
+    existing.lastUsed = Date.now();
+    existing.count = (existing.count || 0) + 1;
+  } else {
+    contacts.push({ email, name: name || "", lastUsed: Date.now(), count: 1 });
+  }
+  saveEmailContacts(contacts);
+}
+function parseEmailAddress(str) {
+  if (!str) return [];
+  // Split by comma, parse each "Name <email>" or "email"
+  return str.split(",").map(s => {
+    const m = s.trim().match(/^"?([^"<]*)"?\s*<?([^>]+@[^>]+)>?$/);
+    if (m) return { name: m[1].trim(), email: m[2].trim().toLowerCase() };
+    const plain = s.trim();
+    if (plain.includes("@")) return { name: "", email: plain.toLowerCase() };
+    return null;
+  }).filter(Boolean);
 }
 
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
@@ -1571,6 +1863,7 @@ const server = http.createServer(async (req, res) => {
         });
         if (!msgResp.ok) return json(res, msgResp.status, { error: "Failed to fetch message" });
         const msg = await msgResp.json();
+        const h = msg.payload?.headers || [];
         const body = gmailExtractBody(msg.payload);
         // Collect attachments
         const attachments = [];
@@ -1582,7 +1875,26 @@ const server = http.createServer(async (req, res) => {
           if (p.parts) p.parts.forEach(findAttachments);
         }
         findAttachments(msg.payload);
-        return json(res, 200, { body, attachments });
+        const from = parseEmailHeader(h, "From");
+        const fromMatch = from.match(/^"?([^"<]+)"?\s*<?([^>]*)>?$/);
+        return json(res, 200, {
+          id: msg.id, threadId: msg.threadId,
+          from: fromMatch ? fromMatch[1].trim() : from,
+          fromEmail: fromMatch ? fromMatch[2].trim() : from,
+          to: parseEmailHeader(h, "To"),
+          cc: parseEmailHeader(h, "Cc"),
+          bcc: parseEmailHeader(h, "Bcc"),
+          replyTo: parseEmailHeader(h, "Reply-To"),
+          subject: parseEmailHeader(h, "Subject") || "(No subject)",
+          date: parseEmailHeader(h, "Date"),
+          messageId: parseEmailHeader(h, "Message-ID"),
+          inReplyTo: parseEmailHeader(h, "In-Reply-To"),
+          references: parseEmailHeader(h, "References"),
+          body, attachments,
+          unread: (msg.labelIds || []).includes("UNREAD"),
+          starred: (msg.labelIds || []).includes("STARRED"),
+          labelIds: msg.labelIds || [],
+        });
       } catch (err) {
         console.error("[gmail] Message fetch error:", err.message);
         return json(res, 500, { error: "Failed to fetch message" });
@@ -1633,6 +1945,133 @@ const server = http.createServer(async (req, res) => {
         });
         return json(res, 200, { ok: resp.ok });
       } catch { return json(res, 500, { ok: false }); }
+    }
+
+    /* ── GMAIL: Messages by folder with pagination ───────────────── */
+    if (urlPath === "/api/gmail-messages" && req.method === "GET") {
+      const label = url.searchParams.get("label") || "INBOX";
+      const pageToken = url.searchParams.get("page") || "";
+      const max = parseInt(url.searchParams.get("max") || "50", 10);
+      const result = await gmailListMessages(label, pageToken || undefined, max);
+      if (!result) return json(res, 200, { emails: [], connected: false });
+      if (result.needsReauth) return json(res, 200, { emails: [], connected: false, needsReauth: true });
+      return json(res, 200, { emails: result.emails, nextPageToken: result.nextPageToken, connected: true });
+    }
+
+    /* ── GMAIL: Thread view ────────────────────────────────────── */
+    if (urlPath.match(/^\/api\/gmail-thread\//) && req.method === "GET") {
+      const threadId = urlPath.split("/").pop();
+      const thread = await gmailGetThread(threadId);
+      if (!thread) return json(res, 500, { error: "Failed to fetch thread" });
+      // Update contacts cache from thread participants
+      for (const msg of thread.messages) {
+        if (msg.fromEmail) updateEmailContact(msg.fromEmail, msg.from);
+        for (const addr of parseEmailAddress(msg.to)) updateEmailContact(addr.email, addr.name);
+        for (const addr of parseEmailAddress(msg.cc)) updateEmailContact(addr.email, addr.name);
+      }
+      return json(res, 200, thread);
+    }
+
+    /* ── GMAIL: Labels with counts ─────────────────────────────── */
+    if (urlPath === "/api/gmail-labels" && req.method === "GET") {
+      const labels = await gmailGetLabels(url.searchParams.get("refresh") === "1");
+      if (!labels) return json(res, 200, { labels: [], connected: false });
+      return json(res, 200, { labels, connected: true });
+    }
+
+    /* ── GMAIL: Send email ─────────────────────────────────────── */
+    if (urlPath === "/api/gmail-send" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const result = await gmailSendEmail(body);
+      if (!result) return json(res, 500, { error: "Failed to send email" });
+      // Update contacts cache
+      for (const addr of parseEmailAddress(body.to)) updateEmailContact(addr.email, addr.name);
+      for (const addr of parseEmailAddress(body.cc)) updateEmailContact(addr.email, addr.name);
+      for (const addr of parseEmailAddress(body.bcc)) updateEmailContact(addr.email, addr.name);
+      console.log(`[gmail] Sent email to ${body.to}: "${body.subject}"`);
+      return json(res, 200, { success: true, messageId: result.id, threadId: result.threadId });
+    }
+
+    /* ── GMAIL: Star/unstar ────────────────────────────────────── */
+    if (urlPath.match(/^\/api\/gmail-star\//) && req.method === "POST") {
+      const msgId = urlPath.split("/").pop();
+      const body = JSON.parse(await readBody(req));
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+      const modBody = body.starred
+        ? { addLabelIds: ["STARRED"] }
+        : { removeLabelIds: ["STARRED"] };
+      try {
+        const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/modify`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(modBody),
+        });
+        return json(res, 200, { ok: resp.ok });
+      } catch { return json(res, 500, { ok: false }); }
+    }
+
+    /* ── GMAIL: Search ─────────────────────────────────────────── */
+    if (urlPath === "/api/gmail-search" && req.method === "GET") {
+      const q = url.searchParams.get("q") || "";
+      const pageToken = url.searchParams.get("page") || "";
+      const max = parseInt(url.searchParams.get("max") || "25", 10);
+      if (!q) return json(res, 200, { emails: [], nextPageToken: null });
+      const result = await gmailListMessages(null, pageToken || undefined, max, q);
+      if (!result) return json(res, 200, { emails: [], connected: false });
+      return json(res, 200, { emails: result.emails, nextPageToken: result.nextPageToken, connected: true });
+    }
+
+    /* ── GMAIL: Drafts ─────────────────────────────────────────── */
+    if (urlPath === "/api/gmail-drafts" && req.method === "GET") {
+      const drafts = await gmailListDrafts();
+      if (!drafts) return json(res, 200, { drafts: [], connected: false });
+      return json(res, 200, { drafts, connected: true });
+    }
+
+    if (urlPath === "/api/gmail-draft" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const result = await gmailCreateDraft(body);
+      if (!result) return json(res, 500, { error: "Failed to create draft" });
+      return json(res, 200, { success: true, draftId: result.id });
+    }
+
+    if (urlPath.match(/^\/api\/gmail-draft\//) && req.method === "DELETE") {
+      const draftId = urlPath.split("/").pop();
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+      try {
+        const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        return json(res, 200, { ok: resp.ok || resp.status === 204 });
+      } catch { return json(res, 500, { ok: false }); }
+    }
+
+    /* ── GMAIL: Contact autocomplete ───────────────────────────── */
+    if (urlPath === "/api/gmail-contacts" && req.method === "GET") {
+      const q = (url.searchParams.get("q") || "").toLowerCase();
+      if (!q || q.length < 2) return json(res, 200, { contacts: [] });
+      const contacts = loadEmailContacts();
+      const matches = contacts.filter(c =>
+        c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))
+      ).slice(0, 10);
+      return json(res, 200, { contacts: matches });
+    }
+
+    /* ── GMAIL: Email signature ────────────────────────────────── */
+    if (urlPath === "/api/gmail-signature" && req.method === "GET") {
+      try {
+        const sig = JSON.parse(fs.readFileSync(EMAIL_SIGNATURE_FILE, "utf8"));
+        return json(res, 200, sig);
+      } catch { return json(res, 200, { html: "", text: "" }); }
+    }
+
+    if (urlPath === "/api/gmail-signature" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      fs.writeFileSync(EMAIL_SIGNATURE_FILE, JSON.stringify({ html: body.html || "", text: body.text || "" }, null, 2), "utf8");
+      return json(res, 200, { ok: true });
     }
 
     /* ── GOALS API ──────────────────────────────────────────────── */

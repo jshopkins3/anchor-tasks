@@ -757,9 +757,11 @@
 
       /* Email layout: stack */
       .email-layout { flex-direction: column !important; }
+      .email-folder-sidebar { display: none !important; }
       .email-list-pane { max-width: 100% !important; width: 100% !important; }
       .email-detail-pane { max-width: 100% !important; width: 100% !important; min-height: 300px; }
       .email-resize-handle { display: none !important; }
+      .compose-panel { width: 100% !important; right: 0 !important; }
 
       /* Dan panel: full width */
       #dan-panel { width: calc(100vw - 16px) !important; right: 8px !important; bottom: 80px !important; max-height: 70vh !important; }
@@ -1202,6 +1204,191 @@
     .email-empty-text { font-size: 15px; color: #71717a; margin-bottom: 6px; }
     .email-empty-sub { font-size: 12px; color: #3f3f46; }
 
+    /* ── Email folder sidebar ───────────────────────────────────── */
+    .email-folder-sidebar {
+      width: 200px; min-width: 160px; flex-shrink: 0;
+      border-right: 1px solid #27272a; overflow-y: auto;
+      padding: 12px 0; display: flex; flex-direction: column;
+    }
+    .email-compose-btn {
+      display: flex; align-items: center; gap: 8px; margin: 0 12px 12px;
+      background: #3b82f6; color: #fff; border: none; border-radius: 8px;
+      padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+      font-family: inherit; transition: background .15s;
+    }
+    .email-compose-btn:hover { background: #2563eb; }
+    .email-folder-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+      font-size: 13px; color: #a1a1aa; cursor: pointer; transition: all .1s;
+      border-left: 3px solid transparent;
+    }
+    .email-folder-item:hover { background: rgba(24,24,27,.8); color: #e4e4e7; }
+    .email-folder-item.active { background: #1a1a2e; color: #60a5fa; border-left-color: #3b82f6; }
+    .email-folder-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+    .email-folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .email-folder-count {
+      font-size: 11px; font-weight: 600; color: #71717a; background: #27272a;
+      border-radius: 10px; padding: 1px 7px; min-width: 18px; text-align: center;
+    }
+    .email-folder-count.unread { background: #3b82f6; color: #fff; }
+    .email-folder-divider { height: 1px; background: #27272a; margin: 8px 12px; }
+    .email-folder-label { font-size: 10px; font-weight: 600; color: #52525b; text-transform: uppercase; letter-spacing: .06em; padding: 8px 16px 4px; }
+
+    /* ── Star toggle ────────────────────────────────────────────── */
+    .email-star {
+      flex-shrink: 0; cursor: pointer; font-size: 14px; color: #3f3f46;
+      transition: color .15s; padding: 2px;
+    }
+    .email-star:hover { color: #fbbf24; }
+    .email-star.starred { color: #fbbf24; }
+
+    /* ── Search bar ─────────────────────────────────────────────── */
+    .email-search-bar {
+      display: flex; align-items: center; gap: 8px; padding: 0 12px;
+      flex: 1; max-width: 300px;
+    }
+    .email-search-input {
+      background: #18181b; border: 1px solid #27272a; color: #e4e4e7;
+      border-radius: 6px; padding: 6px 10px 6px 30px; font-size: 12px;
+      font-family: inherit; outline: none; width: 100%; transition: border-color .15s;
+    }
+    .email-search-input:focus { border-color: #3b82f6; }
+    .email-search-input::placeholder { color: #52525b; }
+    .email-search-wrap { position: relative; flex: 1; }
+    .email-search-icon {
+      position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+      font-size: 12px; color: #52525b; pointer-events: none;
+    }
+    .email-search-clear {
+      position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: #52525b; cursor: pointer; font-size: 14px; padding: 2px;
+    }
+    .email-search-clear:hover { color: #a1a1aa; }
+
+    /* ── Thread view ────────────────────────────────────────────── */
+    .email-thread-wrap { padding: 24px 32px; max-width: 850px; }
+    .email-thread-subject { font-size: 20px; font-weight: 700; color: #f4f4f5; margin-bottom: 16px; line-height: 1.3; }
+    .email-thread-count { font-size: 12px; color: #52525b; font-weight: 400; margin-left: 8px; }
+    .email-thread-msg {
+      border: 1px solid #27272a; border-radius: 10px; margin-bottom: 8px;
+      background: #0a0a0c; overflow: hidden; transition: all .15s;
+    }
+    .email-thread-msg.expanded { background: #09090b; }
+    .email-thread-msg-header {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      cursor: pointer; transition: background .1s;
+    }
+    .email-thread-msg-header:hover { background: rgba(24,24,27,.5); }
+    .email-thread-msg.expanded .email-thread-msg-header {
+      border-bottom: 1px solid #27272a; background: transparent; cursor: default;
+    }
+    .email-thread-msg-info { flex: 1; min-width: 0; }
+    .email-thread-msg-from { font-size: 13px; font-weight: 600; color: #e4e4e7; }
+    .email-thread-msg-to { font-size: 11px; color: #52525b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .email-thread-msg-snippet { font-size: 12px; color: #52525b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+    .email-thread-msg-date { font-size: 11px; color: #52525b; flex-shrink: 0; white-space: nowrap; }
+    .email-thread-msg-body { padding: 16px 20px; }
+    .email-thread-msg-body iframe { width: 100%; border: none; border-radius: 6px; background: #fff; min-height: 200px; }
+    .email-thread-msg-body pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 14px; color: #d4d4d8; line-height: 1.7; margin: 0; }
+    .email-thread-actions {
+      display: flex; gap: 8px; padding: 16px 0; margin-top: 8px;
+    }
+
+    /* ── Compose panel ──────────────────────────────────────────── */
+    .compose-panel {
+      position: fixed; bottom: 0; right: 24px; width: 560px;
+      background: #0f0f12; border: 1px solid #27272a; border-bottom: none;
+      border-radius: 12px 12px 0 0; z-index: 1000;
+      display: flex; flex-direction: column; max-height: 80vh;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.4);
+    }
+    .compose-panel.minimized { max-height: 42px; overflow: hidden; }
+    .compose-header {
+      display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+      background: #18181b; border-radius: 12px 12px 0 0; cursor: pointer;
+      border-bottom: 1px solid #27272a;
+    }
+    .compose-header-title { flex: 1; font-size: 13px; font-weight: 600; color: #e4e4e7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .compose-header-btn {
+      background: none; border: none; color: #71717a; cursor: pointer; font-size: 14px; padding: 4px;
+      transition: color .15s;
+    }
+    .compose-header-btn:hover { color: #e4e4e7; }
+    .compose-fields { padding: 8px 16px 0; display: flex; flex-direction: column; gap: 0; }
+    .compose-field-row {
+      display: flex; align-items: center; gap: 8px; padding: 6px 0;
+      border-bottom: 1px solid #1a1a1e;
+    }
+    .compose-field-label { font-size: 12px; color: #52525b; width: 32px; flex-shrink: 0; }
+    .compose-field-input {
+      flex: 1; background: none; border: none; color: #e4e4e7; font-size: 13px;
+      font-family: inherit; outline: none; padding: 4px 0;
+    }
+    .compose-field-input::placeholder { color: #3f3f46; }
+    .compose-cc-toggle { font-size: 11px; color: #52525b; cursor: pointer; padding: 2px 6px; }
+    .compose-cc-toggle:hover { color: #a1a1aa; }
+    .compose-body-area {
+      flex: 1; padding: 12px 16px; overflow-y: auto; min-height: 200px;
+    }
+    .compose-body-area textarea {
+      width: 100%; min-height: 180px; background: none; border: none; color: #d4d4d8;
+      font-size: 13px; font-family: inherit; outline: none; resize: vertical; line-height: 1.6;
+    }
+    .compose-body-area textarea::placeholder { color: #3f3f46; }
+    .compose-footer {
+      display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+      border-top: 1px solid #27272a;
+    }
+    .compose-send-btn {
+      background: #3b82f6; color: #fff; border: none; border-radius: 8px;
+      padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+      font-family: inherit; transition: background .15s;
+    }
+    .compose-send-btn:hover { background: #2563eb; }
+    .compose-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .compose-discard-btn {
+      background: none; border: none; color: #71717a; cursor: pointer;
+      font-size: 16px; padding: 4px 8px; margin-left: auto; transition: color .15s;
+    }
+    .compose-discard-btn:hover { color: #ef4444; }
+
+    /* Compose autocomplete */
+    .compose-autocomplete {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+      background: #18181b; border: 1px solid #27272a; border-radius: 8px;
+      max-height: 180px; overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,.3);
+    }
+    .compose-autocomplete-item {
+      display: flex; flex-direction: column; padding: 8px 12px; cursor: pointer;
+      transition: background .1s;
+    }
+    .compose-autocomplete-item:hover { background: #1a1a2e; }
+    .compose-autocomplete-name { font-size: 13px; color: #e4e4e7; }
+    .compose-autocomplete-email { font-size: 11px; color: #52525b; }
+    .compose-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #1a1a2e; border: 1px solid #27272a; border-radius: 14px;
+      padding: 2px 8px 2px 10px; font-size: 12px; color: #93c5fd; margin: 2px;
+    }
+    .compose-chip-remove {
+      background: none; border: none; color: #52525b; cursor: pointer;
+      font-size: 14px; padding: 0 2px; line-height: 1;
+    }
+    .compose-chip-remove:hover { color: #ef4444; }
+    .compose-field-chips { display: flex; flex-wrap: wrap; align-items: center; flex: 1; gap: 2px; }
+    .compose-field-chips input {
+      flex: 1; min-width: 80px; background: none; border: none; color: #e4e4e7;
+      font-size: 13px; font-family: inherit; outline: none; padding: 4px 0;
+    }
+    .compose-field-chips input::placeholder { color: #3f3f46; }
+
+    /* Load more */
+    .email-load-more {
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+      color: #52525b; font-size: 13px; cursor: pointer; transition: color .15s;
+    }
+    .email-load-more:hover { color: #3b82f6; }
+
     /* ── Quick links bar ─────────────────────────────────────── */
     .quick-links { display: flex; gap: 10px; padding: 8px 0 0; flex-wrap: wrap; }
     .quick-link { display: inline-flex; align-items: center; gap: 6px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 6px 14px; font-size: 12px; color: #a1a1aa; text-decoration: none; cursor: pointer; }
@@ -1486,13 +1673,23 @@
     <!-- ── Email section ──────────────────────────────────────── -->
     <div class="section" id="sec-email">
       <div class="email-layout">
+        <div class="email-folder-sidebar" id="email-folder-sidebar">
+          <button class="email-compose-btn" onclick="openCompose()">✏ Compose</button>
+          <div id="email-folder-list"></div>
+        </div>
         <div class="email-list-pane" id="email-list-pane">
           <div class="email-list-toolbar">
-            <span class="email-toolbar-title">Inbox</span>
+            <span class="email-toolbar-title" id="email-toolbar-title">Inbox</span>
             <span class="email-toolbar-count" id="email-unread-count" style="display:none;">0</span>
+            <div class="email-search-bar">
+              <div class="email-search-wrap">
+                <span class="email-search-icon">🔍</span>
+                <input class="email-search-input" id="email-search-input" type="text" placeholder="Search mail..." onkeydown="if(event.key==='Enter')searchEmail()">
+                <button class="email-search-clear" id="email-search-clear" style="display:none;" onclick="clearEmailSearch()">✕</button>
+              </div>
+            </div>
             <div class="email-toolbar-actions">
-              <button class="email-toolbar-btn" onclick="markAllEmailsRead().then(()=>{loadInbox().then(()=>renderEmailSection())})" title="Mark all read">✓</button>
-              <button class="email-toolbar-btn" onclick="loadInbox().then(()=>renderEmailSection())" title="Refresh">↻</button>
+              <button class="email-toolbar-btn" onclick="refreshEmailFolder()" title="Refresh">↻</button>
               <a href="/api/gcal-auth" class="email-toolbar-btn" style="text-decoration:none;" title="Reconnect Google">⚙</a>
             </div>
           </div>
@@ -1507,6 +1704,7 @@
           </div>
         </div>
       </div>
+      <div id="compose-container"></div>
     </div>
 
     <!-- ── Finance section ─────────────────────────────────────── -->
@@ -2725,7 +2923,13 @@
           if (tab.dataset.tab === "email") {
             const el = document.getElementById("email-list-items");
             if (el) el.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Loading...</div>`;
-            loadInbox().then(() => renderEmailSection());
+            loadEmailLabels();
+            if (currentFolder === "INBOX" && inboxEmails.length) {
+              folderEmails = inboxEmails;
+              renderEmailList();
+            } else {
+              loadFolderMessages();
+            }
           }
         });
       });
@@ -4482,6 +4686,23 @@
 
     /* ── Email section ────────────────────────────────────────── */
     let selectedEmailId = null;
+    let currentFolder = "INBOX";
+    let currentPageToken = null;
+    let hasMoreMessages = false;
+    let folderEmails = []; // emails for the current folder view
+    let allLabels = [];
+    let emailSearchQuery = "";
+    let composeState = null; // { mode, to, cc, bcc, subject, body, threadId, inReplyTo, references }
+
+    // System folder definitions
+    const SYSTEM_FOLDERS = [
+      { id: "INBOX", name: "Inbox", icon: "📥" },
+      { id: "STARRED", name: "Starred", icon: "⭐" },
+      { id: "SENT", name: "Sent", icon: "📤" },
+      { id: "DRAFT", name: "Drafts", icon: "📝" },
+      { id: "SPAM", name: "Spam", icon: "⚠" },
+      { id: "TRASH", name: "Trash", icon: "🗑" },
+    ];
 
     // Avatar color from name
     function emailAvatarColor(name) {
@@ -4529,32 +4750,115 @@
         " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     }
 
-    function renderEmailSection() {
+    /* ── Folder sidebar ───────────────────────────────────────── */
+    async function loadEmailLabels() {
+      try {
+        const res = await fetch("/api/gmail-labels");
+        const data = await res.json();
+        if (data.labels) allLabels = data.labels;
+      } catch {}
+      renderFolderSidebar();
+    }
+
+    function renderFolderSidebar() {
+      const el = document.getElementById("email-folder-list");
+      if (!el) return;
+      const getCount = (id) => {
+        const label = allLabels.find(l => l.id === id);
+        return label ? label.unread : 0;
+      };
+      let html = SYSTEM_FOLDERS.map(f => {
+        const count = getCount(f.id);
+        const active = currentFolder === f.id && !emailSearchQuery ? "active" : "";
+        return `<div class="email-folder-item ${active}" onclick="switchFolder('${f.id}')">
+          <span class="email-folder-icon">${f.icon}</span>
+          <span class="email-folder-name">${f.name}</span>
+          ${count > 0 ? `<span class="email-folder-count ${f.id === 'INBOX' ? 'unread' : ''}">${count}</span>` : ""}
+        </div>`;
+      }).join("");
+      // User labels
+      const userLabels = allLabels.filter(l => l.type === "user").sort((a,b) => a.name.localeCompare(b.name));
+      if (userLabels.length) {
+        html += `<div class="email-folder-divider"></div><div class="email-folder-label">Labels</div>`;
+        html += userLabels.map(l => {
+          const active = currentFolder === l.id && !emailSearchQuery ? "active" : "";
+          return `<div class="email-folder-item ${active}" onclick="switchFolder('${esc(l.id)}')">
+            <span class="email-folder-icon">🏷</span>
+            <span class="email-folder-name">${esc(l.name)}</span>
+            ${l.unread > 0 ? `<span class="email-folder-count">${l.unread}</span>` : ""}
+          </div>`;
+        }).join("");
+      }
+      el.innerHTML = html;
+    }
+
+    async function switchFolder(labelId) {
+      currentFolder = labelId;
+      currentPageToken = null;
+      emailSearchQuery = "";
+      selectedEmailId = null;
+      folderEmails = [];
+      document.getElementById("email-search-input").value = "";
+      document.getElementById("email-search-clear").style.display = "none";
+      const folderName = SYSTEM_FOLDERS.find(f => f.id === labelId)?.name ||
+        allLabels.find(l => l.id === labelId)?.name || labelId;
+      document.getElementById("email-toolbar-title").textContent = folderName;
+      renderFolderSidebar();
+      await loadFolderMessages();
+    }
+
+    async function loadFolderMessages(append = false) {
+      const listEl = document.getElementById("email-list-items");
+      if (!listEl) return;
+      if (!append) listEl.innerHTML = `<div class="email-empty" style="height:200px;"><div class="email-body-loading">Loading...</div></div>`;
+      try {
+        let url;
+        if (emailSearchQuery) {
+          url = `/api/gmail-search?q=${encodeURIComponent(emailSearchQuery)}&max=50${currentPageToken ? `&page=${currentPageToken}` : ""}`;
+        } else {
+          url = `/api/gmail-messages?label=${encodeURIComponent(currentFolder)}&max=50${currentPageToken ? `&page=${currentPageToken}` : ""}`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        if (append) {
+          folderEmails = [...folderEmails, ...(data.emails || [])];
+        } else {
+          folderEmails = data.emails || [];
+        }
+        hasMoreMessages = !!data.nextPageToken;
+        currentPageToken = data.nextPageToken || null;
+        renderEmailList();
+      } catch {
+        if (!append) listEl.innerHTML = `<div class="email-empty" style="height:200px;"><div class="email-empty-text">Failed to load emails</div></div>`;
+      }
+    }
+
+    function renderEmailList() {
       const listEl = document.getElementById("email-list-items");
       const countEl = document.getElementById("email-unread-count");
       if (!listEl) return;
 
-      // Update unread count badge
-      const unreadCount = inboxEmails.filter(e => e.unread).length;
+      const unreadCount = folderEmails.filter(e => e.unread).length;
       if (countEl) {
         countEl.textContent = unreadCount;
         countEl.style.display = unreadCount > 0 ? "inline-block" : "none";
       }
 
-      if (!inboxEmails.length) {
+      if (!folderEmails.length) {
         listEl.innerHTML = `
           <div class="email-empty" style="height:300px;">
-            <div class="email-empty-icon">🎉</div>
-            <div class="email-empty-text">Inbox zero!</div>
-            <div class="email-empty-sub">No unread emails. You're all caught up.</div>
+            <div class="email-empty-icon">${emailSearchQuery ? "🔍" : "🎉"}</div>
+            <div class="email-empty-text">${emailSearchQuery ? "No results found" : "Nothing here!"}</div>
+            <div class="email-empty-sub">${emailSearchQuery ? "Try a different search" : "This folder is empty."}</div>
           </div>`;
         return;
       }
 
-      listEl.innerHTML = inboxEmails.map(e => {
+      listEl.innerHTML = folderEmails.map(e => {
         const hasAttachment = e.snippet && /attach/i.test(e.snippet);
         return `
-        <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}')">
+        <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}', '${e.threadId}')">
+          <span class="email-star ${e.starred ? 'starred' : ''}" onclick="event.stopPropagation();toggleStar('${e.id}', ${!e.starred})" title="${e.starred ? 'Unstar' : 'Star'}">★</span>
           ${emailAvatarHtml(e.from)}
           <div class="email-row-content">
             <div class="email-row-top">
@@ -4568,20 +4872,48 @@
         </div>`;
       }).join("");
 
-      if (selectedEmailId) renderEmailDetail(selectedEmailId);
+      // Load more button
+      if (hasMoreMessages) {
+        listEl.innerHTML += `<div class="email-load-more" onclick="loadMoreEmails()">Load more...</div>`;
+      }
     }
 
-    async function selectEmail(id) {
+    async function loadMoreEmails() {
+      if (!hasMoreMessages || !currentPageToken) return;
+      await loadFolderMessages(true);
+    }
+
+    /* ── Star toggle ──────────────────────────────────────────── */
+    async function toggleStar(msgId, starred) {
+      try {
+        await fetch(`/api/gmail-star/${msgId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ starred }),
+        });
+        const email = folderEmails.find(e => e.id === msgId);
+        if (email) email.starred = starred;
+        const inboxEmail = inboxEmails.find(e => e.id === msgId);
+        if (inboxEmail) inboxEmail.starred = starred;
+        renderEmailList();
+      } catch {}
+    }
+
+    /* ── Email selection → Thread view ────────────────────────── */
+    async function selectEmail(id, threadId) {
       selectedEmailId = id;
-      renderEmailSection();
-      await renderEmailDetail(id);
-      const email = inboxEmails.find(e => e.id === id);
+      renderEmailList();
+      if (threadId) {
+        await renderThreadView(threadId, id);
+      } else {
+        await renderSingleEmailDetail(id);
+      }
+      const email = folderEmails.find(e => e.id === id);
       if (email && email.unread) {
         await markEmailRead(id);
         email.unread = false;
-        // Update count badge without re-rendering whole list
         const countEl = document.getElementById("email-unread-count");
-        const unreadCount = inboxEmails.filter(e => e.unread).length;
+        const unreadCount = folderEmails.filter(e => e.unread).length;
         if (countEl) {
           countEl.textContent = unreadCount;
           countEl.style.display = unreadCount > 0 ? "inline-block" : "none";
@@ -4591,126 +4923,239 @@
 
     async function archiveEmail(id) {
       await fetch(`/api/gmail-archive/${id}`, { method: "POST" });
+      folderEmails = folderEmails.filter(e => e.id !== id);
       inboxEmails = inboxEmails.filter(e => e.id !== id);
-      if (selectedEmailId === id) selectedEmailId = inboxEmails.length ? inboxEmails[0].id : null;
-      renderEmailSection();
-      if (selectedEmailId) renderEmailDetail(selectedEmailId);
-      else {
+      if (selectedEmailId === id) selectedEmailId = folderEmails.length ? folderEmails[0].id : null;
+      renderEmailList();
+      if (selectedEmailId) {
+        const e = folderEmails.find(e => e.id === selectedEmailId);
+        if (e) selectEmail(selectedEmailId, e.threadId);
+      } else {
         const detailEl = document.getElementById("email-detail-pane");
         if (detailEl) detailEl.innerHTML = `<div class="email-empty" style="height:100%;"><div class="email-empty-icon">✉</div><div class="email-empty-text">Select an email to read</div></div>`;
       }
     }
 
-    async function renderEmailDetail(id) {
+    /* ── Thread / Conversation view ───────────────────────────── */
+    async function renderThreadView(threadId, selectedMsgId) {
       const detailEl = document.getElementById("email-detail-pane");
       if (!detailEl) return;
-      const email = inboxEmails.find(e => e.id === id);
-      if (!email) return;
+      detailEl.innerHTML = `<div class="email-thread-wrap"><div class="email-body-loading">Loading conversation...</div></div>`;
 
-      const triage = triageEmail(email);
-      const projectOpts = projects.filter(p => !p.archived)
-        .map(p => `<option value="${esc(p.name)}" ${triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+      try {
+        const res = await fetch(`/api/gmail-thread/${threadId}`);
+        const thread = await res.json();
+        if (!thread.messages?.length) {
+          await renderSingleEmailDetail(selectedMsgId);
+          return;
+        }
 
-      detailEl.innerHTML = `
-        <div class="email-detail-wrap">
-          <div class="email-detail-subject">${esc(email.subject)}</div>
-          <div class="email-detail-sender">
-            ${emailAvatarHtml(email.from, 42)}
-            <div class="email-detail-sender-info">
-              <div class="email-detail-sender-name">${esc(email.from)}</div>
-              <div class="email-detail-sender-email">${esc(email.fromEmail || "")}</div>
+        const subject = thread.messages[0]?.subject || "(No subject)";
+        const msgCount = thread.messages.length;
+
+        let html = `<div class="email-thread-wrap">
+          <div class="email-thread-subject">${esc(subject)}<span class="email-thread-count">(${msgCount})</span></div>`;
+
+        thread.messages.forEach((msg, i) => {
+          const isLast = i === thread.messages.length - 1;
+          const expanded = isLast;
+          html += `
+          <div class="email-thread-msg ${expanded ? 'expanded' : ''}" id="thread-msg-${msg.id}">
+            <div class="email-thread-msg-header" onclick="toggleThreadMsg('${msg.id}')">
+              ${emailAvatarHtml(msg.from, 32)}
+              <div class="email-thread-msg-info">
+                <div class="email-thread-msg-from">${esc(msg.from)}</div>
+                ${expanded ? `<div class="email-thread-msg-to">to ${esc(msg.to || "me")}${msg.cc ? `, cc: ${esc(msg.cc)}` : ""}</div>` :
+                  `<div class="email-thread-msg-snippet">${esc(msg.body?.type === "text" ? msg.body.data?.substring(0, 100) : (msg.snippet || ""))}</div>`}
+              </div>
+              <div class="email-thread-msg-date">${formatEmailDate(msg.date)}</div>
             </div>
-            <div class="email-detail-date">${formatEmailDateFull(email.date)}</div>
+            ${expanded ? renderThreadMsgBody(msg) : `<div class="email-thread-msg-body" style="display:none;" id="thread-body-${msg.id}"></div>`}
+          </div>`;
+        });
+
+        // Reply/Forward actions at bottom
+        const lastMsg = thread.messages[thread.messages.length - 1];
+        html += `
+          <div class="email-thread-actions">
+            <button class="email-action-btn" onclick="openReply('${threadId}', false)">↩ Reply</button>
+            <button class="email-action-btn" onclick="openReply('${threadId}', true)">↩↩ Reply All</button>
+            <button class="email-action-btn" onclick="openForward('${threadId}')">↪ Forward</button>
+            <button class="email-action-btn" onclick="archiveEmail('${selectedMsgId}')">📥 Archive</button>
+            <button class="email-action-btn danger" onclick="deleteEmail('${selectedMsgId}')">🗑 Delete</button>
+            <button class="email-action-btn task-action" onclick="showTaskCardInThread('${selectedMsgId}')">✚ Task</button>
           </div>
-          <div class="email-detail-actions">
-            <button class="email-action-btn" onclick="archiveEmail('${email.id}')">📥 Archive</button>
-            <button class="email-action-btn danger" onclick="deleteEmail('${email.id}')">🗑 Delete</button>
-            <button class="email-action-btn task-action" onclick="document.getElementById('email-task-card-${id}').style.display='block'">✚ Create Task</button>
-          </div>
-          <div id="email-attach-area" class="email-attachments"></div>
-          <div id="email-body-area" class="email-body-container">
-            <div class="email-body-loading">Loading message...</div>
-          </div>
-          <div class="email-task-card" id="email-task-card-${id}" style="display:none;">
-            <div class="email-task-card-title">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-              Create Task from Email
-            </div>
-            <input id="etask-title-${id}" value="${esc(triage.title || email.subject)}" placeholder="Task title" />
-            <div class="email-task-card-row">
-              <select id="etask-proj-${id}">
-                <option value="">No project</option>${projectOpts}
-              </select>
-              <select id="etask-pri-${id}">
-                <option value="normal" ${triage.priority === "normal" ? "selected" : ""}>Normal</option>
-                <option value="high" ${triage.priority === "high" ? "selected" : ""}>High</option>
-                <option value="urgent" ${triage.priority === "urgent" ? "selected" : ""}>Urgent</option>
-              </select>
-              <input id="etask-due-${id}" type="date" value="${triage.suggestedDue || ""}" />
-            </div>
-            <div class="email-task-card-actions">
-              <span id="etask-saved-${id}" style="display:none;font-size:12px;color:#34d399;">Task created ✓</span>
-              <button class="email-action-btn" onclick="document.getElementById('email-task-card-${id}').style.display='none'">Cancel</button>
-              <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${id}')" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">Create Task</button>
-            </div>
-          </div>
+          <div class="email-task-card" id="email-task-card-thread" style="display:none;"></div>
         </div>`;
 
-      // Fetch full body + attachments
+        detailEl.innerHTML = html;
+
+        // Render body for the last (expanded) message
+        const lastBody = document.querySelector(`#thread-msg-${lastMsg.id} .email-thread-msg-body`);
+        if (lastBody && lastMsg.body) {
+          renderEmailBodyInContainer(lastBody, lastMsg.body, lastMsg.id);
+        }
+
+        // Store thread data for reply/forward
+        detailEl._threadData = thread;
+      } catch (err) {
+        detailEl.innerHTML = `<div class="email-thread-wrap"><div class="email-empty-text">Failed to load conversation</div></div>`;
+      }
+    }
+
+    function renderThreadMsgBody(msg) {
+      // Returns HTML string for expanded message body area
+      let attachHtml = "";
+      if (msg.attachments?.length) {
+        attachHtml = `<div class="email-attachments" style="padding:0 20px 12px;">${msg.attachments.map(a => {
+          const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
+          const url = `/api/gmail-message/${msg.id}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
+          const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
+          return `<a class="email-attachment" href="${url}" download="${esc(a.name)}"><span class="email-attachment-icon">${icon}</span><span class="email-attachment-info"><span class="email-attachment-name">${esc(a.name)}</span>${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}</span></a>`;
+        }).join("")}</div>`;
+      }
+      return `${attachHtml}<div class="email-thread-msg-body" id="thread-body-${msg.id}"></div>`;
+    }
+
+    async function toggleThreadMsg(msgId) {
+      const msgEl = document.getElementById(`thread-msg-${msgId}`);
+      if (!msgEl) return;
+      const isExpanded = msgEl.classList.contains("expanded");
+      if (isExpanded) {
+        msgEl.classList.remove("expanded");
+        return;
+      }
+      msgEl.classList.add("expanded");
+      const bodyEl = document.getElementById(`thread-body-${msgId}`);
+      if (bodyEl && !bodyEl.dataset.loaded) {
+        // Fetch full message if body not yet loaded
+        try {
+          const res = await fetch(`/api/gmail-message/${msgId}`);
+          const data = await res.json();
+          if (data.body) {
+            renderEmailBodyInContainer(bodyEl, data.body, msgId);
+            bodyEl.dataset.loaded = "1";
+          }
+          // Update header to show to/cc
+          const headerInfo = msgEl.querySelector(".email-thread-msg-info");
+          if (headerInfo && data.to) {
+            const snippetEl = headerInfo.querySelector(".email-thread-msg-snippet");
+            if (snippetEl) snippetEl.outerHTML = `<div class="email-thread-msg-to">to ${esc(data.to)}${data.cc ? `, cc: ${esc(data.cc)}` : ""}</div>`;
+          }
+        } catch {}
+      }
+      bodyEl.style.display = "";
+    }
+
+    function renderEmailBodyInContainer(container, body, msgId) {
+      if (body.type === "html") {
+        const iframe = document.createElement("iframe");
+        iframe.sandbox = "allow-same-origin";
+        iframe.style.cssText = "width:100%;border:none;background:#fff;border-radius:6px;min-height:200px;";
+        container.innerHTML = "";
+        container.appendChild(iframe);
+        iframe.contentDocument.open();
+        iframe.contentDocument.write(body.data);
+        iframe.contentDocument.close();
+        const resizeIframe = () => {
+          try { iframe.style.height = Math.max(200, iframe.contentDocument.body.scrollHeight + 30) + "px"; } catch {}
+        };
+        setTimeout(resizeIframe, 300);
+        setTimeout(resizeIframe, 1000);
+        iframe.onload = resizeIframe;
+      } else if (body.type === "text") {
+        container.innerHTML = `<pre>${esc(body.data)}</pre>`;
+      } else {
+        container.innerHTML = `<div style="color:#71717a;font-size:14px;font-style:italic;">No content</div>`;
+      }
+    }
+
+    /* ── Single email detail (fallback if no thread) ──────────── */
+    async function renderSingleEmailDetail(id) {
+      const detailEl = document.getElementById("email-detail-pane");
+      if (!detailEl) return;
+      const email = folderEmails.find(e => e.id === id) || inboxEmails.find(e => e.id === id);
+      if (!email) return;
+
+      detailEl.innerHTML = `<div class="email-detail-wrap"><div class="email-body-loading">Loading message...</div></div>`;
+
       try {
         const res = await fetch(`/api/gmail-message/${id}`);
         const data = await res.json();
-        const bodyArea = document.getElementById("email-body-area");
-        if (!bodyArea) return;
 
-        // Attachments
+        const triage = triageEmail(email);
+        const projectOpts = projects.filter(p => !p.archived)
+          .map(p => `<option value="${esc(p.name)}" ${triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+
+        detailEl.innerHTML = `
+          <div class="email-detail-wrap">
+            <div class="email-detail-subject">${esc(data.subject || email.subject)}</div>
+            <div class="email-detail-sender">
+              ${emailAvatarHtml(data.from || email.from, 42)}
+              <div class="email-detail-sender-info">
+                <div class="email-detail-sender-name">${esc(data.from || email.from)}</div>
+                <div class="email-detail-sender-email">${esc(data.fromEmail || email.fromEmail || "")}</div>
+                ${data.to ? `<div style="font-size:11px;color:#52525b;margin-top:2px;">to ${esc(data.to)}${data.cc ? `, cc: ${esc(data.cc)}` : ""}</div>` : ""}
+              </div>
+              <div class="email-detail-date">${formatEmailDateFull(data.date || email.date)}</div>
+            </div>
+            <div class="email-detail-actions">
+              <button class="email-action-btn" onclick="openReplyFromSingle('${id}')">↩ Reply</button>
+              <button class="email-action-btn" onclick="openReplyAllFromSingle('${id}')">↩↩ Reply All</button>
+              <button class="email-action-btn" onclick="openForwardFromSingle('${id}')">↪ Forward</button>
+              <button class="email-action-btn" onclick="archiveEmail('${id}')">📥 Archive</button>
+              <button class="email-action-btn danger" onclick="deleteEmail('${id}')">🗑 Delete</button>
+              <button class="email-action-btn task-action" onclick="document.getElementById('email-task-card-${id}').style.display='block'">✚ Task</button>
+            </div>
+            <div id="email-attach-area-${id}" class="email-attachments"></div>
+            <div id="email-body-area-${id}" class="email-body-container"></div>
+            <div class="email-task-card" id="email-task-card-${id}" style="display:none;">
+              <div class="email-task-card-title">Create Task from Email</div>
+              <input id="etask-title-${id}" value="${esc(triage.title || email.subject)}" placeholder="Task title" />
+              <div class="email-task-card-row">
+                <select id="etask-proj-${id}"><option value="">No project</option>${projectOpts}</select>
+                <select id="etask-pri-${id}">
+                  <option value="normal" ${triage.priority === "normal" ? "selected" : ""}>Normal</option>
+                  <option value="high" ${triage.priority === "high" ? "selected" : ""}>High</option>
+                  <option value="urgent" ${triage.priority === "urgent" ? "selected" : ""}>Urgent</option>
+                </select>
+                <input id="etask-due-${id}" type="date" value="${triage.suggestedDue || ""}" />
+              </div>
+              <div class="email-task-card-actions">
+                <span id="etask-saved-${id}" style="display:none;font-size:12px;color:#34d399;">Task created ✓</span>
+                <button class="email-action-btn" onclick="document.getElementById('email-task-card-${id}').style.display='none'">Cancel</button>
+                <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${id}')" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">Create Task</button>
+              </div>
+            </div>
+          </div>`;
+
+        // Store data for reply/forward
+        detailEl._singleMsgData = data;
+
+        // Render attachments
         if (data.attachments?.length) {
-          const attArea = document.getElementById("email-attach-area");
+          const attArea = document.getElementById(`email-attach-area-${id}`);
           if (attArea) {
             attArea.innerHTML = data.attachments.map(a => {
               const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
               const url = `/api/gmail-message/${id}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
               const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
-              return `<a class="email-attachment" href="${url}" download="${esc(a.name)}">
-                <span class="email-attachment-icon">${icon}</span>
-                <span class="email-attachment-info">
-                  <span class="email-attachment-name">${esc(a.name)}</span>
-                  ${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}
-                </span>
-              </a>`;
+              return `<a class="email-attachment" href="${url}" download="${esc(a.name)}"><span class="email-attachment-icon">${icon}</span><span class="email-attachment-info"><span class="email-attachment-name">${esc(a.name)}</span>${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}</span></a>`;
             }).join("");
           }
         }
 
-        if (data.body?.type === "html") {
-          const iframe = document.createElement("iframe");
-          iframe.sandbox = "allow-same-origin";
-          iframe.style.cssText = "width:100%;border:none;background:#fff;border-radius:8px;min-height:400px;";
-          bodyArea.innerHTML = "";
-          bodyArea.appendChild(iframe);
-          iframe.contentDocument.open();
-          iframe.contentDocument.write(data.body.data);
-          iframe.contentDocument.close();
-          // Auto-resize iframe to content
-          const resizeIframe = () => {
-            try { iframe.style.height = Math.max(400, iframe.contentDocument.body.scrollHeight + 40) + "px"; } catch {}
-          };
-          setTimeout(resizeIframe, 300);
-          setTimeout(resizeIframe, 1000);
-          iframe.onload = resizeIframe;
-        } else if (data.body?.type === "text") {
-          bodyArea.innerHTML = `<pre>${esc(data.body.data)}</pre>`;
-        } else {
-          bodyArea.innerHTML = `<div style="color:#71717a;font-size:14px;font-style:italic;padding:20px 0;">${esc(email.snippet)}</div>`;
-        }
+        // Render body
+        const bodyArea = document.getElementById(`email-body-area-${id}`);
+        if (bodyArea && data.body) renderEmailBodyInContainer(bodyArea, data.body, id);
+
       } catch {
-        const bodyArea = document.getElementById("email-body-area");
-        if (bodyArea) bodyArea.innerHTML = `<div style="color:#71717a;font-size:14px;font-style:italic;padding:20px 0;">${esc(email.snippet)}</div>`;
+        detailEl.innerHTML = `<div class="email-detail-wrap"><div class="email-empty-text">Failed to load message</div></div>`;
       }
     }
 
     async function createTaskFromEmailDetail(emailId) {
-      const email = inboxEmails.find(e => e.id === emailId);
+      const email = folderEmails.find(e => e.id === emailId) || inboxEmails.find(e => e.id === emailId);
       if (!email) return;
       const title = document.getElementById(`etask-title-${emailId}`)?.value || email.subject;
       const project = document.getElementById(`etask-proj-${emailId}`)?.value || "";
@@ -4727,6 +5172,307 @@
         const msg = document.getElementById(`etask-saved-${emailId}`);
         if (msg) { msg.style.display = "inline"; setTimeout(() => { msg.style.display = "none"; }, 2500); }
       }
+    }
+
+    function showTaskCardInThread(msgId) {
+      const card = document.getElementById("email-task-card-thread");
+      if (!card) return;
+      const email = folderEmails.find(e => e.id === msgId) || inboxEmails.find(e => e.id === msgId);
+      if (!email) return;
+      const triage = triageEmail(email);
+      const projectOpts = projects.filter(p => !p.archived)
+        .map(p => `<option value="${esc(p.name)}" ${triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+      card.innerHTML = `
+        <div class="email-task-card-title">Create Task from Email</div>
+        <input id="etask-title-${msgId}" value="${esc(triage.title || email.subject)}" placeholder="Task title" />
+        <div class="email-task-card-row">
+          <select id="etask-proj-${msgId}"><option value="">No project</option>${projectOpts}</select>
+          <select id="etask-pri-${msgId}">
+            <option value="normal" ${triage.priority === "normal" ? "selected" : ""}>Normal</option>
+            <option value="high" ${triage.priority === "high" ? "selected" : ""}>High</option>
+            <option value="urgent" ${triage.priority === "urgent" ? "selected" : ""}>Urgent</option>
+          </select>
+          <input id="etask-due-${msgId}" type="date" value="${triage.suggestedDue || ""}" />
+        </div>
+        <div class="email-task-card-actions">
+          <span id="etask-saved-${msgId}" style="display:none;font-size:12px;color:#34d399;">Task created ✓</span>
+          <button class="email-action-btn" onclick="document.getElementById('email-task-card-thread').style.display='none'">Cancel</button>
+          <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${msgId}')" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">Create Task</button>
+        </div>`;
+      card.style.display = "block";
+    }
+
+    /* ── Search ────────────────────────────────────────────────── */
+    async function searchEmail() {
+      const input = document.getElementById("email-search-input");
+      const q = input?.value?.trim();
+      if (!q) return;
+      emailSearchQuery = q;
+      currentPageToken = null;
+      folderEmails = [];
+      selectedEmailId = null;
+      document.getElementById("email-search-clear").style.display = "block";
+      document.getElementById("email-toolbar-title").textContent = "Search";
+      renderFolderSidebar();
+      await loadFolderMessages();
+    }
+
+    function clearEmailSearch() {
+      emailSearchQuery = "";
+      document.getElementById("email-search-input").value = "";
+      document.getElementById("email-search-clear").style.display = "none";
+      switchFolder(currentFolder);
+    }
+
+    async function refreshEmailFolder() {
+      currentPageToken = null;
+      folderEmails = [];
+      selectedEmailId = null;
+      loadEmailLabels();
+      await loadFolderMessages();
+    }
+
+    /* ── Compose panel ────────────────────────────────────────── */
+    function openCompose(opts = {}) {
+      const container = document.getElementById("compose-container");
+      if (!container) return;
+      composeState = {
+        mode: opts.mode || "new",
+        to: opts.to || "",
+        cc: opts.cc || "",
+        bcc: "",
+        subject: opts.subject || "",
+        body: opts.body || "",
+        threadId: opts.threadId || "",
+        inReplyTo: opts.inReplyTo || "",
+        references: opts.references || "",
+      };
+      renderComposePanel();
+    }
+
+    function renderComposePanel() {
+      const container = document.getElementById("compose-container");
+      if (!container || !composeState) return;
+      const title = composeState.mode === "reply" ? `Re: ${composeState.subject}` :
+                    composeState.mode === "forward" ? `Fwd: ${composeState.subject}` :
+                    "New Message";
+      container.innerHTML = `
+        <div class="compose-panel" id="compose-panel">
+          <div class="compose-header" onclick="toggleComposeMinimize()">
+            <span class="compose-header-title">${esc(title)}</span>
+            <button class="compose-header-btn" onclick="event.stopPropagation();toggleComposeMinimize()" title="Minimize">—</button>
+            <button class="compose-header-btn" onclick="event.stopPropagation();closeCompose()" title="Close">✕</button>
+          </div>
+          <div class="compose-fields">
+            <div class="compose-field-row">
+              <span class="compose-field-label">To</span>
+              <div class="compose-field-chips" id="compose-to-chips" style="position:relative;">
+                <input id="compose-to" class="compose-field-input" value="${esc(composeState.to)}" placeholder="Recipients" oninput="onComposeRecipientInput(this, 'to')" onkeydown="onComposeRecipientKey(event, this, 'to')">
+                <div class="compose-autocomplete" id="compose-to-autocomplete" style="display:none;"></div>
+              </div>
+              <span class="compose-cc-toggle" id="compose-cc-toggle" onclick="document.getElementById('compose-cc-row').style.display='flex';document.getElementById('compose-bcc-row').style.display='flex';this.style.display='none';">Cc/Bcc</span>
+            </div>
+            <div class="compose-field-row" id="compose-cc-row" style="display:${composeState.cc ? 'flex' : 'none'};">
+              <span class="compose-field-label">Cc</span>
+              <div class="compose-field-chips" id="compose-cc-chips" style="position:relative;">
+                <input id="compose-cc" class="compose-field-input" value="${esc(composeState.cc)}" placeholder="Cc" oninput="onComposeRecipientInput(this, 'cc')" onkeydown="onComposeRecipientKey(event, this, 'cc')">
+                <div class="compose-autocomplete" id="compose-cc-autocomplete" style="display:none;"></div>
+              </div>
+            </div>
+            <div class="compose-field-row" id="compose-bcc-row" style="display:none;">
+              <span class="compose-field-label">Bcc</span>
+              <div class="compose-field-chips" id="compose-bcc-chips" style="position:relative;">
+                <input id="compose-bcc" class="compose-field-input" placeholder="Bcc" oninput="onComposeRecipientInput(this, 'bcc')" onkeydown="onComposeRecipientKey(event, this, 'bcc')">
+                <div class="compose-autocomplete" id="compose-bcc-autocomplete" style="display:none;"></div>
+              </div>
+            </div>
+            <div class="compose-field-row">
+              <span class="compose-field-label">Subj</span>
+              <input id="compose-subject" class="compose-field-input" value="${esc(composeState.subject)}" placeholder="Subject">
+            </div>
+          </div>
+          <div class="compose-body-area">
+            <textarea id="compose-body" placeholder="Write your message...">${esc(composeState.body)}</textarea>
+          </div>
+          <div class="compose-footer">
+            <button class="compose-send-btn" id="compose-send-btn" onclick="sendCompose()">Send</button>
+            <button class="compose-discard-btn" onclick="closeCompose()" title="Discard">🗑</button>
+          </div>
+        </div>`;
+      // Focus appropriate field
+      setTimeout(() => {
+        if (!composeState.to) document.getElementById("compose-to")?.focus();
+        else document.getElementById("compose-body")?.focus();
+      }, 100);
+    }
+
+    function toggleComposeMinimize() {
+      const panel = document.getElementById("compose-panel");
+      if (panel) panel.classList.toggle("minimized");
+    }
+
+    function closeCompose() {
+      const container = document.getElementById("compose-container");
+      if (container) container.innerHTML = "";
+      composeState = null;
+    }
+
+    async function sendCompose() {
+      const btn = document.getElementById("compose-send-btn");
+      if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+      const to = document.getElementById("compose-to")?.value || "";
+      const cc = document.getElementById("compose-cc")?.value || "";
+      const bcc = document.getElementById("compose-bcc")?.value || "";
+      const subject = document.getElementById("compose-subject")?.value || "";
+      const body = document.getElementById("compose-body")?.value || "";
+      if (!to.trim()) { if (btn) { btn.disabled = false; btn.textContent = "Send"; } return; }
+      try {
+        const payload = { to, subject, body };
+        if (cc) payload.cc = cc;
+        if (bcc) payload.bcc = bcc;
+        if (composeState?.threadId) payload.threadId = composeState.threadId;
+        if (composeState?.inReplyTo) payload.inReplyTo = composeState.inReplyTo;
+        if (composeState?.references) payload.references = composeState.references;
+        const res = await fetch("/api/gmail-send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeCompose();
+          // Refresh folder if in sent
+          if (currentFolder === "SENT") refreshEmailFolder();
+        } else {
+          if (btn) { btn.disabled = false; btn.textContent = "Send"; }
+          alert("Failed to send: " + (data.error || "Unknown error"));
+        }
+      } catch {
+        if (btn) { btn.disabled = false; btn.textContent = "Send"; }
+      }
+    }
+
+    /* ── Reply / Reply All / Forward ──────────────────────────── */
+    function openReply(threadId, replyAll = false) {
+      const detailEl = document.getElementById("email-detail-pane");
+      const thread = detailEl?._threadData;
+      if (!thread?.messages?.length) return;
+      const lastMsg = thread.messages[thread.messages.length - 1];
+      const replyTo = lastMsg.replyTo || lastMsg.fromEmail || lastMsg.from;
+      let cc = "";
+      if (replyAll && lastMsg.cc) cc = lastMsg.cc;
+      if (replyAll && lastMsg.to) {
+        const existingCc = cc ? cc + ", " : "";
+        cc = existingCc + lastMsg.to;
+      }
+      const subject = lastMsg.subject?.startsWith("Re:") ? lastMsg.subject : `Re: ${lastMsg.subject}`;
+      const quotedText = `\n\n\nOn ${formatEmailDateFull(lastMsg.date)}, ${lastMsg.from} wrote:\n> ${(lastMsg.body?.type === "text" ? lastMsg.body.data : "").split("\n").join("\n> ")}`;
+      openCompose({
+        mode: "reply", to: replyTo, cc, subject,
+        body: quotedText, threadId: thread.id,
+        inReplyTo: lastMsg.messageId, references: (lastMsg.references ? lastMsg.references + " " : "") + lastMsg.messageId,
+      });
+    }
+
+    function openForward(threadId) {
+      const detailEl = document.getElementById("email-detail-pane");
+      const thread = detailEl?._threadData;
+      if (!thread?.messages?.length) return;
+      const lastMsg = thread.messages[thread.messages.length - 1];
+      const subject = lastMsg.subject?.startsWith("Fwd:") ? lastMsg.subject : `Fwd: ${lastMsg.subject}`;
+      const fwdText = `\n\n\n---------- Forwarded message ----------\nFrom: ${lastMsg.from}\nDate: ${formatEmailDateFull(lastMsg.date)}\nSubject: ${lastMsg.subject}\nTo: ${lastMsg.to || ""}\n\n${lastMsg.body?.type === "text" ? lastMsg.body.data : ""}`;
+      openCompose({ mode: "forward", subject, body: fwdText });
+    }
+
+    function openReplyFromSingle(msgId) {
+      const detailEl = document.getElementById("email-detail-pane");
+      const data = detailEl?._singleMsgData;
+      if (!data) return;
+      const replyTo = data.replyTo || data.fromEmail || data.from;
+      const subject = data.subject?.startsWith("Re:") ? data.subject : `Re: ${data.subject}`;
+      const quotedText = `\n\n\nOn ${formatEmailDateFull(data.date)}, ${data.from} wrote:\n> ${(data.body?.type === "text" ? data.body.data : "").split("\n").join("\n> ")}`;
+      openCompose({ mode: "reply", to: replyTo, subject, body: quotedText, threadId: data.threadId, inReplyTo: data.messageId, references: (data.references ? data.references + " " : "") + data.messageId });
+    }
+
+    function openReplyAllFromSingle(msgId) {
+      const detailEl = document.getElementById("email-detail-pane");
+      const data = detailEl?._singleMsgData;
+      if (!data) return;
+      const replyTo = data.replyTo || data.fromEmail || data.from;
+      let cc = [data.to, data.cc].filter(Boolean).join(", ");
+      const subject = data.subject?.startsWith("Re:") ? data.subject : `Re: ${data.subject}`;
+      const quotedText = `\n\n\nOn ${formatEmailDateFull(data.date)}, ${data.from} wrote:\n> ${(data.body?.type === "text" ? data.body.data : "").split("\n").join("\n> ")}`;
+      openCompose({ mode: "reply", to: replyTo, cc, subject, body: quotedText, threadId: data.threadId, inReplyTo: data.messageId, references: (data.references ? data.references + " " : "") + data.messageId });
+    }
+
+    function openForwardFromSingle(msgId) {
+      const detailEl = document.getElementById("email-detail-pane");
+      const data = detailEl?._singleMsgData;
+      if (!data) return;
+      const subject = data.subject?.startsWith("Fwd:") ? data.subject : `Fwd: ${data.subject}`;
+      const fwdText = `\n\n\n---------- Forwarded message ----------\nFrom: ${data.from}\nDate: ${formatEmailDateFull(data.date)}\nSubject: ${data.subject}\nTo: ${data.to || ""}\n\n${data.body?.type === "text" ? data.body.data : ""}`;
+      openCompose({ mode: "forward", subject, body: fwdText });
+    }
+
+    /* ── Contact autocomplete ─────────────────────────────────── */
+    let autocompleteTimeout = null;
+    async function onComposeRecipientInput(input, field) {
+      clearTimeout(autocompleteTimeout);
+      const q = input.value.trim();
+      const dropdown = document.getElementById(`compose-${field}-autocomplete`);
+      if (!dropdown) return;
+      if (q.length < 2) { dropdown.style.display = "none"; return; }
+      autocompleteTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/gmail-contacts?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          if (!data.contacts?.length) { dropdown.style.display = "none"; return; }
+          dropdown.innerHTML = data.contacts.map(c =>
+            `<div class="compose-autocomplete-item" onclick="selectAutocomplete('${field}', '${esc(c.email)}', '${esc(c.name)}')">
+              <span class="compose-autocomplete-name">${esc(c.name || c.email)}</span>
+              ${c.name ? `<span class="compose-autocomplete-email">${esc(c.email)}</span>` : ""}
+            </div>`
+          ).join("");
+          dropdown.style.display = "block";
+        } catch { dropdown.style.display = "none"; }
+      }, 300);
+    }
+
+    function onComposeRecipientKey(event, input, field) {
+      if (event.key === "Escape") {
+        const dropdown = document.getElementById(`compose-${field}-autocomplete`);
+        if (dropdown) dropdown.style.display = "none";
+      }
+    }
+
+    function selectAutocomplete(field, email, name) {
+      const input = document.getElementById(`compose-${field}`);
+      if (!input) return;
+      const existing = input.value.trim();
+      // If there's already text, append with comma
+      if (existing && !existing.endsWith(",")) {
+        input.value = existing + ", " + (name ? `${name} <${email}>` : email);
+      } else {
+        input.value = (existing ? existing + " " : "") + (name ? `${name} <${email}>` : email);
+      }
+      const dropdown = document.getElementById(`compose-${field}-autocomplete`);
+      if (dropdown) dropdown.style.display = "none";
+      input.focus();
+    }
+
+    /* ── Backward-compatible renderEmailSection ───────────────── */
+    function renderEmailSection() {
+      // Called when Email tab is opened — now loads folder view
+      loadEmailLabels();
+      if (currentFolder === "INBOX" && !emailSearchQuery) {
+        // Sync inbox emails to folderEmails for first load
+        if (inboxEmails.length && !folderEmails.length) {
+          folderEmails = inboxEmails;
+          renderEmailList();
+          return;
+        }
+      }
+      loadFolderMessages();
     }
 
     /* ── Email pane resize ────────────────────────────────────── */
@@ -4756,17 +5502,62 @@
     }
     setupEmailResize();
 
+    /* ── Keyboard shortcuts for email ─────────────────────────── */
+    document.addEventListener("keydown", e => {
+      // Only active when Email tab is visible
+      const emailSection = document.getElementById("sec-email");
+      if (!emailSection?.classList.contains("active")) return;
+      // Don't intercept when typing in inputs
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
+      if (e.key === "c" && !e.ctrlKey && !e.metaKey) { openCompose(); e.preventDefault(); }
+      if (e.key === "r" && !e.ctrlKey && !e.metaKey) {
+        const detailEl = document.getElementById("email-detail-pane");
+        if (detailEl?._threadData) openReply(detailEl._threadData.id, false);
+        else if (detailEl?._singleMsgData) openReplyFromSingle(selectedEmailId);
+        e.preventDefault();
+      }
+      if (e.key === "a" && !e.ctrlKey && !e.metaKey) {
+        const detailEl = document.getElementById("email-detail-pane");
+        if (detailEl?._threadData) openReply(detailEl._threadData.id, true);
+        else if (detailEl?._singleMsgData) openReplyAllFromSingle(selectedEmailId);
+        e.preventDefault();
+      }
+      if (e.key === "f" && !e.ctrlKey && !e.metaKey) {
+        const detailEl = document.getElementById("email-detail-pane");
+        if (detailEl?._threadData) openForward(detailEl._threadData.id);
+        else if (detailEl?._singleMsgData) openForwardFromSingle(selectedEmailId);
+        e.preventDefault();
+      }
+      if (e.key === "e" && !e.ctrlKey && !e.metaKey && selectedEmailId) { archiveEmail(selectedEmailId); e.preventDefault(); }
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) { document.getElementById("email-search-input")?.focus(); e.preventDefault(); }
+      if (e.key === "j") {
+        const idx = folderEmails.findIndex(e => e.id === selectedEmailId);
+        if (idx < folderEmails.length - 1) { const next = folderEmails[idx + 1]; selectEmail(next.id, next.threadId); }
+        e.preventDefault();
+      }
+      if (e.key === "k") {
+        const idx = folderEmails.findIndex(e => e.id === selectedEmailId);
+        if (idx > 0) { const prev = folderEmails[idx - 1]; selectEmail(prev.id, prev.threadId); }
+        e.preventDefault();
+      }
+    });
+
     /* ── Today inbox email modal ──────────────────────────────── */
     function openEmailModal(emailId) {
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
       document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
       document.querySelector(".tab[data-tab='email']").classList.add("active");
       document.getElementById("sec-email").classList.add("active");
+      currentFolder = "INBOX";
+      emailSearchQuery = "";
       const el = document.getElementById("email-list-items");
       if (el) el.innerHTML = `<div class="email-empty" style="height:200px;"><div class="email-body-loading">Loading inbox...</div></div>`;
       loadInbox().then(() => {
-        renderEmailSection();
-        selectEmail(emailId);
+        folderEmails = inboxEmails;
+        renderEmailList();
+        loadEmailLabels();
+        const email = folderEmails.find(e => e.id === emailId);
+        if (email) selectEmail(emailId, email.threadId);
       });
     }
 
