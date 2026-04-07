@@ -5061,8 +5061,17 @@
         // Reverse so newest is on top
         const sortedMsgs = [...thread.messages].reverse();
 
+        const lastMsg = thread.messages[thread.messages.length - 1];
         let html = `<div class="email-thread-wrap">
-          <div class="email-thread-subject">${esc(subject)}<span class="email-thread-count">(${msgCount})</span></div>`;
+          <div class="email-thread-subject">${esc(subject)}<span class="email-thread-count">(${msgCount})</span></div>
+          <div class="email-thread-actions">
+            <button class="email-action-btn" onclick="openReply('${threadId}', false)">↩ Reply</button>
+            <button class="email-action-btn" onclick="openReply('${threadId}', true)">↩↩ Reply All</button>
+            <button class="email-action-btn" onclick="openForward('${threadId}')">↪ Forward</button>
+            <button class="email-action-btn" onclick="archiveEmail('${selectedMsgId}')">📥 Archive</button>
+            <button class="email-action-btn danger" onclick="deleteEmail('${selectedMsgId}')">🗑 Delete</button>
+            <button class="email-action-btn task-action" onclick="showTaskCardInThread('${selectedMsgId}')">✚ Task</button>
+          </div>`;
 
         sortedMsgs.forEach((msg, i) => {
           const isFirst = i === 0;
@@ -5082,17 +5091,7 @@
           </div>`;
         });
 
-        // Reply/Forward actions at bottom
-        const lastMsg = thread.messages[thread.messages.length - 1];
         html += `
-          <div class="email-thread-actions">
-            <button class="email-action-btn" onclick="openReply('${threadId}', false)">↩ Reply</button>
-            <button class="email-action-btn" onclick="openReply('${threadId}', true)">↩↩ Reply All</button>
-            <button class="email-action-btn" onclick="openForward('${threadId}')">↪ Forward</button>
-            <button class="email-action-btn" onclick="archiveEmail('${selectedMsgId}')">📥 Archive</button>
-            <button class="email-action-btn danger" onclick="deleteEmail('${selectedMsgId}')">🗑 Delete</button>
-            <button class="email-action-btn task-action" onclick="showTaskCardInThread('${selectedMsgId}')">✚ Task</button>
-          </div>
           <div class="email-task-card" id="email-task-card-thread" style="display:none;"></div>
         </div>`;
 
