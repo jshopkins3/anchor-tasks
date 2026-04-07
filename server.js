@@ -1788,8 +1788,15 @@ const server = http.createServer(async (req, res) => {
       if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
         return json(res, 500, { error: "Google OAuth not configured" });
       }
-      // Delete old token to force fresh consent with new scopes
-      try { if (fs.existsSync(GCAL_TOKEN_FILE)) fs.unlinkSync(GCAL_TOKEN_FILE); console.log("[gcal] Deleted old token for re-auth"); } catch {}
+      // Save existing refresh_token before deleting, in case Google doesn't issue a new one
+      let savedRefreshToken = null;
+      try {
+        const existing = loadGCalToken();
+        if (existing?.refresh_token) savedRefreshToken = existing.refresh_token;
+      } catch {}
+      try { if (fs.existsSync(GCAL_TOKEN_FILE)) fs.unlinkSync(GCAL_TOKEN_FILE); } catch {}
+      // Stash refresh token in memory for the callback
+      if (savedRefreshToken) global._savedRefreshToken = savedRefreshToken;
       const host = req.headers.host || "";
       const proto = IS_PRODUCTION ? "https" : "http";
       const redirectUri = `${proto}://${host}/api/gcal-callback`;
@@ -1826,7 +1833,8 @@ const server = http.createServer(async (req, res) => {
         if (data.access_token) {
           // Keep existing refresh_token if Google didn't issue a new one (re-auth scenario)
           const existing = loadGCalToken();
-          const refresh_token = data.refresh_token || (existing && existing.refresh_token) || null;
+          const refresh_token = data.refresh_token || (existing && existing.refresh_token) || global._savedRefreshToken || null;
+          if (global._savedRefreshToken) delete global._savedRefreshToken;
           if (refresh_token) {
             saveGCalToken({
               refresh_token,
@@ -1834,7 +1842,9 @@ const server = http.createServer(async (req, res) => {
               expires_at: Date.now() + (data.expires_in || 3600) * 1000,
               scope: data.scope || "",
             });
+            const hasGmailSend = (data.scope || "").includes("gmail.send");
             console.log("[gcal] Connected successfully. Scopes:", data.scope || "(not returned)");
+            console.log("[gcal] gmail.send scope:", hasGmailSend ? "YES" : "NO - re-auth needed with consent prompt");
             res.writeHead(302, { Location: "/?gcal=connected" });
           } else {
             console.error("[gcal] No refresh token available:", data);
