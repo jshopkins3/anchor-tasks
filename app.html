@@ -5124,6 +5124,7 @@
       if (body.type === "html") {
         const iframe = document.createElement("iframe");
         iframe.sandbox = "allow-same-origin";
+        iframe.referrerPolicy = "no-referrer";
         iframe.style.cssText = "width:100%;border:none;background:#fff;border-radius:6px;min-height:200px;";
         container.innerHTML = "";
         container.appendChild(iframe);
