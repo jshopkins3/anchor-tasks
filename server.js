@@ -3,6 +3,7 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const webpush = require("web-push");
 
 /* ─── Config ─────────────────────────────────────────────────────────── */
 const PORT = process.env.PORT || 8080;
@@ -15,6 +16,12 @@ const JOURNAL_FILE = path.join(DATA_DIR, "journal.json");
 const GCAL_TOKEN_FILE = path.join(DATA_DIR, "gcal-token.json");
 const EMAIL_CONTACTS_FILE = path.join(DATA_DIR, "email-contacts.json");
 const EMAIL_SIGNATURE_FILE = path.join(DATA_DIR, "email-signature.json");
+const PUSH_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "push-subscriptions.json");
+
+// VAPID keys for push notifications
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BObEhtMss78OTAVIU_2bq7RAom1BF5_Yh2HR444L7Mbq3hejOAGhJi2w07oKhqMS-sDGWYzuremKk8fYkvlnz0M";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "Ru4ias01IaUsTeo-o7xtftzEnIi5gMJwg3e06aOxOM4";
+webpush.setVapidDetails("mailto:john.hopkins@mychomeloans.com", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 // Google Calendar config
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -790,6 +797,75 @@ function parseEmailAddress(str) {
     if (plain.includes("@")) return { name: "", email: plain.toLowerCase() };
     return null;
   }).filter(Boolean);
+}
+
+/* ─── Push notification helpers ─────────────────────────────────────── */
+function loadPushSubscriptions() {
+  try { return JSON.parse(fs.readFileSync(PUSH_SUBSCRIPTIONS_FILE, "utf8")); } catch { return []; }
+}
+function savePushSubscriptions(subs) {
+  fs.writeFileSync(PUSH_SUBSCRIPTIONS_FILE, JSON.stringify(subs, null, 2), "utf8");
+}
+async function sendPushToAll(payload) {
+  const subs = loadPushSubscriptions();
+  const failed = [];
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(sub, JSON.stringify(payload));
+    } catch (err) {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        failed.push(sub.endpoint);
+      }
+    }
+  }
+  // Remove expired subscriptions
+  if (failed.length) {
+    const remaining = subs.filter(s => !failed.includes(s.endpoint));
+    savePushSubscriptions(remaining);
+  }
+}
+
+/* ─── Server-side email polling for push notifications ─────────────── */
+let lastKnownInboxIds = new Set();
+let emailPollStarted = false;
+function startServerEmailPoll() {
+  if (emailPollStarted) return;
+  emailPollStarted = true;
+  // Initial load of known IDs
+  gmailGetInbox().then(result => {
+    if (Array.isArray(result)) {
+      lastKnownInboxIds = new Set(result.map(e => e.id));
+    }
+  }).catch(() => {});
+  // Poll every 60 seconds
+  setInterval(async () => {
+    try {
+      const result = await gmailGetInbox();
+      if (!Array.isArray(result)) return;
+      const currentIds = new Set(result.map(e => e.id));
+      const newEmails = result.filter(e => !lastKnownInboxIds.has(e.id));
+      if (newEmails.length > 0) {
+        const subs = loadPushSubscriptions();
+        if (subs.length > 0) {
+          if (newEmails.length === 1) {
+            const e = newEmails[0];
+            await sendPushToAll({
+              title: e.from || "New Email",
+              body: e.subject || "(No subject)",
+              url: "/?tab=email",
+            });
+          } else {
+            await sendPushToAll({
+              title: `${newEmails.length} new emails`,
+              body: newEmails.map(e => e.subject).slice(0, 3).join(", "),
+              url: "/?tab=email",
+            });
+          }
+        }
+      }
+      lastKnownInboxIds = currentIds;
+    } catch {}
+  }, 60000);
 }
 
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
@@ -2074,6 +2150,38 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── Push notifications ───────────────────────────────────── */
+    if (urlPath === "/api/push/vapid-key" && req.method === "GET") {
+      return json(res, 200, { publicKey: VAPID_PUBLIC_KEY });
+    }
+
+    if (urlPath === "/api/push/subscribe" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      if (!body.endpoint) return json(res, 400, { error: "Missing subscription" });
+      const subs = loadPushSubscriptions();
+      // Avoid duplicates
+      if (!subs.find(s => s.endpoint === body.endpoint)) {
+        subs.push(body);
+        savePushSubscriptions(subs);
+      }
+      // Start server-side polling if not already running
+      startServerEmailPoll();
+      return json(res, 200, { ok: true });
+    }
+
+    if (urlPath === "/api/push/unsubscribe" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const subs = loadPushSubscriptions();
+      const remaining = subs.filter(s => s.endpoint !== body.endpoint);
+      savePushSubscriptions(remaining);
+      return json(res, 200, { ok: true });
+    }
+
+    if (urlPath === "/api/push/test" && req.method === "POST") {
+      await sendPushToAll({ title: "Anchor Tasks", body: "Push notifications are working!", url: "/" });
+      return json(res, 200, { ok: true });
+    }
+
     /* ── GMAIL: Borrower/project email search (CRM) ──────────── */
     const borrowerEmailMatch = urlPath.match(/^\/api\/projects\/([^/]+)\/emails$/);
     if (borrowerEmailMatch && req.method === "GET") {
@@ -2654,4 +2762,10 @@ server.listen(PORT, () => {
   console.log(`[anchor-tasks] Auth: ${GOOGLE_CLIENT_ID ? "Google OAuth configured" : "⚠ GOOGLE_CLIENT_ID not set"}`);
   console.log(`[anchor-tasks] Allowed emails: ${ALLOWED_EMAILS.length || "any (no whitelist)"}`);
   console.log(`[anchor-tasks] Data dir: ${DATA_DIR}`);
+  // Start email polling for push notifications if subscriptions exist
+  const subs = loadPushSubscriptions();
+  if (subs.length > 0) {
+    console.log(`[push] Starting email poll (${subs.length} subscription(s))`);
+    startServerEmailPoll();
+  }
 });

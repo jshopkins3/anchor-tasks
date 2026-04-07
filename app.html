@@ -5843,10 +5843,32 @@
 
     createDanPanel();
 
-    // PWA Service Worker
+    // PWA Service Worker + Push Notifications
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").then(reg => {
+      navigator.serviceWorker.register("/sw.js").then(async reg => {
         console.log("[PWA] Service worker registered");
+        // Auto-subscribe to push notifications
+        if ("PushManager" in window) {
+          try {
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+              const vapidRes = await fetch("/api/push/vapid-key");
+              const { publicKey } = await vapidRes.json();
+              const applicationServerKey = Uint8Array.from(atob(publicKey.replace(/-/g,"+").replace(/_/g,"/")), c => c.charCodeAt(0));
+              sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+              console.log("[Push] Subscribed");
+            }
+            // Send subscription to server
+            await fetch("/api/push/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(sub.toJSON()),
+            });
+            console.log("[Push] Subscription synced with server");
+          } catch (e) {
+            console.warn("[Push] Subscription failed:", e.message);
+          }
+        }
       }).catch(e => console.error("[PWA] SW registration failed:", e));
     }
 
