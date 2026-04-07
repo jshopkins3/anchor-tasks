@@ -643,12 +643,10 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
   if (!accessToken) return { error: "No access token" };
   try {
     // Fetch Gmail signature and append
+    const plainBody = body || "";
     let signature = "";
     try { signature = await gmailGetSignature(); } catch {}
-    console.log("[gmail-send] Body length:", plainBody.length, "Body preview:", JSON.stringify(plainBody.substring(0, 100)));
-    console.log("[gmail-send] Signature length:", signature.length);
-
-    const plainBody = body || "";
+    console.log("[gmail-send] Body length:", plainBody.length, "Signature length:", signature.length);
     const rawLines = [];
     rawLines.push(`From: me`);
     if (to) rawLines.push(`To: ${to}`);
