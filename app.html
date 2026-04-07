@@ -1121,6 +1121,11 @@
       font-size: 10px; padding: 1px 6px; border-radius: 3px;
       background: rgba(59,130,246,.1); color: #60a5fa; white-space: nowrap;
     }
+    .email-row-badge.work { background: rgba(16,185,129,.12); color: #34d399; }
+    .email-row-badge.personal { background: rgba(251,191,36,.1); color: #fbbf24; }
+    #borrower-emails-list { max-height: 500px; overflow-y: auto; }
+    #borrower-emails-list .email-row { cursor: pointer; transition: background .1s; }
+    #borrower-emails-list .email-row:hover { background: rgba(24,24,27,.8); }
 
     /* Detail pane */
     .email-detail-wrap { padding: 24px 32px; max-width: 100%; }
@@ -2450,6 +2455,17 @@
           </div>
         </div>
 
+        <div class="card" id="borrower-emails-card">
+          <div class="detail-section-label" style="display:flex;align-items:center;gap:8px;">
+            Related Emails
+            <button class="btn-add" style="font-size:11px;padding:4px 10px;" onclick="loadBorrowerEmails()">Search</button>
+            <input class="inp-sm" id="borrower-email-search" placeholder="Search name..." value="${esc(p.name)}" style="max-width:200px;font-size:12px;" onkeydown="if(event.key==='Enter')loadBorrowerEmails()">
+          </div>
+          <div id="borrower-emails-list" style="margin-top:8px;">
+            <div class="empty">Click Search to find emails related to this borrower</div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="detail-section-label">Add Task to ${esc(p.name)}</div>
           <div class="add-row">
@@ -2496,6 +2512,71 @@
       });
       projectDetail.notes = notes;
       projectDetail.ethos = ethos;
+    }
+
+    /* ── Borrower / CRM email search in project detail ────────── */
+    let borrowerEmailPageToken = null;
+    async function loadBorrowerEmails(append = false) {
+      const listEl = document.getElementById("borrower-emails-list");
+      if (!listEl) return;
+      const searchInput = document.getElementById("borrower-email-search");
+      const query = searchInput?.value?.trim() || "";
+      if (!query) return;
+      if (!append) { listEl.innerHTML = '<div class="email-body-loading">Searching emails...</div>'; borrowerEmailPageToken = null; }
+      try {
+        let url = `/api/projects/${activeProjectId}/emails?q=${encodeURIComponent(query)}`;
+        if (borrowerEmailPageToken) url += `&page=${borrowerEmailPageToken}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        borrowerEmailPageToken = data.nextPageToken || null;
+        if (!data.emails?.length && !append) {
+          listEl.innerHTML = '<div class="empty">No emails found for this borrower</div>';
+          return;
+        }
+        const rows = (data.emails || []).map(e => {
+          const isWork = isWorkEmail(e.to) || isWorkEmail(e.fromEmail) || isWorkEmail(e.from);
+          return `<div class="email-row" style="padding:8px 12px;border-radius:6px;margin-bottom:2px;" onclick="openEmailFromProject('${e.id}', '${e.threadId}')">
+            ${emailAvatarHtml(e.from, 28)}
+            <div class="email-row-content">
+              <div class="email-row-top">
+                <span class="email-row-from">${esc(e.from)}</span>
+                <span class="email-row-time">${formatEmailDate(e.date)}</span>
+              </div>
+              <div class="email-row-subject">${esc(e.subject)}</div>
+              <div class="email-row-snippet">${esc(e.snippet)}</div>
+              <div class="email-row-badges">
+                ${isWork ? '<span class="email-row-badge work">Anchor</span>' : ''}
+                ${e.unread ? '<span class="email-row-badge">Unread</span>' : ''}
+              </div>
+            </div>
+          </div>`;
+        }).join("");
+        if (append) {
+          // Remove old load-more button and append
+          const oldBtn = listEl.querySelector(".email-load-more");
+          if (oldBtn) oldBtn.remove();
+          listEl.insertAdjacentHTML("beforeend", rows);
+        } else {
+          listEl.innerHTML = rows;
+        }
+        if (borrowerEmailPageToken) {
+          listEl.insertAdjacentHTML("beforeend", '<div class="email-load-more" onclick="loadBorrowerEmails(true)">Load more...</div>');
+        }
+      } catch {
+        if (!append) listEl.innerHTML = '<div class="empty">Failed to search emails</div>';
+      }
+    }
+
+    function openEmailFromProject(msgId, threadId) {
+      // Switch to email tab and open this message
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+      document.querySelector(".tab[data-tab='email']").classList.add("active");
+      document.getElementById("sec-email").classList.add("active");
+      loadEmailLabels();
+      selectedEmailId = msgId;
+      if (threadId) renderThreadView(threadId, msgId);
+      else renderSingleEmailDetail(msgId);
     }
 
     async function addDoc() {
@@ -4710,6 +4791,14 @@
       { id: "TRASH", name: "Trash", icon: "🗑" },
     ];
 
+    // Work email detection
+    const WORK_EMAIL_DOMAINS = ["mychomeloans.com", "mychomeloans"];
+    function isWorkEmail(str) {
+      if (!str) return false;
+      const lower = str.toLowerCase();
+      return WORK_EMAIL_DOMAINS.some(d => lower.includes(d));
+    }
+
     // Avatar color from name
     function emailAvatarColor(name) {
       const colors = ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#ef4444","#06b6d4","#6366f1","#f97316","#14b8a6"];
@@ -4862,6 +4951,10 @@
 
       listEl.innerHTML = folderEmails.map(e => {
         const hasAttachment = e.snippet && /attach/i.test(e.snippet);
+        const isWork = isWorkEmail(e.to) || isWorkEmail(e.fromEmail) || isWorkEmail(e.from);
+        const badges = [];
+        if (isWork) badges.push('<span class="email-row-badge work">Anchor</span>');
+        if (hasAttachment) badges.push('<span class="email-row-badge">📎 Attachment</span>');
         return `
         <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}', '${e.threadId}')">
           <span class="email-star ${e.starred ? 'starred' : ''}" onclick="event.stopPropagation();toggleStar('${e.id}', ${!e.starred})" title="${e.starred ? 'Unstar' : 'Star'}">★</span>
@@ -4873,7 +4966,7 @@
             </div>
             <div class="email-row-subject">${esc(e.subject)}</div>
             <div class="email-row-snippet">${esc(e.snippet)}</div>
-            ${hasAttachment ? `<div class="email-row-badges"><span class="email-row-badge">📎 Attachment</span></div>` : ""}
+            ${badges.length ? `<div class="email-row-badges">${badges.join("")}</div>` : ""}
           </div>
         </div>`;
       }).join("");

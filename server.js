@@ -2074,6 +2074,21 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── GMAIL: Borrower/project email search (CRM) ──────────── */
+    const borrowerEmailMatch = urlPath.match(/^\/api\/projects\/([^/]+)\/emails$/);
+    if (borrowerEmailMatch && req.method === "GET") {
+      const projectId = borrowerEmailMatch[1];
+      const p = parseProjects().find(p => p.id === projectId);
+      if (!p) return json(res, 404, { error: "Project not found" });
+      const searchName = url.searchParams.get("q") || p.name;
+      const pageToken = url.searchParams.get("page") || "";
+      // Search Gmail for emails matching the borrower/project name
+      const query = `"${searchName}"`;
+      const result = await gmailListMessages(null, pageToken || undefined, 25, query);
+      if (!result) return json(res, 200, { emails: [], connected: false });
+      return json(res, 200, { emails: result.emails, nextPageToken: result.nextPageToken, projectName: p.name });
+    }
+
     /* ── GOALS API ──────────────────────────────────────────────── */
     if (urlPath === "/api/goals" && req.method === "GET") {
       const goals = readGoals();
