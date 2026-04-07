@@ -5494,12 +5494,43 @@
             <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px;">Your Signature</label>
             <div id="sig-editor" contenteditable="true" style="width:100%;min-height:150px;background:#fff;border:1px solid #27272a;color:#000;border-radius:8px;padding:16px;font-family:Arial,sans-serif;font-size:14px;outline:none;overflow-y:auto;">${sigData.html || ""}</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button class="compose-send-btn" onclick="saveSignature()">Save Signature</button>
+            <label class="email-action-btn" style="cursor:pointer;">
+              🖼 Insert Image
+              <input type="file" accept="image/*" style="display:none;" onchange="insertSigImage(this)">
+            </label>
+            <button class="email-action-btn" onclick="insertSigImageUrl()">🔗 Image URL</button>
             <button class="email-action-btn" onclick="document.getElementById('sig-editor').innerHTML=''">Clear</button>
             <span id="sig-saved-msg" style="display:none;color:#34d399;font-size:13px;">Saved!</span>
           </div>
         </div>`;
+    }
+
+    function insertSigImage(input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const editor = document.getElementById("sig-editor");
+        if (editor) {
+          editor.focus();
+          const img = `<img src="${reader.result}" style="max-width:400px;height:auto;">`;
+          document.execCommand("insertHTML", false, img);
+        }
+      };
+      reader.readAsDataURL(file);
+      input.value = "";
+    }
+
+    function insertSigImageUrl() {
+      const url = prompt("Paste image URL:");
+      if (!url) return;
+      const editor = document.getElementById("sig-editor");
+      if (editor) {
+        editor.focus();
+        document.execCommand("insertHTML", false, `<img src="${url}" style="max-width:400px;height:auto;">`);
+      }
     }
 
     async function saveSignature() {
