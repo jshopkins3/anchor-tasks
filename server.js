@@ -662,8 +662,8 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
       const boundary = `----=${crypto.randomBytes(12).toString("hex")}`;
       const sigPlain = signature.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
       const textContent = sigPlain ? `${plainBody}\r\n\r\n--\r\n${sigPlain}` : plainBody;
-      const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>\r\n");
-      const htmlContent = `<div>${bodyHtml || escapedBody}</div><br>\r\n${signature}`;
+      const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
+      const htmlContent = `<div dir="ltr">${bodyHtml || escapedBody}</div><br><div class="gmail_signature">${signature}</div>`;
       rawLines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
       rawLines.push("");
       rawLines.push(`--${boundary}`);
