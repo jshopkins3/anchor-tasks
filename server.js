@@ -1788,11 +1788,15 @@ const server = http.createServer(async (req, res) => {
       if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
         return json(res, 500, { error: "Google OAuth not configured" });
       }
-      // Save existing refresh_token before deleting, in case Google doesn't issue a new one
+      // Save existing refresh_token before revoking, in case Google doesn't issue a new one
       let savedRefreshToken = null;
       try {
         const existing = loadGCalToken();
         if (existing?.refresh_token) savedRefreshToken = existing.refresh_token;
+        // Revoke the old token so Google forces full re-consent
+        if (existing?.access_token) {
+          fetch(`https://oauth2.googleapis.com/revoke?token=${existing.access_token}`, { method: "POST" }).catch(() => {});
+        }
       } catch {}
       try { if (fs.existsSync(GCAL_TOKEN_FILE)) fs.unlinkSync(GCAL_TOKEN_FILE); } catch {}
       // Stash refresh token in memory for the callback
@@ -1807,6 +1811,7 @@ const server = http.createServer(async (req, res) => {
         scope: GCAL_SCOPES,
         access_type: "offline",
         prompt: "consent",
+        include_granted_scopes: "true",
       }).toString();
       res.writeHead(302, { Location: authUrl });
       return res.end();
