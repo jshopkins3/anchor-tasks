@@ -644,9 +644,12 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
   try {
     // Fetch Gmail signature and append
     const plainBody = body || "";
+    // Use local signature from app settings (not Gmail API)
     let signature = "";
-    try { signature = await gmailGetSignature(); } catch {}
-    console.log("[gmail-send] Body length:", plainBody.length, "Signature length:", signature.length);
+    try {
+      const sigData = JSON.parse(fs.readFileSync(EMAIL_SIGNATURE_FILE, "utf8"));
+      signature = sigData.html || "";
+    } catch {}
     const rawLines = [];
     rawLines.push(`From: me`);
     if (to) rawLines.push(`To: ${to}`);

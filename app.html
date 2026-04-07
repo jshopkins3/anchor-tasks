@@ -1392,6 +1392,20 @@
     }
     .compose-field-chips input::placeholder { color: #3f3f46; }
 
+    /* Multi-select */
+    .email-checkbox { flex-shrink: 0; width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer; margin-top: 2px; }
+    .email-bulk-bar {
+      display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+      background: #1a1a2e; border-bottom: 1px solid #27272a; position: sticky; top: 48px; z-index: 1;
+    }
+    .email-bulk-bar span { font-size: 12px; color: #93c5fd; font-weight: 600; }
+    .email-bulk-btn {
+      background: #18181b; border: 1px solid #27272a; color: #a1a1aa; border-radius: 6px;
+      padding: 4px 10px; font-size: 11px; cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    .email-bulk-btn:hover { border-color: #3f3f46; color: #e4e4e7; }
+    .email-bulk-btn.danger:hover { border-color: #ef4444; color: #ef4444; }
+
     /* Load more */
     .email-load-more {
       display: flex; align-items: center; justify-content: center; padding: 16px;
@@ -1684,6 +1698,12 @@
         <div class="email-folder-sidebar" id="email-folder-sidebar">
           <button class="email-compose-btn" onclick="openCompose()">✏ Compose</button>
           <div id="email-folder-list"></div>
+          <div style="margin-top:auto;padding:8px 12px;border-top:1px solid #27272a;">
+            <button class="email-folder-item" onclick="openSignatureEditor()" style="border:none;width:100%;text-align:left;background:none;font-family:inherit;cursor:pointer;">
+              <span class="email-folder-icon">✍</span>
+              <span class="email-folder-name">Signature</span>
+            </button>
+          </div>
         </div>
         <div class="email-resize-handle" id="email-sidebar-resize-handle"></div>
         <div class="email-list-pane" id="email-list-pane">
@@ -4745,6 +4765,7 @@
     let allLabels = [];
     let emailSearchQuery = "";
     let emailSortBy = "date";
+    let selectedEmailIds = new Set();
     let composeState = null; // { mode, to, cc, bcc, subject, body, threadId, inReplyTo, references }
 
     // System folder definitions
@@ -4922,14 +4943,30 @@
         return;
       }
 
-      listEl.innerHTML = folderEmails.map(e => {
+      // Bulk action bar
+      const bulkBar = selectedEmailIds.size > 0
+        ? `<div class="email-bulk-bar">
+            <input type="checkbox" class="email-checkbox" ${selectedEmailIds.size === folderEmails.length ? "checked" : ""} onchange="toggleSelectAll(this.checked)">
+            <span>${selectedEmailIds.size} selected</span>
+            <button class="email-bulk-btn" onclick="bulkArchive()">📥 Archive</button>
+            <button class="email-bulk-btn" onclick="bulkMarkRead()">✓ Read</button>
+            <button class="email-bulk-btn danger" onclick="bulkDelete()">🗑 Delete</button>
+            <button class="email-bulk-btn" onclick="selectedEmailIds.clear();renderEmailList()">Cancel</button>
+          </div>`
+        : `<div class="email-bulk-bar" style="padding:4px 16px;">
+            <input type="checkbox" class="email-checkbox" onchange="toggleSelectAll(this.checked)" title="Select all">
+          </div>`;
+
+      listEl.innerHTML = bulkBar + folderEmails.map(e => {
         const hasAttachment = e.snippet && /attach/i.test(e.snippet);
         const isWork = isWorkEmail(e.to) || isWorkEmail(e.fromEmail) || isWorkEmail(e.from);
+        const checked = selectedEmailIds.has(e.id);
         const badges = [];
         if (isWork) badges.push('<span class="email-row-badge work">Anchor</span>');
         if (hasAttachment) badges.push('<span class="email-row-badge">📎 Attachment</span>');
         return `
         <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}', '${e.threadId}')">
+          <input type="checkbox" class="email-checkbox" ${checked ? "checked" : ""} onclick="event.stopPropagation();toggleEmailCheck('${e.id}')" >
           <span class="email-star ${e.starred ? 'starred' : ''}" onclick="event.stopPropagation();toggleStar('${e.id}', ${!e.starred})" title="${e.starred ? 'Unstar' : 'Star'}">★</span>
           ${emailAvatarHtml(e.from)}
           <div class="email-row-content">
@@ -4956,6 +4993,45 @@
     }
 
     /* ── Star toggle ──────────────────────────────────────────── */
+    /* ── Multi-select & bulk actions ─────────────────────────── */
+    function toggleEmailCheck(id) {
+      if (selectedEmailIds.has(id)) selectedEmailIds.delete(id);
+      else selectedEmailIds.add(id);
+      renderEmailList();
+    }
+    function toggleSelectAll(checked) {
+      if (checked) folderEmails.forEach(e => selectedEmailIds.add(e.id));
+      else selectedEmailIds.clear();
+      renderEmailList();
+    }
+    async function bulkArchive() {
+      const ids = [...selectedEmailIds];
+      await Promise.all(ids.map(id => fetch(`/api/gmail-archive/${id}`, { method: "POST" })));
+      folderEmails = folderEmails.filter(e => !selectedEmailIds.has(e.id));
+      inboxEmails = inboxEmails.filter(e => !selectedEmailIds.has(e.id));
+      selectedEmailIds.clear();
+      renderEmailList();
+      updateEmailTabBadge();
+    }
+    async function bulkDelete() {
+      const ids = [...selectedEmailIds];
+      await Promise.all(ids.map(id => fetch(`/api/gmail-delete/${id}`, { method: "POST" })));
+      folderEmails = folderEmails.filter(e => !selectedEmailIds.has(e.id));
+      inboxEmails = inboxEmails.filter(e => !selectedEmailIds.has(e.id));
+      selectedEmailIds.clear();
+      renderEmailList();
+      updateEmailTabBadge();
+    }
+    async function bulkMarkRead() {
+      const ids = [...selectedEmailIds];
+      await Promise.all(ids.map(id => fetch(`/api/gmail-mark-read/${id}`, { method: "POST" })));
+      folderEmails.forEach(e => { if (selectedEmailIds.has(e.id)) e.unread = false; });
+      inboxEmails.forEach(e => { if (selectedEmailIds.has(e.id)) e.unread = false; });
+      selectedEmailIds.clear();
+      renderEmailList();
+      updateEmailTabBadge();
+    }
+
     async function toggleStar(msgId, starred) {
       try {
         await fetch(`/api/gmail-star/${msgId}`, {
@@ -5399,6 +5475,56 @@
     function toggleComposeMinimize() {
       const panel = document.getElementById("compose-panel");
       if (panel) panel.classList.toggle("minimized");
+    }
+
+    /* ── Signature editor ────────────────────────────────────── */
+    async function openSignatureEditor() {
+      const detailEl = document.getElementById("email-detail-pane");
+      if (!detailEl) return;
+      let sigData = { html: "", text: "" };
+      try {
+        const res = await fetch("/api/gmail-signature");
+        sigData = await res.json();
+      } catch {}
+      detailEl.innerHTML = `
+        <div style="padding:24px 32px;max-width:700px;">
+          <h2 style="color:#f4f4f5;font-size:18px;margin:0 0 16px;">Email Signature</h2>
+          <p style="color:#71717a;font-size:13px;margin-bottom:16px;">This signature will be appended to all emails you send from Anchor Tasks.</p>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px;">HTML Signature</label>
+            <textarea id="sig-html-editor" style="width:100%;min-height:200px;background:#18181b;border:1px solid #27272a;color:#e4e4e7;border-radius:8px;padding:12px;font-family:monospace;font-size:12px;resize:vertical;">${esc(sigData.html || "")}</textarea>
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px;">Preview</label>
+            <div id="sig-preview" style="background:#fff;border-radius:8px;padding:16px;min-height:60px;">${sigData.html || '<span style="color:#999;">No signature set</span>'}</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="compose-send-btn" onclick="saveSignature()">Save Signature</button>
+            <button class="email-action-btn" onclick="document.getElementById('sig-html-editor').value='';document.getElementById('sig-preview').innerHTML='<span style=color:#999>No signature</span>'">Clear</button>
+          </div>
+          <div id="sig-saved-msg" style="display:none;color:#34d399;font-size:13px;margin-top:8px;">Signature saved!</div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #27272a;">
+            <p style="color:#52525b;font-size:12px;">Tip: Paste your HTML signature from Gmail or your email client. You can also use basic HTML tags for formatting.</p>
+          </div>
+        </div>`;
+      // Live preview
+      document.getElementById("sig-html-editor").addEventListener("input", e => {
+        document.getElementById("sig-preview").innerHTML = e.target.value || '<span style="color:#999;">No signature set</span>';
+      });
+    }
+
+    async function saveSignature() {
+      const html = document.getElementById("sig-html-editor")?.value || "";
+      const text = html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
+      try {
+        await fetch("/api/gmail-signature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ html, text }),
+        });
+        const msg = document.getElementById("sig-saved-msg");
+        if (msg) { msg.style.display = "block"; setTimeout(() => msg.style.display = "none", 2500); }
+      } catch {}
     }
 
     function closeCompose() {
