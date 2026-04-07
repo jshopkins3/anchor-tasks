@@ -647,28 +647,40 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     try { signature = await gmailGetSignature(); } catch {}
 
     const plainBody = body || "";
-    const boundary = `boundary_${crypto.randomBytes(16).toString("hex")}`;
-    const mimeHeaders = [`MIME-Version: 1.0`];
-    if (to) mimeHeaders.push(`To: ${to}`);
-    if (cc) mimeHeaders.push(`Cc: ${cc}`);
-    if (bcc) mimeHeaders.push(`Bcc: ${bcc}`);
-    mimeHeaders.push(`Subject: ${subject || ""}`);
-    if (inReplyTo) mimeHeaders.push(`In-Reply-To: ${inReplyTo}`);
-    if (references) mimeHeaders.push(`References: ${references}`);
+    const rawLines = [];
+    rawLines.push(`From: me`);
+    if (to) rawLines.push(`To: ${to}`);
+    if (cc) rawLines.push(`Cc: ${cc}`);
+    if (bcc) rawLines.push(`Bcc: ${bcc}`);
+    rawLines.push(`Subject: ${subject || ""}`);
+    if (inReplyTo) rawLines.push(`In-Reply-To: ${inReplyTo}`);
+    if (references) rawLines.push(`References: ${references}`);
+    rawLines.push(`MIME-Version: 1.0`);
 
     let rawEmail;
     if (signature) {
-      // Multipart with HTML signature
+      const boundary = `----=${crypto.randomBytes(12).toString("hex")}`;
       const sigPlain = signature.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
-      const textPart = sigPlain ? `${plainBody}\n\n--\n${sigPlain}` : plainBody;
-      const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
-      const htmlPart = `<div>${bodyHtml || escapedBody}</div><br>${signature}`;
-      mimeHeaders.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
-      rawEmail = [...mimeHeaders, "", `--${boundary}`, `Content-Type: text/plain; charset=utf-8`, "", textPart, `--${boundary}`, `Content-Type: text/html; charset=utf-8`, "", htmlPart, `--${boundary}--`].join("\r\n");
+      const textContent = sigPlain ? `${plainBody}\r\n\r\n--\r\n${sigPlain}` : plainBody;
+      const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>\r\n");
+      const htmlContent = `<div>${bodyHtml || escapedBody}</div><br>\r\n${signature}`;
+      rawLines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+      rawLines.push("");
+      rawLines.push(`--${boundary}`);
+      rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
+      rawLines.push("");
+      rawLines.push(textContent);
+      rawLines.push(`--${boundary}`);
+      rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
+      rawLines.push("");
+      rawLines.push(htmlContent);
+      rawLines.push(`--${boundary}--`);
+      rawEmail = rawLines.join("\r\n");
     } else {
-      // Plain text, no signature
-      mimeHeaders.push(`Content-Type: text/plain; charset=utf-8`);
-      rawEmail = [...mimeHeaders, "", plainBody].join("\r\n");
+      rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
+      rawLines.push("");
+      rawLines.push(plainBody);
+      rawEmail = rawLines.join("\r\n");
     }
     const encoded = Buffer.from(rawEmail).toString("base64url");
     const payload = { raw: encoded };
