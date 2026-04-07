@@ -2457,6 +2457,22 @@
         </div>
 
         <div class="card">
+          <div class="detail-section-label">Team Members</div>
+          <div id="detail-members-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+            ${(p.members || []).map(m => `
+              <span style="display:inline-flex;align-items:center;gap:4px;background:#1a1a2e;border:1px solid #27272a;border-radius:14px;padding:4px 10px 4px 12px;font-size:12px;color:#93c5fd;">
+                ${esc(m)}
+                <button onclick="removeMember('${esc(m)}')" style="background:none;border:none;color:#52525b;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;" title="Remove">✕</button>
+              </span>
+            `).join("") || '<span style="font-size:12px;color:#52525b;">No members assigned</span>'}
+          </div>
+          <div class="add-row" style="margin-bottom:0;">
+            <input class="inp-title" id="detail-add-member" placeholder="Email address..." style="max-width:300px;" onkeydown="if(event.key==='Enter')addMember()" />
+            <button class="btn-add" onclick="addMember()">Add Member</button>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="detail-section-label">Documents & Resources</div>
           <div id="detail-docs-list">
             ${(projectDetail.docs || []).map((d, i) => `
@@ -2524,6 +2540,38 @@
         titleInput.addEventListener("keydown", e => { if (e.key === "Enter") addDetailTask(); });
         titleInput.focus();
       }
+    }
+
+    async function addMember() {
+      const input = document.getElementById("detail-add-member");
+      const email = input?.value?.trim().toLowerCase();
+      if (!email || !email.includes("@")) return;
+      const p = projects.find(p => p.id === activeProjectId);
+      if (!p) return;
+      const members = [...(p.members || [])];
+      if (members.includes(email)) { input.value = ""; return; }
+      members.push(email);
+      await fetch(`/api/projects/${activeProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ members }),
+      });
+      p.members = members;
+      input.value = "";
+      renderDetail();
+    }
+
+    async function removeMember(email) {
+      const p = projects.find(p => p.id === activeProjectId);
+      if (!p) return;
+      const members = (p.members || []).filter(m => m !== email);
+      await fetch(`/api/projects/${activeProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ members }),
+      });
+      p.members = members;
+      renderDetail();
     }
 
     async function saveDetailMeta() {
