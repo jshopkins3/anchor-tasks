@@ -1172,7 +1172,31 @@ const server = http.createServer(async (req, res) => {
   try {
     /* ── Health ─────────────────────────────────────────────────────── */
     if (urlPath === "/api/health") {
-      return json(res, 200, { ok: true, app: "anchor-tasks", uptime: process.uptime() });
+      return json(res, 200, { ok: true, app: "anchor-tasks", uptime: process.uptime(), ownerEmail: OWNER_EMAIL || "(not set)" });
+    }
+
+    // Debug: list data directory contents (temp - remove later)
+    if (urlPath === "/api/debug-files" && req.method === "GET") {
+      const session = getSession(req);
+      if (!session) return json(res, 401, { error: "Not authenticated" });
+      const listDir = (dir, prefix = "") => {
+        const result = [];
+        try {
+          const items = fs.readdirSync(dir);
+          for (const item of items) {
+            const full = path.join(dir, item);
+            const stat = fs.statSync(full);
+            if (stat.isDirectory()) {
+              result.push({ path: prefix + item + "/", type: "dir" });
+              result.push(...listDir(full, prefix + item + "/"));
+            } else {
+              result.push({ path: prefix + item, type: "file", size: stat.size });
+            }
+          }
+        } catch {}
+        return result;
+      };
+      return json(res, 200, { dataDir: DATA_DIR, ownerEmail: OWNER_EMAIL, files: listDir(DATA_DIR) });
     }
 
     /* ── Auth config (public — login page needs client ID) ─────────── */
