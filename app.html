@@ -1682,6 +1682,7 @@
           <button class="email-compose-btn" onclick="openCompose()">✏ Compose</button>
           <div id="email-folder-list"></div>
         </div>
+        <div class="email-resize-handle" id="email-sidebar-resize-handle"></div>
         <div class="email-list-pane" id="email-list-pane">
           <div class="email-list-toolbar">
             <span class="email-toolbar-title" id="email-toolbar-title">Inbox</span>
@@ -5506,6 +5507,32 @@
       });
     }
     setupEmailResize();
+
+    // Sidebar resize
+    (function setupSidebarResize() {
+      const handle = document.getElementById("email-sidebar-resize-handle");
+      const sidebar = document.getElementById("email-folder-sidebar");
+      if (!handle || !sidebar) return;
+      let dragging = false, startX = 0, startW = 0;
+      handle.addEventListener("mousedown", e => {
+        dragging = true; startX = e.clientX; startW = sidebar.offsetWidth;
+        handle.classList.add("dragging");
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+      });
+      document.addEventListener("mousemove", e => {
+        if (!dragging) return;
+        const w = Math.min(Math.max(startW + (e.clientX - startX), 100), 400);
+        sidebar.style.width = w + "px";
+      });
+      document.addEventListener("mouseup", () => {
+        if (!dragging) return;
+        dragging = false;
+        handle.classList.remove("dragging");
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      });
+    })();
 
     /* ── Keyboard shortcuts for email ─────────────────────────── */
     document.addEventListener("keydown", e => {
