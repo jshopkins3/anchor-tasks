@@ -936,7 +936,7 @@ function saveJournal(entries) {
 }
 
 /* ─── Auth bypass paths ──────────────────────────────────────────────── */
-const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico", "/api/gcal-callback", "/manifest.json", "/sw.js", "/icon.svg", "/icon-192.png", "/icon-512.png", "/dan-icon-180.png", "/dan-avatar.svg"];
+const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico", "/api/gcal-callback", "/manifest.json", "/sw.js", "/icon.svg", "/icon-192.png", "/icon-512.png", "/dan-icon-180.png", "/dan-avatar.svg", "/api/signature-image-file"];
 
 /* ─── HTTP server ────────────────────────────────────────────────────── */
 const server = http.createServer(async (req, res) => {
@@ -2192,6 +2192,39 @@ const server = http.createServer(async (req, res) => {
     }
 
     /* ── GMAIL: Email signature ────────────────────────────────── */
+    /* ── Signature image upload ───────────────────────────────── */
+    if (urlPath === "/api/signature-image" && req.method === "POST") {
+      try {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const buf = Buffer.concat(chunks);
+        const contentType = req.headers["content-type"] || "image/png";
+        const ext = contentType.includes("jpeg") || contentType.includes("jpg") ? ".jpg" : contentType.includes("gif") ? ".gif" : ".png";
+        const filename = `signature-img${ext}`;
+        const filepath = path.join(DATA_DIR, filename);
+        fs.writeFileSync(filepath, buf);
+        console.log("[signature] Image uploaded:", filename, buf.length, "bytes");
+        return json(res, 200, { url: `/api/signature-image-file`, size: buf.length });
+      } catch (e) {
+        console.error("[signature] Upload failed:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    if (urlPath === "/api/signature-image-file" && req.method === "GET") {
+      const pngPath = path.join(DATA_DIR, "signature-img.png");
+      const jpgPath = path.join(DATA_DIR, "signature-img.jpg");
+      const gifPath = path.join(DATA_DIR, "signature-img.gif");
+      let filepath, mime;
+      if (fs.existsSync(pngPath)) { filepath = pngPath; mime = "image/png"; }
+      else if (fs.existsSync(jpgPath)) { filepath = jpgPath; mime = "image/jpeg"; }
+      else if (fs.existsSync(gifPath)) { filepath = gifPath; mime = "image/gif"; }
+      else return json(res, 404, { error: "No signature image" });
+      const buf = fs.readFileSync(filepath);
+      res.writeHead(200, { "Content-Type": mime, "Content-Length": buf.length, "Cache-Control": "public, max-age=86400" });
+      return res.end(buf);
+    }
+
     if (urlPath === "/api/gmail-signature" && req.method === "GET") {
       try {
         const sig = JSON.parse(fs.readFileSync(EMAIL_SIGNATURE_FILE, "utf8"));

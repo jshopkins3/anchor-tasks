@@ -5513,19 +5513,31 @@
         </div>`;
     }
 
-    function insertSigImage(input) {
+    async function insertSigImage(input) {
       const file = input.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const editor = document.getElementById("sig-editor");
-        if (editor) {
-          editor.focus();
-          const img = `<img src="${reader.result}" style="max-width:400px;height:auto;">`;
-          document.execCommand("insertHTML", false, img);
+      try {
+        // Upload to server so it's hosted as a URL
+        const resp = await fetch("/api/signature-image", {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        const data = await resp.json();
+        if (data.url) {
+          const editor = document.getElementById("sig-editor");
+          if (editor) {
+            editor.focus();
+            // Use full URL so it works in emails
+            const origin = window.location.origin;
+            document.execCommand("insertHTML", false, `<img src="${origin}${data.url}" style="max-width:400px;height:auto;">`);
+          }
+        } else {
+          alert("Upload failed: " + (data.error || "Unknown error"));
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (e) {
+        alert("Upload failed: " + e.message);
+      }
       input.value = "";
     }
 
