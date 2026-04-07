@@ -645,7 +645,8 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     // Fetch Gmail signature and append
     let signature = "";
     try { signature = await gmailGetSignature(); } catch {}
-    console.log("[gmail-send] Signature length:", signature.length, "first 200 chars:", signature.substring(0, 200));
+    console.log("[gmail-send] Body length:", plainBody.length, "Body preview:", JSON.stringify(plainBody.substring(0, 100)));
+    console.log("[gmail-send] Signature length:", signature.length);
 
     const plainBody = body || "";
     const rawLines = [];
@@ -661,7 +662,9 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     // Build the raw email using base64-encoded parts to avoid boundary conflicts
     const boundary = `000000000000${crypto.randomBytes(12).toString("hex")}`;
     const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
-    const htmlContent = signature ? (escapedBody + "<br><br>" + signature) : escapedBody;
+    const htmlContent = signature
+      ? `<div style="font-family:Arial,sans-serif;font-size:14px;color:#000;">${escapedBody}</div><br><table cellpadding="0" cellspacing="0" style="border-top:1px solid #ccc;padding-top:10px;margin-top:10px;"><tr><td>${signature}</td></tr></table>`
+      : escapedBody;
     const textPart = Buffer.from(plainBody, "utf8").toString("base64");
     const htmlPart = Buffer.from(htmlContent, "utf8").toString("base64");
 
