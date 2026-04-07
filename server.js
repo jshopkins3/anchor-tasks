@@ -1897,6 +1897,13 @@ const server = http.createServer(async (req, res) => {
         urgent: !!body.urgent,
         important: !!body.important,
         linkedGoal: String(body.linkedGoal || "").substring(0, 50),
+        todayFocus: !!body.todayFocus,
+        todayOrder: parseInt(body.todayOrder) || 0,
+        calEventId: "",
+        scheduledStart: "",
+        emailId: String(body.emailId || "").substring(0, 200),
+        emailSubject: String(body.emailSubject || "").substring(0, 500),
+        assigneeEmail: String(body.assigneeEmail || "").substring(0, 200),
         done: false,
       };
       if (!task.title) return json(res, 400, { error: "Title required" });
