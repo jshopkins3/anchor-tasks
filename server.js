@@ -9,6 +9,11 @@ const webpush = require("web-push");
 const PORT = process.env.PORT || 8080;
 const BASE = __dirname;
 const DATA_DIR = path.join(BASE, "data");
+const SHARED_DIR = path.join(DATA_DIR, "shared");
+const USERS_DIR = path.join(DATA_DIR, "users");
+const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+
+// Legacy flat-file paths (used as fallbacks during migration)
 const TASKS_FILE = path.join(DATA_DIR, "tasks.md");
 const PROJECTS_FILE = path.join(DATA_DIR, "projects.md");
 const GOALS_FILE = path.join(DATA_DIR, "goals.json");
@@ -17,6 +22,40 @@ const GCAL_TOKEN_FILE = path.join(DATA_DIR, "gcal-token.json");
 const EMAIL_CONTACTS_FILE = path.join(DATA_DIR, "email-contacts.json");
 const EMAIL_SIGNATURE_FILE = path.join(DATA_DIR, "email-signature.json");
 const PUSH_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "push-subscriptions.json");
+
+/* ─── Multi-user helpers ─────────────────────────────────────────────── */
+const OWNER_EMAIL = (process.env.OWNER_EMAIL || "").toLowerCase() ||
+  ((process.env.ALLOWED_EMAILS || "").split(",")[0] || "").trim().toLowerCase();
+
+function getUserDir(email) {
+  return path.join(USERS_DIR, email.toLowerCase().replace(/[^a-z0-9@._-]/g, ""));
+}
+
+function ensureUserDir(email) {
+  const dir = getUserDir(email);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "tasks.md"), "# Tasks\n\n## Active\n\n## Completed\n", "utf8");
+    fs.writeFileSync(path.join(dir, "goals.json"), "[]", "utf8");
+    fs.writeFileSync(path.join(dir, "journal.json"), "[]", "utf8");
+    console.log(`[multiuser] Created workspace for ${email}`);
+  }
+  return dir;
+}
+
+// User-scoped file paths
+function userFile(email, filename) { return path.join(getUserDir(email), filename); }
+function userTasksFile(email) { return userFile(email, "tasks.md"); }
+function userGoalsFile(email) { return userFile(email, "goals.json"); }
+function userJournalFile(email) { return userFile(email, "journal.json"); }
+function userGCalTokenFile(email) { return userFile(email, "gcal-token.json"); }
+function userEmailContactsFile(email) { return userFile(email, "email-contacts.json"); }
+function userEmailSignatureFile(email) { return userFile(email, "email-signature.json"); }
+function userPushSubsFile(email) { return userFile(email, "push-subscriptions.json"); }
+
+// Shared file paths
+function sharedProjectsFile() { return path.join(SHARED_DIR, "projects.md"); }
+function sharedProjectDetailPath(id) { return path.join(SHARED_DIR, `project-${id}.json`); }
 
 // VAPID keys for push notifications
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BObEhtMss78OTAVIU_2bq7RAom1BF5_Yh2HR444L7Mbq3hejOAGhJi2w07oKhqMS-sDGWYzuremKk8fYkvlnz0M";
@@ -46,22 +85,91 @@ const MIME = {
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || "")
   .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
-const sessions = new Map(); // sessionId → { email, name, picture, createdAt }
 const IS_PRODUCTION = !!process.env.RAILWAY_ENVIRONMENT;
 
-/* ─── Ensure data dir + seed files exist ─────────────────────────────── */
+// Persistent sessions (survive server restarts)
+function loadSessions() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf8"));
+    const now = Date.now();
+    const valid = {};
+    for (const [id, sess] of Object.entries(raw)) {
+      if (now - sess.createdAt < 7 * 24 * 60 * 60 * 1000) valid[id] = sess;
+    }
+    return new Map(Object.entries(valid));
+  } catch { return new Map(); }
+}
+function saveSessions() {
+  try { fs.writeFileSync(SESSIONS_FILE, JSON.stringify(Object.fromEntries(sessions), null, 2), "utf8"); } catch {}
+}
+const sessions = loadSessions();
+
+/* ─── Ensure data dirs + migrate to multi-user ──────────────────────── */
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(TASKS_FILE)) {
-  fs.writeFileSync(TASKS_FILE, `# Tasks\n\n## Active\n\n## Completed\n`, "utf8");
-}
-if (!fs.existsSync(PROJECTS_FILE)) {
-  fs.writeFileSync(PROJECTS_FILE, `# Projects\n\n## Active\n\n## Archived\n`, "utf8");
-}
-if (!fs.existsSync(GOALS_FILE)) {
-  fs.writeFileSync(GOALS_FILE, JSON.stringify([], null, 2), "utf8");
-}
-if (!fs.existsSync(JOURNAL_FILE)) {
-  fs.writeFileSync(JOURNAL_FILE, JSON.stringify([], null, 2), "utf8");
+if (!fs.existsSync(SHARED_DIR)) fs.mkdirSync(SHARED_DIR, { recursive: true });
+if (!fs.existsSync(USERS_DIR)) fs.mkdirSync(USERS_DIR, { recursive: true });
+
+// Migration: move existing flat files to multi-user structure
+(function migrateToMultiUser() {
+  if (!OWNER_EMAIL) return; // Can't migrate without knowing the owner
+  const ownerDir = getUserDir(OWNER_EMAIL);
+  if (fs.existsSync(ownerDir) && fs.existsSync(path.join(ownerDir, "tasks.md"))) return; // Already migrated
+
+  console.log("[migration] Migrating to multi-user for:", OWNER_EMAIL);
+  ensureUserDir(OWNER_EMAIL);
+
+  // Move per-user files to owner's directory
+  const userFiles = ["tasks.md", "goals.json", "journal.json", "notebook.json",
+    "gcal-token.json", "email-contacts.json", "email-signature.json",
+    "push-subscriptions.json", "finance.json"];
+  for (const file of userFiles) {
+    const src = path.join(DATA_DIR, file);
+    const dest = path.join(ownerDir, file);
+    if (fs.existsSync(src) && !fs.existsSync(dest)) {
+      fs.copyFileSync(src, dest);
+      console.log(`[migration] Copied ${file} -> users/${OWNER_EMAIL}/`);
+    }
+  }
+
+  // Move shared files (projects, taglines, content)
+  const sharedFiles = ["projects.md", "taglines.json", "content-calendar.json", "content-feedback.json"];
+  for (const file of sharedFiles) {
+    const src = path.join(DATA_DIR, file);
+    const dest = path.join(SHARED_DIR, file);
+    if (fs.existsSync(src) && !fs.existsSync(dest)) {
+      fs.copyFileSync(src, dest);
+      console.log(`[migration] Copied ${file} -> shared/`);
+    }
+  }
+
+  // Move project detail files to shared
+  try {
+    const allFiles = fs.readdirSync(DATA_DIR);
+    for (const file of allFiles) {
+      if (file.startsWith("project-") && file.endsWith(".json")) {
+        const src = path.join(DATA_DIR, file);
+        const dest = path.join(SHARED_DIR, file);
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(src, dest);
+          console.log(`[migration] Copied ${file} -> shared/`);
+        }
+      }
+    }
+  } catch {}
+
+  // Move signature image if exists
+  for (const ext of [".png", ".jpg", ".gif"]) {
+    const src = path.join(DATA_DIR, `signature-img${ext}`);
+    const dest = path.join(ownerDir, `signature-img${ext}`);
+    if (fs.existsSync(src) && !fs.existsSync(dest)) fs.copyFileSync(src, dest);
+  }
+
+  console.log("[migration] Multi-user migration complete!");
+})();
+
+// Ensure shared projects file exists
+if (!fs.existsSync(sharedProjectsFile())) {
+  fs.writeFileSync(sharedProjectsFile(), "# Projects\n\n## Active\n\n## Archived\n", "utf8");
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
@@ -108,7 +216,9 @@ function json(res, status, data) {
 /* ─── Session helpers (identical to Anchor Command) ──────────────────── */
 function createSession(userData) {
   const id = crypto.randomBytes(32).toString("hex");
+  ensureUserDir(userData.email);
   sessions.set(id, { ...userData, createdAt: Date.now() });
+  saveSessions();
   console.log(`[auth] Session created for ${userData.email} (${sessions.size} active)`);
   return id;
 }
@@ -156,8 +266,10 @@ function generateId() {
   return crypto.randomBytes(4).toString("hex");
 }
 
-function parseTasks() {
-  const raw = fs.readFileSync(TASKS_FILE, "utf8");
+function parseTasks(email) {
+  const file = email ? userTasksFile(email) : TASKS_FILE;
+  if (!fs.existsSync(file)) return [];
+  const raw = fs.readFileSync(file, "utf8");
   const tasks = [];
   const lines = raw.split("\n");
   for (const line of lines) {
@@ -183,26 +295,64 @@ function parseTasks() {
       scheduledStart: parts[14] || "",
       emailId: parts[15] || "",
       emailSubject: parts[16] || "",
+      assigneeEmail: parts[17] || "",
       done,
     });
   }
   return tasks;
 }
 
-function writeTasks(tasks) {
+function writeTasks(tasks, email) {
+  const file = email ? userTasksFile(email) : TASKS_FILE;
   const active = tasks.filter(t => !t.done);
   const completed = tasks.filter(t => t.done);
-  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""} | ${t.personal ? "true" : "false"} | ${t.urgent ? "true" : "false"} | ${t.important ? "true" : "false"} | ${t.linkedGoal || ""} | ${t.todayFocus ? "true" : "false"} | ${t.todayOrder || 0} | ${t.calEventId || ""} | ${t.scheduledStart || ""} | ${t.emailId || ""} | ${t.emailSubject || ""}`;
+  const fmt = t => `- [${t.done ? "x" : " "}] ${t.id} | ${t.title} | ${t.assignee} | ${t.due} | ${t.priority} | ${t.project} | ${t.status || ""} | ${t.personal ? "true" : "false"} | ${t.urgent ? "true" : "false"} | ${t.important ? "true" : "false"} | ${t.linkedGoal || ""} | ${t.todayFocus ? "true" : "false"} | ${t.todayOrder || 0} | ${t.calEventId || ""} | ${t.scheduledStart || ""} | ${t.emailId || ""} | ${t.emailSubject || ""} | ${t.assigneeEmail || ""}`;
   const md = [
     "# Tasks", "",
     "## Active", ...active.map(fmt), "",
     "## Completed", ...completed.map(fmt), "",
   ].join("\n");
-  fs.writeFileSync(TASKS_FILE, md, "utf8");
+  fs.writeFileSync(file, md, "utf8");
+}
+
+// Get tasks assigned TO this user from other users
+function getAssignedTasks(email) {
+  if (!fs.existsSync(USERS_DIR)) return [];
+  const assigned = [];
+  try {
+    const userDirs = fs.readdirSync(USERS_DIR);
+    for (const userEmail of userDirs) {
+      if (userEmail === email.toLowerCase()) continue;
+      const tasks = parseTasks(userEmail);
+      for (const t of tasks) {
+        if (t.assigneeEmail && t.assigneeEmail.toLowerCase() === email.toLowerCase()) {
+          assigned.push({ ...t, _fromUser: userEmail });
+        }
+      }
+    }
+  } catch {}
+  return assigned;
+}
+
+// Get all tasks for a specific project across all users
+function getProjectTasks(projectName) {
+  if (!fs.existsSync(USERS_DIR)) return [];
+  const all = [];
+  try {
+    const userDirs = fs.readdirSync(USERS_DIR);
+    for (const userEmail of userDirs) {
+      const tasks = parseTasks(userEmail);
+      for (const t of tasks) {
+        if (t.project === projectName) all.push({ ...t, _userEmail: userEmail });
+      }
+    }
+  } catch {}
+  return all;
 }
 
 function parseProjects() {
-  const raw = fs.readFileSync(PROJECTS_FILE, "utf8");
+  const file = fs.existsSync(sharedProjectsFile()) ? sharedProjectsFile() : PROJECTS_FILE;
+  const raw = fs.readFileSync(file, "utf8");
   const projects = [];
   const lines = raw.split("\n");
   for (const line of lines) {
@@ -215,6 +365,7 @@ function parseProjects() {
       name: parts[1] || "",
       description: parts[2] || "",
       owner: parts[3] || "",
+      ownerEmail: parts[4] || "",
       archived,
     });
   }
@@ -222,29 +373,40 @@ function parseProjects() {
 }
 
 function writeProjects(projects) {
+  const file = sharedProjectsFile();
   const active = projects.filter(p => !p.archived);
   const archived = projects.filter(p => p.archived);
-  const fmt = p => `- [${p.archived ? "x" : " "}] ${p.id} | ${p.name} | ${p.description} | ${p.owner}`;
+  const fmt = p => `- [${p.archived ? "x" : " "}] ${p.id} | ${p.name} | ${p.description} | ${p.owner} | ${p.ownerEmail || ""}`;
   const md = [
     "# Projects", "",
     "## Active", ...active.map(fmt), "",
     "## Archived", ...archived.map(fmt), "",
   ].join("\n");
-  fs.writeFileSync(PROJECTS_FILE, md, "utf8");
+  fs.writeFileSync(file, md, "utf8");
 }
 
 /* ─── Goals engine ────────────────────────────────────────────────────── */
-function readGoals() {
-  try { return JSON.parse(fs.readFileSync(GOALS_FILE, "utf8")); }
+function readGoals(email) {
+  const file = email ? userGoalsFile(email) : GOALS_FILE;
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); }
   catch { return []; }
 }
 
-function writeGoals(goals) {
-  fs.writeFileSync(GOALS_FILE, JSON.stringify(goals, null, 2), "utf8");
+function writeGoals(goals, email) {
+  const file = email ? userGoalsFile(email) : GOALS_FILE;
+  fs.writeFileSync(file, JSON.stringify(goals, null, 2), "utf8");
 }
 
 /* ─── Google Calendar helpers ────────────────────────────────────────────── */
-function loadGCalToken() {
+function loadGCalToken(email) {
+  // Try user-specific token first
+  if (email) {
+    try {
+      const userFile = userGCalTokenFile(email);
+      if (fs.existsSync(userFile)) return JSON.parse(fs.readFileSync(userFile, "utf8"));
+    } catch {}
+  }
+  // Fallback to legacy flat file
   try {
     if (fs.existsSync(GCAL_TOKEN_FILE)) return JSON.parse(fs.readFileSync(GCAL_TOKEN_FILE, "utf8"));
   } catch {}
@@ -252,21 +414,22 @@ function loadGCalToken() {
   try {
     if (process.env.GCAL_TOKEN) {
       const token = JSON.parse(process.env.GCAL_TOKEN);
-      fs.writeFileSync(GCAL_TOKEN_FILE, JSON.stringify(token, null, 2));
+      const dest = email ? userGCalTokenFile(email) : GCAL_TOKEN_FILE;
+      fs.writeFileSync(dest, JSON.stringify(token, null, 2));
       console.log("[gcal] Restored token from GCAL_TOKEN env var");
       return token;
     }
   } catch {}
   return null;
 }
-function saveGCalToken(token) {
-  fs.writeFileSync(GCAL_TOKEN_FILE, JSON.stringify(token, null, 2));
-  // Log the token value so it can be set as GCAL_TOKEN env var on Railway
+function saveGCalToken(token, email) {
+  const file = email ? userGCalTokenFile(email) : GCAL_TOKEN_FILE;
+  fs.writeFileSync(file, JSON.stringify(token, null, 2));
   console.log("[gcal] TOKEN_FOR_ENV:", JSON.stringify(token));
 }
 
-async function getGCalAccessToken() {
-  const token = loadGCalToken();
+async function getGCalAccessToken(email) {
+  const token = loadGCalToken(email);
   if (!token || !token.refresh_token) return null;
   if (token.access_token && token.expires_at && Date.now() < token.expires_at - 300000) {
     return token.access_token;
@@ -287,7 +450,7 @@ async function getGCalAccessToken() {
     if (data.access_token) {
       token.access_token = data.access_token;
       token.expires_at = Date.now() + (data.expires_in || 3600) * 1000;
-      saveGCalToken(token);
+      saveGCalToken(token, email);
       return data.access_token;
     }
     console.error("[gcal] Token refresh failed:", data);
@@ -802,19 +965,20 @@ async function gmailGetLabels(forceRefresh = false) {
 }
 
 /* ─── Email contacts cache ─────────────────────────────────────────────── */
-function loadEmailContacts() {
-  try { return JSON.parse(fs.readFileSync(EMAIL_CONTACTS_FILE, "utf8")); } catch { return []; }
+function loadEmailContacts(userEmail) {
+  const file = userEmail ? userEmailContactsFile(userEmail) : EMAIL_CONTACTS_FILE;
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return []; }
 }
-function saveEmailContacts(contacts) {
-  // Keep max 500, sorted by lastUsed desc
+function saveEmailContacts(contacts, userEmail) {
+  const file = userEmail ? userEmailContactsFile(userEmail) : EMAIL_CONTACTS_FILE;
   contacts.sort((a, b) => b.lastUsed - a.lastUsed);
   if (contacts.length > 500) contacts = contacts.slice(0, 500);
-  fs.writeFileSync(EMAIL_CONTACTS_FILE, JSON.stringify(contacts, null, 2), "utf8");
+  fs.writeFileSync(file, JSON.stringify(contacts, null, 2), "utf8");
 }
-function updateEmailContact(email, name) {
+function updateEmailContact(email, name, userEmail) {
   if (!email) return;
   email = email.trim().toLowerCase();
-  const contacts = loadEmailContacts();
+  const contacts = loadEmailContacts(userEmail);
   const existing = contacts.find(c => c.email === email);
   if (existing) {
     existing.name = name || existing.name;
@@ -823,7 +987,7 @@ function updateEmailContact(email, name) {
   } else {
     contacts.push({ email, name: name || "", lastUsed: Date.now(), count: 1 });
   }
-  saveEmailContacts(contacts);
+  saveEmailContacts(contacts, userEmail);
 }
 function parseEmailAddress(str) {
   if (!str) return [];
@@ -838,11 +1002,13 @@ function parseEmailAddress(str) {
 }
 
 /* ─── Push notification helpers ─────────────────────────────────────── */
-function loadPushSubscriptions() {
-  try { return JSON.parse(fs.readFileSync(PUSH_SUBSCRIPTIONS_FILE, "utf8")); } catch { return []; }
+function loadPushSubscriptions(userEmail) {
+  const file = userEmail ? userPushSubsFile(userEmail) : PUSH_SUBSCRIPTIONS_FILE;
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return []; }
 }
-function savePushSubscriptions(subs) {
-  fs.writeFileSync(PUSH_SUBSCRIPTIONS_FILE, JSON.stringify(subs, null, 2), "utf8");
+function savePushSubscriptions(subs, userEmail) {
+  const file = userEmail ? userPushSubsFile(userEmail) : PUSH_SUBSCRIPTIONS_FILE;
+  fs.writeFileSync(file, JSON.stringify(subs, null, 2), "utf8");
 }
 async function sendPushToAll(payload) {
   const subs = loadPushSubscriptions();
@@ -908,7 +1074,11 @@ function startServerEmailPoll() {
 
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
 function projectDetailPath(id) {
-  return path.join(DATA_DIR, `project-${id}.json`);
+  const shared = sharedProjectDetailPath(id);
+  if (fs.existsSync(shared)) return shared;
+  const legacy = path.join(DATA_DIR, `project-${id}.json`);
+  if (fs.existsSync(legacy)) return legacy;
+  return shared; // New files go to shared
 }
 
 function readProjectDetail(id) {
@@ -928,11 +1098,13 @@ function deleteProjectDetail(id) {
 }
 
 /* ─── Journal helpers ────────────────────────────────────────────────── */
-function loadJournal() {
-  try { return JSON.parse(fs.readFileSync(JOURNAL_FILE, "utf8")); } catch { return []; }
+function loadJournal(email) {
+  const file = email ? userJournalFile(email) : JOURNAL_FILE;
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return []; }
 }
-function saveJournal(entries) {
-  fs.writeFileSync(JOURNAL_FILE, JSON.stringify(entries, null, 2), "utf8");
+function saveJournal(entries, email) {
+  const file = email ? userJournalFile(email) : JOURNAL_FILE;
+  fs.writeFileSync(file, JSON.stringify(entries, null, 2), "utf8");
 }
 
 /* ─── Auth bypass paths ──────────────────────────────────────────────── */
@@ -1617,12 +1789,22 @@ const server = http.createServer(async (req, res) => {
 
     /* ── TASKS API ─────────────────────────────────────────────────── */
     if (urlPath === "/api/tasks" && req.method === "GET") {
-      return json(res, 200, { tasks: parseTasks() });
+      const myTasks = parseTasks(req.session.email);
+      const assignedToMe = getAssignedTasks(req.session.email).map(t => ({ ...t, _assigned: true }));
+      return json(res, 200, { tasks: [...myTasks, ...assignedToMe] });
+    }
+
+    // Get all tasks for a specific project (across all users)
+    if (urlPath.match(/^\/api\/projects\/[^/]+\/tasks$/) && req.method === "GET") {
+      const id = urlPath.split("/")[3];
+      const project = parseProjects().find(p => p.id === id);
+      if (!project) return json(res, 404, { error: "Project not found" });
+      return json(res, 200, { tasks: getProjectTasks(project.name) });
     }
 
     if (urlPath === "/api/tasks" && req.method === "POST") {
       const body = JSON.parse(await readBody(req));
-      const tasks = parseTasks();
+      const tasks = parseTasks(req.session.email);
       const task = {
         id: generateId(),
         title: String(body.title || "").substring(0, 200),
@@ -1639,14 +1821,14 @@ const server = http.createServer(async (req, res) => {
       };
       if (!task.title) return json(res, 400, { error: "Title required" });
       tasks.push(task);
-      writeTasks(tasks);
+      writeTasks(tasks, req.session.email);
       return json(res, 201, { task });
     }
 
     if (urlPath.startsWith("/api/tasks/") && req.method === "PATCH") {
       const id = urlPath.split("/")[3];
       const body = JSON.parse(await readBody(req));
-      const tasks = parseTasks();
+      const tasks = parseTasks(req.session.email);
       const idx = tasks.findIndex(t => t.id === id);
       if (idx === -1) return json(res, 404, { error: "Task not found" });
       if (body.title !== undefined) tasks[idx].title = String(body.title).substring(0, 200);
@@ -1666,16 +1848,16 @@ const server = http.createServer(async (req, res) => {
       if (body.scheduledStart !== undefined) tasks[idx].scheduledStart = String(body.scheduledStart).substring(0, 50);
       if (body.emailId !== undefined) tasks[idx].emailId = String(body.emailId).substring(0, 200);
       if (body.emailSubject !== undefined) tasks[idx].emailSubject = String(body.emailSubject).substring(0, 500);
-      writeTasks(tasks);
+      writeTasks(tasks, req.session.email);
       return json(res, 200, { task: tasks[idx] });
     }
 
     if (urlPath.startsWith("/api/tasks/") && req.method === "DELETE") {
       const id = urlPath.split("/")[3];
-      const tasks = parseTasks();
+      const tasks = parseTasks(req.session.email);
       const filtered = tasks.filter(t => t.id !== id);
       if (filtered.length === tasks.length) return json(res, 404, { error: "Task not found" });
-      writeTasks(filtered);
+      writeTasks(filtered, req.session.email);
       return json(res, 200, { ok: true });
     }
 
@@ -1890,7 +2072,7 @@ const server = http.createServer(async (req, res) => {
     if (scheduleMatch && req.method === "POST") {
       const id = scheduleMatch[1];
       const body = JSON.parse(await readBody(req));
-      const tasks = parseTasks();
+      const tasks = parseTasks(req.session.email);
       const idx = tasks.findIndex(t => t.id === id);
       if (idx === -1) return json(res, 404, { error: "Task not found" });
       const t = tasks[idx];
@@ -1919,26 +2101,26 @@ const server = http.createServer(async (req, res) => {
       if (!evt) return json(res, 500, { error: "Failed to create calendar event" });
       tasks[idx].calEventId = evt.id;
       tasks[idx].scheduledStart = startTime || "";
-      writeTasks(tasks);
+      writeTasks(tasks, req.session.email);
       return json(res, 200, { task: tasks[idx], eventId: evt.id });
     }
 
     // Remove task from calendar
     if (scheduleMatch && req.method === "DELETE") {
       const id = scheduleMatch[1];
-      const tasks = parseTasks();
+      const tasks = parseTasks(req.session.email);
       const idx = tasks.findIndex(t => t.id === id);
       if (idx === -1) return json(res, 404, { error: "Task not found" });
       if (tasks[idx].calEventId) await gcalDeleteEvent(tasks[idx].calEventId);
       tasks[idx].calEventId = "";
       tasks[idx].scheduledStart = "";
-      writeTasks(tasks);
+      writeTasks(tasks, req.session.email);
       return json(res, 200, { task: tasks[idx] });
     }
 
     // AI Prioritize — scoring algorithm
     if (urlPath === "/api/ai-prioritize" && req.method === "GET") {
-      const tasks = parseTasks().filter(t => !t.done);
+      const tasks = parseTasks(req.session.email).filter(t => !t.done);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const scored = tasks.map(t => {
@@ -2294,13 +2476,13 @@ const server = http.createServer(async (req, res) => {
 
     /* ── GOALS API ──────────────────────────────────────────────── */
     if (urlPath === "/api/goals" && req.method === "GET") {
-      const goals = readGoals();
+      const goals = readGoals(req.session.email);
       return json(res, 200, { goals });
     }
 
     if (urlPath === "/api/goals" && req.method === "POST") {
       const body = JSON.parse(await readBody(req));
-      const goals = readGoals();
+      const goals = readGoals(req.session.email);
       const goal = {
         id: generateId(),
         title: String(body.title || "").substring(0, 200),
@@ -2312,7 +2494,7 @@ const server = http.createServer(async (req, res) => {
       };
       if (!goal.title) return json(res, 400, { error: "Title required" });
       goals.push(goal);
-      writeGoals(goals);
+      writeGoals(goals, req.session.email);
       return json(res, 201, { goal });
     }
 
@@ -2320,7 +2502,7 @@ const server = http.createServer(async (req, res) => {
     if (goalMatch && req.method === "PATCH") {
       const id = goalMatch[1];
       const body = JSON.parse(await readBody(req));
-      const goals = readGoals();
+      const goals = readGoals(req.session.email);
       const idx = goals.findIndex(g => g.id === id);
       if (idx === -1) return json(res, 404, { error: "Goal not found" });
       if (body.title !== undefined) goals[idx].title = String(body.title).substring(0, 200);
@@ -2329,16 +2511,16 @@ const server = http.createServer(async (req, res) => {
       if (body.category !== undefined && ["personal", "professional"].includes(body.category)) goals[idx].category = body.category;
       if (body.progress !== undefined) goals[idx].progress = Math.min(100, Math.max(0, parseInt(body.progress) || 0));
       if (body.linkedTasks !== undefined && Array.isArray(body.linkedTasks)) goals[idx].linkedTasks = body.linkedTasks.map(id => String(id).substring(0, 20));
-      writeGoals(goals);
+      writeGoals(goals, req.session.email);
       return json(res, 200, { goal: goals[idx] });
     }
 
     if (goalMatch && req.method === "DELETE") {
       const id = goalMatch[1];
-      const goals = readGoals();
+      const goals = readGoals(req.session.email);
       const filtered = goals.filter(g => g.id !== id);
       if (filtered.length === goals.length) return json(res, 404, { error: "Goal not found" });
-      writeGoals(filtered);
+      writeGoals(filtered, req.session.email);
       return json(res, 200, { ok: true });
     }
 
@@ -2539,7 +2721,7 @@ const server = http.createServer(async (req, res) => {
       const nb = loadNotebook();
       const note = nb.notes.find(n => n.id === noteId);
       if (!note) return json(res, 404, { error: "Note not found" });
-      const tasks = parseTasks();
+      const tasks = parseTasks(req.session.email);
       const task = {
         id: generateId(),
         title: note.content.split("\n")[0].substring(0, 200),
@@ -2555,7 +2737,7 @@ const server = http.createServer(async (req, res) => {
         fromNote: noteId,
       };
       tasks.push(task);
-      writeTasks(tasks);
+      writeTasks(tasks, req.session.email);
       // Mark note as converted
       const idx = nb.notes.findIndex(n => n.id === noteId);
       if (idx >= 0) { nb.notes[idx].convertedToTask = task.id; nb.notes[idx].updatedAt = new Date().toISOString(); }
@@ -2782,7 +2964,7 @@ const server = http.createServer(async (req, res) => {
 
     /* ── JOURNAL API ────────────────────────────────────────────────── */
     if (urlPath === "/api/journal" && req.method === "GET") {
-      const entries = loadJournal();
+      const entries = loadJournal(req.session.email);
       entries.sort((a, b) => (b.date > a.date ? 1 : -1));
       return json(res, 200, { entries });
     }
@@ -2793,28 +2975,28 @@ const server = http.createServer(async (req, res) => {
       const content = String(body.content || "").substring(0, 50000);
       const title = String(body.title || "").substring(0, 200);
       if (!date) return json(res, 400, { error: "date required" });
-      const entries = loadJournal();
+      const entries = loadJournal(req.session.email);
       const existing = entries.findIndex(e => e.date === date);
       if (existing !== -1) {
         entries[existing].content = content;
         entries[existing].title = title;
         entries[existing].updatedAt = new Date().toISOString();
-        saveJournal(entries);
+        saveJournal(entries, req.session.email);
         return json(res, 200, { entry: entries[existing] });
       }
       const entry = { id: generateId(), date, title, content, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       entries.push(entry);
-      saveJournal(entries);
+      saveJournal(entries, req.session.email);
       return json(res, 201, { entry });
     }
 
     const journalMatch = urlPath.match(/^\/api\/journal\/([a-f0-9]+)$/);
     if (journalMatch && req.method === "DELETE") {
       const id = journalMatch[1];
-      const entries = loadJournal();
+      const entries = loadJournal(req.session.email);
       const filtered = entries.filter(e => e.id !== id);
       if (filtered.length === entries.length) return json(res, 404, { error: "Entry not found" });
-      saveJournal(filtered);
+      saveJournal(filtered, req.session.email);
       return json(res, 200, { ok: true });
     }
 
