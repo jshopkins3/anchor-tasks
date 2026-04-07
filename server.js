@@ -616,13 +616,38 @@ async function gmailGetThread(threadId) {
 }
 
 /* ─── Gmail: send email (full RFC 2822) ────────────────────────────────── */
+/* ─── Gmail: fetch user's email signature ──────────────────────────── */
+let cachedSignature = null;
+let signatureCacheTime = 0;
+async function gmailGetSignature() {
+  const now = Date.now();
+  if (cachedSignature !== null && (now - signatureCacheTime) < 3600000) return cachedSignature;
+  const accessToken = await getGCalAccessToken();
+  if (!accessToken) return "";
+  try {
+    const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) return "";
+    const data = await resp.json();
+    // Find primary sendAs (isDefault or isPrimary)
+    const primary = (data.sendAs || []).find(s => s.isDefault || s.isPrimary) || (data.sendAs || [])[0];
+    cachedSignature = primary?.signature || "";
+    signatureCacheTime = now;
+    return cachedSignature;
+  } catch { return ""; }
+}
+
 async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId }) {
   const accessToken = await getGCalAccessToken();
   if (!accessToken) return { error: "No access token" };
-  // Log token scope for debugging
-  const token = loadGCalToken();
-  console.log("[gmail-send] Token scope:", token?.scope || "NOT STORED");
   try {
+    // Fetch Gmail signature and append
+    const signature = await gmailGetSignature();
+    const bodyWithSig = body ? (signature ? `${body}\n\n${signature.replace(/<[^>]*>/g, "")}` : body) : "";
+    const htmlSig = signature ? `<br><br>${signature}` : "";
+    const bodyHtmlWithSig = bodyHtml ? `${bodyHtml}${htmlSig}` : (body ? `<pre>${body.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</pre>${htmlSig}` : htmlSig);
+
     const boundary = `boundary_${crypto.randomBytes(16).toString("hex")}`;
     const headers = [`MIME-Version: 1.0`];
     if (to) headers.push(`To: ${to}`);
@@ -631,39 +656,25 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     headers.push(`Subject: ${subject || ""}`);
     if (inReplyTo) headers.push(`In-Reply-To: ${inReplyTo}`);
     if (references) headers.push(`References: ${references}`);
-    if (bodyHtml) {
-      headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
-      const rawEmail = [
-        ...headers, "", `--${boundary}`,
-        `Content-Type: text/plain; charset=utf-8`, "", body || "",
-        `--${boundary}`,
-        `Content-Type: text/html; charset=utf-8`, "", bodyHtml,
-        `--${boundary}--`,
-      ].join("\r\n");
-      const encoded = Buffer.from(rawEmail).toString("base64url");
-      const payload = { raw: encoded };
-      if (threadId) payload.threadId = threadId;
-      const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!resp.ok) { const errBody = await resp.text(); console.error("[gmail] Send failed:", resp.status, errBody); return { error: `Gmail API ${resp.status}: ${errBody}` }; }
-      return await resp.json();
-    } else {
-      headers.push(`Content-Type: text/plain; charset=utf-8`);
-      const rawEmail = [...headers, "", body || ""].join("\r\n");
-      const encoded = Buffer.from(rawEmail).toString("base64url");
-      const payload = { raw: encoded };
-      if (threadId) payload.threadId = threadId;
-      const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!resp.ok) { const errBody = await resp.text(); console.error("[gmail] Send failed:", resp.status, errBody); return { error: `Gmail API ${resp.status}: ${errBody}` }; }
-      return await resp.json();
-    }
+    // Always send as multipart/alternative so signature renders properly
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    const rawEmail = [
+      ...headers, "", `--${boundary}`,
+      `Content-Type: text/plain; charset=utf-8`, "", bodyWithSig,
+      `--${boundary}`,
+      `Content-Type: text/html; charset=utf-8`, "", bodyHtmlWithSig,
+      `--${boundary}--`,
+    ].join("\r\n");
+    const encoded = Buffer.from(rawEmail).toString("base64url");
+    const payload = { raw: encoded };
+    if (threadId) payload.threadId = threadId;
+    const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) { const errBody = await resp.text(); console.error("[gmail] Send failed:", resp.status, errBody); return { error: `Gmail API ${resp.status}: ${errBody}` }; }
+    return await resp.json();
   } catch (err) {
     console.error("[gmail] Send error:", err.message);
     return null;
