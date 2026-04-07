@@ -658,31 +658,27 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     if (references) rawLines.push(`References: ${references}`);
     rawLines.push(`MIME-Version: 1.0`);
 
-    let rawEmail;
-    if (signature) {
-      const boundary = `----=${crypto.randomBytes(12).toString("hex")}`;
-      const sigPlain = signature.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
-      const textContent = sigPlain ? `${plainBody}\r\n\r\n--\r\n${sigPlain}` : plainBody;
-      const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
-      const htmlContent = `<html><body><div dir="ltr">${bodyHtml || escapedBody}</div><br><br><div>--</div>${signature}</body></html>`;
-      rawLines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
-      rawLines.push("");
-      rawLines.push(`--${boundary}`);
-      rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
-      rawLines.push("");
-      rawLines.push(textContent);
-      rawLines.push(`--${boundary}`);
-      rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
-      rawLines.push("");
-      rawLines.push(htmlContent);
-      rawLines.push(`--${boundary}--`);
-      rawEmail = rawLines.join("\r\n");
-    } else {
-      rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
-      rawLines.push("");
-      rawLines.push(plainBody);
-      rawEmail = rawLines.join("\r\n");
-    }
+    // Build the raw email using base64-encoded parts to avoid boundary conflicts
+    const boundary = `000000000000${crypto.randomBytes(12).toString("hex")}`;
+    const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
+    const htmlContent = signature ? (escapedBody + "<br><br>" + signature) : escapedBody;
+    const textPart = Buffer.from(plainBody, "utf8").toString("base64");
+    const htmlPart = Buffer.from(htmlContent, "utf8").toString("base64");
+
+    rawLines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    rawLines.push("");
+    rawLines.push(`--${boundary}`);
+    rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
+    rawLines.push(`Content-Transfer-Encoding: base64`);
+    rawLines.push("");
+    rawLines.push(textPart);
+    rawLines.push(`--${boundary}`);
+    rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
+    rawLines.push(`Content-Transfer-Encoding: base64`);
+    rawLines.push("");
+    rawLines.push(htmlPart);
+    rawLines.push(`--${boundary}--`);
+    const rawEmail = rawLines.join("\r\n");
     const encoded = Buffer.from(rawEmail).toString("base64url");
     const payload = { raw: encoded };
     if (threadId) payload.threadId = threadId;
