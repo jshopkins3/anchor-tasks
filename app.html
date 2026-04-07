@@ -5489,32 +5489,21 @@
       detailEl.innerHTML = `
         <div style="padding:24px 32px;max-width:700px;">
           <h2 style="color:#f4f4f5;font-size:18px;margin:0 0 16px;">Email Signature</h2>
-          <p style="color:#71717a;font-size:13px;margin-bottom:16px;">This signature will be appended to all emails you send from Anchor Tasks.</p>
-          <div style="margin-bottom:12px;">
-            <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px;">HTML Signature</label>
-            <textarea id="sig-html-editor" style="width:100%;min-height:200px;background:#18181b;border:1px solid #27272a;color:#e4e4e7;border-radius:8px;padding:12px;font-family:monospace;font-size:12px;resize:vertical;">${esc(sigData.html || "")}</textarea>
-          </div>
+          <p style="color:#71717a;font-size:13px;margin-bottom:16px;">Paste your signature below — images, formatted text, anything. Just copy from Gmail and paste here.</p>
           <div style="margin-bottom:16px;">
-            <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px;">Preview</label>
-            <div id="sig-preview" style="background:#fff;border-radius:8px;padding:16px;min-height:60px;">${sigData.html || '<span style="color:#999;">No signature set</span>'}</div>
+            <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px;">Your Signature</label>
+            <div id="sig-editor" contenteditable="true" style="width:100%;min-height:150px;background:#fff;border:1px solid #27272a;color:#000;border-radius:8px;padding:16px;font-family:Arial,sans-serif;font-size:14px;outline:none;overflow-y:auto;">${sigData.html || ""}</div>
           </div>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:center;">
             <button class="compose-send-btn" onclick="saveSignature()">Save Signature</button>
-            <button class="email-action-btn" onclick="document.getElementById('sig-html-editor').value='';document.getElementById('sig-preview').innerHTML='<span style=color:#999>No signature</span>'">Clear</button>
-          </div>
-          <div id="sig-saved-msg" style="display:none;color:#34d399;font-size:13px;margin-top:8px;">Signature saved!</div>
-          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #27272a;">
-            <p style="color:#52525b;font-size:12px;">Tip: Paste your HTML signature from Gmail or your email client. You can also use basic HTML tags for formatting.</p>
+            <button class="email-action-btn" onclick="document.getElementById('sig-editor').innerHTML=''">Clear</button>
+            <span id="sig-saved-msg" style="display:none;color:#34d399;font-size:13px;">Saved!</span>
           </div>
         </div>`;
-      // Live preview
-      document.getElementById("sig-html-editor").addEventListener("input", e => {
-        document.getElementById("sig-preview").innerHTML = e.target.value || '<span style="color:#999;">No signature set</span>';
-      });
     }
 
     async function saveSignature() {
-      const html = document.getElementById("sig-html-editor")?.value || "";
+      const html = document.getElementById("sig-editor")?.innerHTML || "";
       const text = html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
       try {
         await fetch("/api/gmail-signature", {
