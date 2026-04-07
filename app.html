@@ -68,8 +68,8 @@
     .section { display: none; }
     .section.active { display: block; }
     #sec-email.active {
-      display: block; position: relative;
-      width: 100vw; left: 50%; transform: translateX(-50%);
+      display: block;
+      margin-left: calc(-50vw + 50%); margin-right: calc(-50vw + 50%);
       max-width: 100vw; padding: 0;
     }
 
@@ -1719,8 +1719,8 @@
           </div>
         </div>
       </div>
-      <div id="compose-container"></div>
     </div>
+    <div id="compose-container"></div>
 
     <!-- ── Finance section ─────────────────────────────────────── -->
     <div class="section" id="sec-finance">
