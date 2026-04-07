@@ -1700,6 +1700,12 @@
               </div>
             </div>
             <div class="email-toolbar-actions">
+              <select class="email-toolbar-btn" id="email-sort-select" onchange="sortEmails(this.value)" title="Sort by" style="background:#18181b;color:#a1a1aa;font-size:12px;border:1px solid #27272a;border-radius:6px;padding:4px 6px;cursor:pointer;font-family:inherit;">
+                <option value="date">Date</option>
+                <option value="sender">Sender</option>
+                <option value="subject">Subject</option>
+                <option value="unread">Unread first</option>
+              </select>
               <button class="email-toolbar-btn" onclick="refreshEmailFolder()" title="Refresh">↻</button>
               <a href="/api/gcal-auth" class="email-toolbar-btn" style="text-decoration:none;" title="Reconnect Google">⚙</a>
             </div>
@@ -4790,6 +4796,7 @@
     let folderEmails = []; // emails for the current folder view
     let allLabels = [];
     let emailSearchQuery = "";
+    let emailSortBy = "date";
     let composeState = null; // { mode, to, cc, bcc, subject, body, threadId, inReplyTo, references }
 
     // System folder definitions
@@ -5340,6 +5347,22 @@
       document.getElementById("email-search-input").value = "";
       document.getElementById("email-search-clear").style.display = "none";
       switchFolder(currentFolder);
+    }
+
+    function sortEmails(by) {
+      emailSortBy = by;
+      const sorted = [...folderEmails];
+      if (by === "sender") {
+        sorted.sort((a, b) => (a.from || "").localeCompare(b.from || ""));
+      } else if (by === "subject") {
+        sorted.sort((a, b) => (a.subject || "").localeCompare(b.subject || ""));
+      } else if (by === "unread") {
+        sorted.sort((a, b) => (b.unread ? 1 : 0) - (a.unread ? 1 : 0) || new Date(b.date) - new Date(a.date));
+      } else {
+        sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+      }
+      folderEmails = sorted;
+      renderEmailList();
     }
 
     async function refreshEmailFolder() {
