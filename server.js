@@ -645,6 +645,7 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     // Fetch Gmail signature and append
     let signature = "";
     try { signature = await gmailGetSignature(); } catch {}
+    console.log("[gmail-send] Signature length:", signature.length, "first 200 chars:", signature.substring(0, 200));
 
     const plainBody = body || "";
     const rawLines = [];
@@ -663,7 +664,7 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
       const sigPlain = signature.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
       const textContent = sigPlain ? `${plainBody}\r\n\r\n--\r\n${sigPlain}` : plainBody;
       const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
-      const htmlContent = `<div dir="ltr">${bodyHtml || escapedBody}</div><br><div class="gmail_signature">${signature}</div>`;
+      const htmlContent = `<html><body><div dir="ltr">${bodyHtml || escapedBody}</div><br><br><div>--</div>${signature}</body></html>`;
       rawLines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
       rawLines.push("");
       rawLines.push(`--${boundary}`);
