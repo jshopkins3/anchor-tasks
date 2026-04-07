@@ -5463,6 +5463,10 @@
           </div>
           <div class="compose-footer">
             <button class="compose-send-btn" id="compose-send-btn" onclick="sendCompose()">Send</button>
+            <div style="position:relative;">
+              <button class="email-action-btn" onclick="toggleEmojiPicker()" title="Emoji" style="font-size:16px;padding:6px 10px;">😊</button>
+              <div id="emoji-picker" style="display:none;position:absolute;bottom:40px;left:0;background:#18181b;border:1px solid #27272a;border-radius:10px;padding:8px;width:280px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10;"></div>
+            </div>
             <button class="compose-discard-btn" onclick="closeCompose()" title="Discard">🗑</button>
           </div>
         </div>`;
@@ -5476,6 +5480,38 @@
         if (!composeState.to) document.getElementById("compose-to")?.focus();
         else document.getElementById("compose-body")?.focus();
       }, 100);
+    }
+
+    const EMOJI_LIST = [
+      "😊","😂","🤣","❤️","🔥","👍","👎","🎉","🙏","💪","👏","🤝","✅","❌","⭐","💯","📎","📞","📧","🏠",
+      "😀","😃","😄","😁","😆","🥹","😅","😇","🙂","😉","😌","😍","🥰","😘","😋","😜","🤪","😎","🤩","🥳",
+      "😏","😒","😞","😔","😟","😕","🙁","😣","😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","😳",
+      "🤔","🤫","🤭","😶","😐","😑","😬","🫠","🙄","😯","😧","😮","😲","🥱","😴","🤤","😷","🤒","🤕","🤑",
+      "👋","🤚","🖐️","✋","🖖","👌","🤌","🤏","✌️","🤞","🫰","🤟","🤘","🤙","👆","👇","👈","👉","👊","✊",
+      "💰","💵","💸","🏦","📊","📈","📉","📋","📝","✏️","📌","📍","🗓️","⏰","⏳","🔑","🏡","🏢","📱","💻",
+    ];
+    function toggleEmojiPicker() {
+      const picker = document.getElementById("emoji-picker");
+      if (!picker) return;
+      if (picker.style.display === "none") {
+        picker.innerHTML = EMOJI_LIST.map(e =>
+          `<span style="cursor:pointer;font-size:20px;padding:4px;display:inline-block;border-radius:4px;transition:background .1s;" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background=''" onclick="insertEmoji('${e}')">${e}</span>`
+        ).join("");
+        picker.style.display = "block";
+      } else {
+        picker.style.display = "none";
+      }
+    }
+    function insertEmoji(emoji) {
+      const textarea = document.getElementById("compose-body");
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        textarea.value = textarea.value.substring(0, start) + emoji + textarea.value.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
+        textarea.focus();
+      }
+      document.getElementById("emoji-picker").style.display = "none";
     }
 
     function toggleComposeMinimize() {
