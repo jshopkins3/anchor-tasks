@@ -5058,13 +5058,15 @@
 
         const subject = thread.messages[0]?.subject || "(No subject)";
         const msgCount = thread.messages.length;
+        // Reverse so newest is on top
+        const sortedMsgs = [...thread.messages].reverse();
 
         let html = `<div class="email-thread-wrap">
           <div class="email-thread-subject">${esc(subject)}<span class="email-thread-count">(${msgCount})</span></div>`;
 
-        thread.messages.forEach((msg, i) => {
-          const isLast = i === thread.messages.length - 1;
-          const expanded = isLast;
+        sortedMsgs.forEach((msg, i) => {
+          const isFirst = i === 0;
+          const expanded = isFirst;
           html += `
           <div class="email-thread-msg ${expanded ? 'expanded' : ''}" id="thread-msg-${msg.id}">
             <div class="email-thread-msg-header" onclick="toggleThreadMsg('${msg.id}')">
@@ -5096,7 +5098,7 @@
 
         detailEl.innerHTML = html;
 
-        // Render body for the last (expanded) message
+        // Render body for the newest (expanded) message
         const lastBody = document.querySelector(`#thread-msg-${lastMsg.id} .email-thread-msg-body`);
         if (lastBody && lastMsg.body) {
           renderEmailBodyInContainer(lastBody, lastMsg.body, lastMsg.id);
