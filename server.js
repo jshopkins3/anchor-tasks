@@ -2200,9 +2200,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (urlPath === "/api/gmail-signature" && req.method === "POST") {
-      const body = JSON.parse(await readBody(req));
-      fs.writeFileSync(EMAIL_SIGNATURE_FILE, JSON.stringify({ html: body.html || "", text: body.text || "" }, null, 2), "utf8");
-      return json(res, 200, { ok: true });
+      try {
+        const body = JSON.parse(await readBody(req));
+        const html = body.html || "";
+        console.log("[signature] Saving signature, length:", html.length);
+        fs.writeFileSync(EMAIL_SIGNATURE_FILE, JSON.stringify({ html, text: body.text || "" }), "utf8");
+        return json(res, 200, { ok: true });
+      } catch (e) {
+        console.error("[signature] Save failed:", e.message);
+        return json(res, 500, { error: e.message });
+      }
     }
 
     /* ── Push notifications ───────────────────────────────────── */

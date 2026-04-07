@@ -5459,12 +5459,18 @@
           </div>
           <div class="compose-body-area">
             <textarea id="compose-body" placeholder="Write your message...">${esc(composeState.body)}</textarea>
+            <div id="compose-sig-preview" style="border-top:1px solid #27272a;padding-top:8px;margin-top:8px;opacity:.6;"></div>
           </div>
           <div class="compose-footer">
             <button class="compose-send-btn" id="compose-send-btn" onclick="sendCompose()">Send</button>
             <button class="compose-discard-btn" onclick="closeCompose()" title="Discard">🗑</button>
           </div>
         </div>`;
+      // Load signature preview
+      fetch("/api/gmail-signature").then(r => r.json()).then(sig => {
+        const preview = document.getElementById("compose-sig-preview");
+        if (preview && sig.html) preview.innerHTML = sig.html;
+      }).catch(() => {});
       // Focus appropriate field
       setTimeout(() => {
         if (!composeState.to) document.getElementById("compose-to")?.focus();
@@ -5537,14 +5543,20 @@
       const html = document.getElementById("sig-editor")?.innerHTML || "";
       const text = html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
       try {
-        await fetch("/api/gmail-signature", {
+        const res = await fetch("/api/gmail-signature", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ html, text }),
         });
-        const msg = document.getElementById("sig-saved-msg");
-        if (msg) { msg.style.display = "block"; setTimeout(() => msg.style.display = "none", 2500); }
-      } catch {}
+        if (res.ok) {
+          const msg = document.getElementById("sig-saved-msg");
+          if (msg) { msg.style.display = "inline"; setTimeout(() => msg.style.display = "none", 2500); }
+        } else {
+          alert("Failed to save signature. The image may be too large — try using an image URL instead.");
+        }
+      } catch (e) {
+        alert("Failed to save: " + e.message);
+      }
     }
 
     function closeCompose() {
