@@ -1835,10 +1835,12 @@ const server = http.createServer(async (req, res) => {
           body: params.toString(),
         });
         const data = await resp.json();
+        console.log("[gcal-callback] Google returned:", JSON.stringify({ access_token: !!data.access_token, refresh_token: !!data.refresh_token, scope: data.scope, error: data.error }));
         if (data.access_token) {
           // Keep existing refresh_token if Google didn't issue a new one (re-auth scenario)
           const existing = loadGCalToken();
           const refresh_token = data.refresh_token || (existing && existing.refresh_token) || global._savedRefreshToken || null;
+          console.log("[gcal-callback] refresh_token sources: google=", !!data.refresh_token, "existing=", !!(existing?.refresh_token), "stashed=", !!global._savedRefreshToken, "final=", !!refresh_token);
           if (global._savedRefreshToken) delete global._savedRefreshToken;
           if (refresh_token) {
             saveGCalToken({
