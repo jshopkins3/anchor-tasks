@@ -1526,8 +1526,6 @@
             <div class="today-section-header">
               <span class="today-section-title">Inbox</span>
               <span id="inbox-status-badge"></span>
-              <button onclick="markAllEmailsRead()" style="margin-left:auto;background:none;border:none;font-size:11px;color:#52525b;cursor:pointer;padding:0;" title="Mark all read">✓ All read</button>
-              <a href="/api/gcal-auth" title="Re-authorize Google" style="font-size:11px;color:#52525b;text-decoration:none;opacity:.6;margin-left:8px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">🔄</a>
             </div>
             <div id="inbox-content"><div class="today-empty">Loading...</div></div>
           </div>
@@ -3688,10 +3686,7 @@
 
       if (notConnected) {
         badge.innerHTML = `<a href="/api/gcal-auth" class="gcal-connect-btn">Connect</a>`;
-        const apiNote = (reason === "accessNotConfigured" || reason === "SERVICE_DISABLED")
-          ? `<div style="margin-top:8px;font-size:11px;color:#f87171;">Gmail API is not enabled in Google Cloud Console.<br>Go to <strong>APIs &amp; Services → Enable APIs</strong> and enable <strong>Gmail API</strong>, then reconnect.</div>`
-          : `<div style="margin-top:8px;font-size:11px;color:#71717a;">Click Connect and re-authorize to grant Gmail access.${reason ? `<br>Reason: ${reason}` : ""}</div>`;
-        content.innerHTML = `<div class="today-empty">Gmail not connected.${apiNote}</div>`;
+        content.innerHTML = `<div class="today-empty">Gmail not connected. <a href="/api/gcal-auth" style="color:#3b82f6;">Connect</a></div>`;
         return;
       }
 
@@ -3700,72 +3695,25 @@
         ? `<span class="today-section-count">${unread}</span>`
         : `<span style="font-size:10px;color:#52525b;">All read</span>`;
 
-      if (!emails.length) {
-        content.innerHTML = `<div class="today-empty">Inbox zero! Nothing unread.</div>`;
+      if (!unread) {
+        content.innerHTML = `<div class="today-empty" style="padding:12px 0;">
+          <div style="font-size:13px;color:#52525b;">Inbox zero! You're all caught up.</div>
+        </div>`;
         return;
       }
 
-      const digest = renderInboxDigest(emails);
-      const digestHtml = digest ? `<div style="font-size:11px;color:#71717a;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #1f1f23;">${digest}</div>` : "";
-
-      content.innerHTML = digestHtml + emails.map(email => {
-        const showForm = inboxEmailTaskForm === email.id;
-        const triage = showForm ? triageEmail(email) : null;
-        const projectOpts = projects.filter(p => !p.archived)
-          .map(p => `<option value="${esc(p.name)}" ${triage && triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
-
-        return `
-          <div class="email-item" id="email-${email.id}" style="display:flex;gap:10px;align-items:flex-start;">
-            <div onclick="openEmailModal('${email.id}')" style="cursor:pointer;flex-shrink:0;margin-top:2px;">
-              ${emailAvatarHtml(email.from, 32)}
-            </div>
-            <div style="flex:1;min-width:0;">
-              <div class="email-header" style="cursor:pointer;" onclick="openEmailModal('${email.id}')">
-                <span class="email-from">${esc(email.from)}</span>
-                <span class="email-time">${formatEmailTime(email.date)}</span>
-              </div>
-              <div class="email-subject" style="cursor:pointer;" onclick="openEmailModal('${email.id}')">${esc(email.subject)}</div>
-              <div class="email-snippet">${esc(email.snippet)}</div>
-              ${isWorkEmail(email.fromEmail || email.from) ? '<div style="margin:3px 0;"><span class="email-row-badge work" style="font-size:9px;">Anchor</span></div>' : ''}
-              <div class="email-actions">
-                <button class="email-btn task-btn" onclick="toggleEmailTaskForm('${email.id}')">
-                  ${showForm ? "Cancel" : "→ Task"}
-                </button>
-                <button class="email-btn read-btn" onclick="markEmailRead('${email.id}')">✓ Read</button>
-                <button class="email-btn" onclick="archiveEmail('${email.id}')" title="Archive">📥</button>
-                <button class="email-btn" onclick="deleteEmail('${email.id}')" style="color:#ef4444;border-color:#ef4444;" title="Delete">🗑</button>
-              </div>
-            </div>
-            ${showForm ? `
-            <div class="email-task-form" id="etf-form-${email.id}" style="border:1px solid #3f3f46;border-radius:8px;">
-              <div style="font-size:10px;color:#a78bfa;margin-bottom:4px;display:flex;align-items:center;gap:4px;">
-                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                AI pre-filled from email content
-              </div>
-              <input id="etf-title-${email.id}" value="${esc(triage.title)}" placeholder="Task title..." />
-              <div class="email-task-form-row">
-                <select id="etf-project-${email.id}">
-                  <option value="">No project</option>
-                  ${projectOpts}
-                </select>
-                <select id="etf-priority-${email.id}">
-                  <option value="normal" ${triage.priority==="normal"?"selected":""}>Normal</option>
-                  <option value="high" ${triage.priority==="high"?"selected":""}>High</option>
-                  <option value="urgent" ${triage.priority==="urgent"?"selected":""}>Urgent</option>
-                  <option value="low" ${triage.priority==="low"?"selected":""}>Low</option>
-                </select>
-              </div>
-              <div class="email-task-form-row">
-                <input id="etf-due-${email.id}" type="date" value="${triage.due}" />
-                <input id="etf-assignee-${email.id}" value="${esc(user ? user.name : "")}" placeholder="Assign to..." />
-              </div>
-              <div class="email-task-form-actions">
-                <button class="btn-cancel" style="font-size:12px;" onclick="toggleEmailTaskForm('${email.id}')">Cancel</button>
-                <button class="btn-save" style="font-size:12px;" onclick="createTaskFromEmail('${email.id}')">Create Task</button>
-              </div>
-            </div>` : ""}
-          </div>`;
-      }).join("");
+      // Show summary + link to email tab
+      const topSenders = [...new Set(emails.filter(e => e.unread).map(e => e.from))].slice(0, 3);
+      content.innerHTML = `
+        <div style="padding:8px 0;cursor:pointer;" onclick="document.querySelector('.tab[data-tab=email]').click()">
+          <div style="font-size:14px;color:#e4e4e7;font-weight:600;margin-bottom:6px;">
+            ${unread} unread email${unread !== 1 ? "s" : ""}
+          </div>
+          <div style="font-size:12px;color:#71717a;margin-bottom:8px;">
+            From: ${topSenders.map(s => `<span style="color:#a1a1aa;">${esc(s)}</span>`).join(", ")}${topSenders.length < unread ? ` and ${unread - topSenders.length} more` : ""}
+          </div>
+          <div style="font-size:12px;color:#3b82f6;">Open Email →</div>
+        </div>`;
     }
 
     /* ── AI Email Triage ─────────────────────────────────────── */
