@@ -3720,6 +3720,7 @@
               </div>
               <div class="email-subject" style="cursor:pointer;" onclick="openEmailModal('${email.id}')">${esc(email.subject)}</div>
               <div class="email-snippet">${esc(email.snippet)}</div>
+              ${isWorkEmail(email.fromEmail || email.from) ? '<div style="margin:3px 0;"><span class="email-row-badge work" style="font-size:9px;">Anchor</span></div>' : ''}
               <div class="email-actions">
                 <button class="email-btn task-btn" onclick="toggleEmailTaskForm('${email.id}')">
                   ${showForm ? "Cancel" : "→ Task"}
@@ -3901,16 +3902,20 @@
     async function deleteEmail(emailId) {
       await fetch(`/api/gmail-delete/${emailId}`, { method: "POST" });
       inboxEmails = inboxEmails.filter(e => e.id !== emailId);
+      folderEmails = folderEmails.filter(e => e.id !== emailId);
       if (selectedEmailId === emailId) {
-        selectedEmailId = inboxEmails.length ? inboxEmails[0].id : null;
+        selectedEmailId = folderEmails.length ? folderEmails[0].id : null;
       }
       renderInbox(inboxEmails, false);
-      renderEmailSection();
-      if (selectedEmailId) renderEmailDetail(selectedEmailId);
-      else {
+      renderEmailList();
+      if (selectedEmailId) {
+        const e = folderEmails.find(e => e.id === selectedEmailId);
+        if (e) selectEmail(selectedEmailId, e.threadId);
+      } else {
         const detailEl = document.getElementById("email-detail-pane");
         if (detailEl) detailEl.innerHTML = `<div class="email-empty" style="height:100%;"><div class="email-empty-icon">✉</div><div class="email-empty-text">Select an email to read</div></div>`;
       }
+      updateEmailTabBadge();
       renderStats();
     }
 
@@ -3918,17 +3923,22 @@
       await Promise.all(inboxEmails.filter(e => e.unread).map(e =>
         fetch(`/api/gmail-mark-read/${e.id}`, { method: "POST" })
       ));
-      inboxEmails = [];
-      renderInbox([], false);
-      renderEmailSection();
+      inboxEmails.forEach(e => e.unread = false);
+      folderEmails.forEach(e => e.unread = false);
+      renderInbox(inboxEmails, false);
+      renderEmailList();
+      updateEmailTabBadge();
       renderStats();
     }
 
     async function markEmailRead(emailId) {
       await fetch(`/api/gmail-mark-read/${emailId}`, { method: "POST" });
       inboxEmails = inboxEmails.filter(e => e.id !== emailId);
+      const fe = folderEmails.find(e => e.id === emailId);
+      if (fe) fe.unread = false;
       renderInbox(inboxEmails, false);
-      // Update unread count in stats
+      renderEmailList();
+      updateEmailTabBadge();
       renderStats();
     }
 
