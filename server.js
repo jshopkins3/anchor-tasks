@@ -661,8 +661,8 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     const boundary = `000000000000${crypto.randomBytes(12).toString("hex")}`;
     const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
     const htmlContent = signature
-      ? `<div style="font-family:Arial,sans-serif;font-size:14px;color:#000;">${escapedBody}</div><br><table cellpadding="0" cellspacing="0" style="border-top:1px solid #ccc;padding-top:10px;margin-top:10px;"><tr><td>${signature}</td></tr></table>`
-      : escapedBody;
+      ? `<div dir="ltr"><div dir="ltr"><div style="font-family:Arial,sans-serif;font-size:14px;color:#000">${escapedBody}</div></div><br clear="all"><div><br></div>-- <br><div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature">${signature}</div></div>`
+      : `<div dir="ltr">${escapedBody}</div>`;
     const textPart = Buffer.from(plainBody, "utf8").toString("base64");
     const htmlPart = Buffer.from(htmlContent, "utf8").toString("base64");
 
