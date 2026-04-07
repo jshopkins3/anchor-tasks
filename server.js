@@ -113,30 +113,42 @@ if (!fs.existsSync(USERS_DIR)) fs.mkdirSync(USERS_DIR, { recursive: true });
 (function migrateToMultiUser() {
   if (!OWNER_EMAIL) return; // Can't migrate without knowing the owner
   const ownerDir = getUserDir(OWNER_EMAIL);
-  if (fs.existsSync(ownerDir) && fs.existsSync(path.join(ownerDir, "tasks.md"))) return; // Already migrated
+  // Re-run migration if flat files exist and are larger than user copies
+  const flatTasks = path.join(DATA_DIR, "tasks.md");
+  const userTasks = path.join(ownerDir, "tasks.md");
+  const needsMigration = fs.existsSync(flatTasks) && (!fs.existsSync(userTasks) || fs.statSync(flatTasks).size > fs.statSync(userTasks).size);
+  if (fs.existsSync(ownerDir) && !needsMigration) return; // Already migrated
 
   console.log("[migration] Migrating to multi-user for:", OWNER_EMAIL);
-  ensureUserDir(OWNER_EMAIL);
+  if (!fs.existsSync(ownerDir)) fs.mkdirSync(ownerDir, { recursive: true });
 
-  // Move per-user files to owner's directory
+  // Move per-user files to owner's directory (overwrite if source is larger)
   const userFiles = ["tasks.md", "goals.json", "journal.json", "notebook.json",
     "gcal-token.json", "email-contacts.json", "email-signature.json",
-    "push-subscriptions.json", "finance.json"];
+    "push-subscriptions.json", "finance.json", "signature-img.png", "signature-img.jpg", "signature-img.gif"];
   for (const file of userFiles) {
     const src = path.join(DATA_DIR, file);
     const dest = path.join(ownerDir, file);
-    if (fs.existsSync(src) && !fs.existsSync(dest)) {
-      fs.copyFileSync(src, dest);
-      console.log(`[migration] Copied ${file} -> users/${OWNER_EMAIL}/`);
+    if (fs.existsSync(src)) {
+      const srcSize = fs.statSync(src).size;
+      const destSize = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
+      if (srcSize > destSize) {
+        fs.copyFileSync(src, dest);
+        console.log(`[migration] Copied ${file} (${srcSize} bytes) -> users/${OWNER_EMAIL}/`);
+      }
     }
   }
 
   // Move projects to owner's user dir (projects are now per-user)
   const projSrc = path.join(DATA_DIR, "projects.md");
   const projDest = path.join(ownerDir, "projects.md");
-  if (fs.existsSync(projSrc) && !fs.existsSync(projDest)) {
-    fs.copyFileSync(projSrc, projDest);
-    console.log(`[migration] Copied projects.md -> users/${OWNER_EMAIL}/`);
+  if (fs.existsSync(projSrc)) {
+    const srcSize = fs.statSync(projSrc).size;
+    const destSize = fs.existsSync(projDest) ? fs.statSync(projDest).size : 0;
+    if (srcSize > destSize) {
+      fs.copyFileSync(projSrc, projDest);
+      console.log(`[migration] Copied projects.md (${srcSize} bytes) -> users/${OWNER_EMAIL}/`);
+    }
   }
   // Also keep in shared for backward compat
   const sharedFiles = ["projects.md", "taglines.json", "content-calendar.json", "content-feedback.json"];
