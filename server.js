@@ -618,7 +618,10 @@ async function gmailGetThread(threadId) {
 /* ─── Gmail: send email (full RFC 2822) ────────────────────────────────── */
 async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId }) {
   const accessToken = await getGCalAccessToken();
-  if (!accessToken) return null;
+  if (!accessToken) return { error: "No access token" };
+  // Log token scope for debugging
+  const token = loadGCalToken();
+  console.log("[gmail-send] Token scope:", token?.scope || "NOT STORED");
   try {
     const boundary = `boundary_${crypto.randomBytes(16).toString("hex")}`;
     const headers = [`MIME-Version: 1.0`];
@@ -645,7 +648,7 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!resp.ok) { const errBody = await resp.text(); console.error("[gmail] Send failed:", resp.status, errBody); return null; }
+      if (!resp.ok) { const errBody = await resp.text(); console.error("[gmail] Send failed:", resp.status, errBody); return { error: `Gmail API ${resp.status}: ${errBody}` }; }
       return await resp.json();
     } else {
       headers.push(`Content-Type: text/plain; charset=utf-8`);
@@ -658,7 +661,7 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!resp.ok) { const errBody = await resp.text(); console.error("[gmail] Send failed:", resp.status, errBody); return null; }
+      if (!resp.ok) { const errBody = await resp.text(); console.error("[gmail] Send failed:", resp.status, errBody); return { error: `Gmail API ${resp.status}: ${errBody}` }; }
       return await resp.json();
     }
   } catch (err) {
@@ -2064,10 +2067,8 @@ const server = http.createServer(async (req, res) => {
     /* ── GMAIL: Send email ─────────────────────────────────────── */
     if (urlPath === "/api/gmail-send" && req.method === "POST") {
       const body = JSON.parse(await readBody(req));
-      const accessToken = await getGCalAccessToken();
-      if (!accessToken) return json(res, 500, { error: "Gmail not connected. Click ⚙ in email toolbar to re-authorize with send permissions." });
       const result = await gmailSendEmail(body);
-      if (!result) return json(res, 500, { error: "Send failed. You may need to re-authorize: click ⚙ in email toolbar." });
+      if (!result || result.error) return json(res, 500, { error: result?.error || "Send failed. You may need to re-authorize: click ⚙ in email toolbar." });
       // Update contacts cache
       for (const addr of parseEmailAddress(body.to)) updateEmailContact(addr.email, addr.name);
       for (const addr of parseEmailAddress(body.cc)) updateEmailContact(addr.email, addr.name);
