@@ -5123,13 +5123,13 @@
     function renderEmailBodyInContainer(container, body, msgId) {
       if (body.type === "html") {
         const iframe = document.createElement("iframe");
-        iframe.sandbox = "allow-same-origin";
+        iframe.sandbox = "allow-same-origin allow-popups allow-popups-to-escape-sandbox";
         iframe.referrerPolicy = "no-referrer";
         iframe.style.cssText = "width:100%;border:none;background:#fff;border-radius:6px;min-height:200px;";
         container.innerHTML = "";
         container.appendChild(iframe);
         iframe.contentDocument.open();
-        iframe.contentDocument.write(body.data);
+        iframe.contentDocument.write(`<base target="_blank">${body.data}`);
         iframe.contentDocument.close();
         const resizeIframe = () => {
           try { iframe.style.height = Math.max(200, iframe.contentDocument.body.scrollHeight + 30) + "px"; } catch {}
