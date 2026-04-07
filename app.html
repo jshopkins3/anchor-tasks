@@ -4784,6 +4784,7 @@
     // System folder definitions
     const SYSTEM_FOLDERS = [
       { id: "INBOX", name: "Inbox", icon: "📥" },
+      { id: "ANCHOR_WORK", name: "Anchor", icon: "⚓", search: "from:mychomeloans.com OR to:mychomeloans.com" },
       { id: "STARRED", name: "Starred", icon: "⭐" },
       { id: "SENT", name: "Sent", icon: "📤" },
       { id: "DRAFT", name: "Drafts", icon: "📝" },
@@ -4864,8 +4865,8 @@
       };
       let html = SYSTEM_FOLDERS.map(f => {
         const count = getCount(f.id);
-        const active = currentFolder === f.id && !emailSearchQuery ? "active" : "";
-        return `<div class="email-folder-item ${active}" onclick="switchFolder('${f.id}')">
+        const isActive = currentFolder === f.id && (!emailSearchQuery || f.search);
+        return `<div class="email-folder-item ${isActive ? 'active' : ''}" onclick="switchFolder('${f.id}')">
           <span class="email-folder-icon">${f.icon}</span>
           <span class="email-folder-name">${f.name}</span>
           ${count > 0 ? `<span class="email-folder-count ${f.id === 'INBOX' ? 'unread' : ''}">${count}</span>` : ""}
@@ -4890,12 +4891,18 @@
     async function switchFolder(labelId) {
       currentFolder = labelId;
       currentPageToken = null;
-      emailSearchQuery = "";
       selectedEmailId = null;
       folderEmails = [];
       document.getElementById("email-search-input").value = "";
       document.getElementById("email-search-clear").style.display = "none";
-      const folderName = SYSTEM_FOLDERS.find(f => f.id === labelId)?.name ||
+      // Check if this is a search-based virtual folder (like Anchor)
+      const sysFolder = SYSTEM_FOLDERS.find(f => f.id === labelId);
+      if (sysFolder?.search) {
+        emailSearchQuery = sysFolder.search;
+      } else {
+        emailSearchQuery = "";
+      }
+      const folderName = sysFolder?.name ||
         allLabels.find(l => l.id === labelId)?.name || labelId;
       document.getElementById("email-toolbar-title").textContent = folderName;
       renderFolderSidebar();
