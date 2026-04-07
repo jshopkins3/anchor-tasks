@@ -579,7 +579,13 @@ async function gmailGetThread(threadId) {
       function findAttachments(p) {
         if (!p) return;
         if (p.filename && p.body?.attachmentId) {
-          attachments.push({ name: p.filename, attachmentId: p.body.attachmentId, mimeType: p.mimeType, size: p.body.size || 0 });
+          // Skip inline images (signature logos, etc.) - they have Content-ID headers
+          const contentDisp = (p.headers || []).find(h => h.name.toLowerCase() === "content-disposition");
+          const contentId = (p.headers || []).find(h => h.name.toLowerCase() === "content-id");
+          const isInline = (contentDisp && /^\s*inline/i.test(contentDisp.value)) || (contentId && /^image\//i.test(p.mimeType));
+          if (!isInline) {
+            attachments.push({ name: p.filename, attachmentId: p.body.attachmentId, mimeType: p.mimeType, size: p.body.size || 0 });
+          }
         }
         if (p.parts) p.parts.forEach(findAttachments);
       }
