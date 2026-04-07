@@ -131,7 +131,14 @@ if (!fs.existsSync(USERS_DIR)) fs.mkdirSync(USERS_DIR, { recursive: true });
     }
   }
 
-  // Move shared files (projects, taglines, content)
+  // Move projects to owner's user dir (projects are now per-user)
+  const projSrc = path.join(DATA_DIR, "projects.md");
+  const projDest = path.join(ownerDir, "projects.md");
+  if (fs.existsSync(projSrc) && !fs.existsSync(projDest)) {
+    fs.copyFileSync(projSrc, projDest);
+    console.log(`[migration] Copied projects.md -> users/${OWNER_EMAIL}/`);
+  }
+  // Also keep in shared for backward compat
   const sharedFiles = ["projects.md", "taglines.json", "content-calendar.json", "content-feedback.json"];
   for (const file of sharedFiles) {
     const src = path.join(DATA_DIR, file);
@@ -350,8 +357,11 @@ function getProjectTasks(projectName) {
   return all;
 }
 
-function parseProjects() {
-  const file = fs.existsSync(sharedProjectsFile()) ? sharedProjectsFile() : PROJECTS_FILE;
+function parseProjects(email) {
+  // Projects are now per-user, with a members field for sharing
+  const file = email ? userFile(email, "projects.md") :
+    (fs.existsSync(sharedProjectsFile()) ? sharedProjectsFile() : PROJECTS_FILE);
+  if (!fs.existsSync(file)) return [];
   const raw = fs.readFileSync(file, "utf8");
   const projects = [];
   const lines = raw.split("\n");
@@ -366,23 +376,57 @@ function parseProjects() {
       description: parts[2] || "",
       owner: parts[3] || "",
       ownerEmail: parts[4] || "",
+      members: parts[5] ? parts[5].split(";").filter(Boolean) : [],
       archived,
     });
   }
   return projects;
 }
 
-function writeProjects(projects) {
-  const file = sharedProjectsFile();
+function writeProjects(projects, email) {
+  const file = email ? userFile(email, "projects.md") : sharedProjectsFile();
   const active = projects.filter(p => !p.archived);
   const archived = projects.filter(p => p.archived);
-  const fmt = p => `- [${p.archived ? "x" : " "}] ${p.id} | ${p.name} | ${p.description} | ${p.owner} | ${p.ownerEmail || ""}`;
+  const fmt = p => `- [${p.archived ? "x" : " "}] ${p.id} | ${p.name} | ${p.description} | ${p.owner} | ${p.ownerEmail || ""} | ${(p.members || []).join(";")}`;
   const md = [
     "# Projects", "",
     "## Active", ...active.map(fmt), "",
     "## Archived", ...archived.map(fmt), "",
   ].join("\n");
   fs.writeFileSync(file, md, "utf8");
+}
+
+// Get all projects visible to a user (their own + ones they're a member of)
+function getVisibleProjects(email) {
+  if (!email) return parseProjects();
+  // User's own projects
+  const own = parseProjects(email);
+  // Scan other users for projects where this email is a member
+  const assigned = [];
+  if (fs.existsSync(USERS_DIR)) {
+    try {
+      const userDirs = fs.readdirSync(USERS_DIR);
+      for (const otherEmail of userDirs) {
+        if (otherEmail === email.toLowerCase()) continue;
+        const otherProjects = parseProjects(otherEmail);
+        for (const p of otherProjects) {
+          if ((p.members || []).some(m => m.toLowerCase() === email.toLowerCase())) {
+            assigned.push({ ...p, _sharedBy: otherEmail });
+          }
+        }
+      }
+    } catch {}
+  }
+  // Also include legacy shared projects if they exist
+  if (fs.existsSync(sharedProjectsFile())) {
+    const shared = parseProjects(); // no email = shared file
+    for (const p of shared) {
+      if (!own.find(o => o.id === p.id) && !assigned.find(a => a.id === p.id)) {
+        own.push(p);
+      }
+    }
+  }
+  return [...own, ...assigned];
 }
 
 /* ─── Goals engine ────────────────────────────────────────────────────── */
@@ -1863,45 +1907,48 @@ const server = http.createServer(async (req, res) => {
 
     /* ── PROJECTS API ──────────────────────────────────────────────── */
     if (urlPath === "/api/projects" && req.method === "GET") {
-      return json(res, 200, { projects: parseProjects() });
+      return json(res, 200, { projects: getVisibleProjects(req.session.email) });
     }
 
     if (urlPath === "/api/projects" && req.method === "POST") {
       const body = JSON.parse(await readBody(req));
-      const projects = parseProjects();
+      const projects = parseProjects(req.session.email);
       const project = {
         id: generateId(),
         name: String(body.name || "").substring(0, 200),
         description: String(body.description || "").substring(0, 500),
         owner: String(body.owner || req.session.name || "").substring(0, 100),
+        ownerEmail: req.session.email,
+        members: body.members || [],
         archived: false,
       };
       if (!project.name) return json(res, 400, { error: "Name required" });
       projects.push(project);
-      writeProjects(projects);
+      writeProjects(projects, req.session.email);
       return json(res, 201, { project });
     }
 
     if (urlPath.startsWith("/api/projects/") && req.method === "PATCH") {
       const id = urlPath.split("/")[3];
       const body = JSON.parse(await readBody(req));
-      const projects = parseProjects();
+      const projects = parseProjects(req.session.email);
       const idx = projects.findIndex(p => p.id === id);
       if (idx === -1) return json(res, 404, { error: "Project not found" });
       if (body.name !== undefined) projects[idx].name = String(body.name).substring(0, 200);
       if (body.description !== undefined) projects[idx].description = String(body.description).substring(0, 500);
       if (body.owner !== undefined) projects[idx].owner = String(body.owner).substring(0, 100);
       if (body.archived !== undefined) projects[idx].archived = !!body.archived;
-      writeProjects(projects);
+      if (body.members !== undefined) projects[idx].members = body.members;
+      writeProjects(projects, req.session.email);
       return json(res, 200, { project: projects[idx] });
     }
 
     if (urlPath.startsWith("/api/projects/") && req.method === "DELETE") {
       const id = urlPath.split("/")[3];
-      const projects = parseProjects();
+      const projects = parseProjects(req.session.email);
       const filtered = projects.filter(p => p.id !== id);
       if (filtered.length === projects.length) return json(res, 404, { error: "Project not found" });
-      writeProjects(filtered);
+      writeProjects(filtered, req.session.email);
       deleteProjectDetail(id);
       return json(res, 200, { ok: true });
     }
