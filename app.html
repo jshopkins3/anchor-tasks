@@ -1432,7 +1432,7 @@
       <div class="tab" data-tab="matrix">Matrix</div>
       <div class="tab" data-tab="projects">Projects</div>
       <div class="tab" data-tab="journal">Journal</div>
-      <div class="tab" data-tab="email">Email</div>
+      <div class="tab" data-tab="email">Email <span id="email-tab-badge" style="display:none;background:#3b82f6;color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:16px;text-align:center;margin-left:4px;"></span></div>
       <div class="tab" data-tab="notebook">Notebook</div>
       <div class="tab" data-tab="finance">Finance</div>
       <div class="tab" data-tab="content">Content</div>
@@ -3664,6 +3664,7 @@
         } else {
           inboxEmails = data.emails || [];
           renderInbox(inboxEmails, !data.connected);
+          if (typeof updateEmailTabBadge === "function") updateEmailTabBadge();
         }
       } catch {
         inboxEmails = [];
@@ -5674,6 +5675,46 @@
         e.preventDefault();
       }
     });
+
+    /* ── Email polling (check every 60s) ─────────────────────── */
+    let emailPollInterval = null;
+    function startEmailPolling() {
+      if (emailPollInterval) return;
+      emailPollInterval = setInterval(async () => {
+        try {
+          // Always check inbox unread count for the tab badge
+          const res = await fetch("/api/gmail-inbox");
+          const data = await res.json();
+          if (data.emails) {
+            inboxEmails = data.emails;
+            // Update tab badge
+            const badge = document.getElementById("email-tab-badge");
+            const unread = inboxEmails.filter(e => e.unread).length;
+            if (badge) {
+              badge.textContent = unread;
+              badge.style.display = unread > 0 ? "inline-block" : "none";
+            }
+            // If email tab is active and viewing inbox, refresh the list
+            const emailSection = document.getElementById("sec-email");
+            if (emailSection?.classList.contains("active") && currentFolder === "INBOX" && !emailSearchQuery) {
+              folderEmails = inboxEmails;
+              renderEmailList();
+              loadEmailLabels();
+            }
+          }
+        } catch {}
+      }, 60000);
+    }
+    // Start polling on app load
+    startEmailPolling();
+    // Also set initial badge from loadInbox data
+    function updateEmailTabBadge() {
+      const badge = document.getElementById("email-tab-badge");
+      if (!badge) return;
+      const unread = inboxEmails.filter(e => e.unread).length;
+      badge.textContent = unread;
+      badge.style.display = unread > 0 ? "inline-block" : "none";
+    }
 
     /* ── Today inbox email modal ──────────────────────────────── */
     function openEmailModal(emailId) {
