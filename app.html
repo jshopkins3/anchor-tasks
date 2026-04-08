@@ -5161,7 +5161,8 @@
             <button class="email-action-btn" onclick="archiveEmail(selectedEmailId)">📥 Archive</button>
             <button class="email-action-btn danger" onclick="deleteEmail(selectedEmailId)">🗑 Delete</button>
             <button class="email-action-btn task-action" onclick="showTaskCardInThread(selectedEmailId)">✚ Task</button>
-          </div>`;
+          </div>
+          <div class="email-task-card" id="email-task-card-thread" style="display:none;"></div>`;
 
         sortedMsgs.forEach((msg, i) => {
           const isFirst = i === 0;
@@ -5181,9 +5182,7 @@
           </div>`;
         });
 
-        html += `
-          <div class="email-task-card" id="email-task-card-thread" style="display:none;"></div>
-        </div>`;
+        html += `</div>`;
 
         detailEl.innerHTML = html;
 
@@ -5374,9 +5373,8 @@
     }
 
     function showTaskCardInThread(msgId) {
-      alert("Task button clicked! msgId: " + msgId);
       const card = document.getElementById("email-task-card-thread");
-      if (!card) { alert("Card element not found!"); return; }
+      if (!card) return;
       const email = folderEmails.find(e => e.id === msgId) || inboxEmails.find(e => e.id === msgId)
         || folderEmails.find(e => e.id === selectedEmailId) || inboxEmails.find(e => e.id === selectedEmailId);
       if (!email) { console.error("[task] No email found for:", msgId); return; }
