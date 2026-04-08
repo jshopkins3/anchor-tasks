@@ -5353,8 +5353,9 @@
     }
 
     async function createTaskFromEmailDetail(emailId) {
-      const email = folderEmails.find(e => e.id === emailId) || inboxEmails.find(e => e.id === emailId);
-      if (!email) return;
+      const email = folderEmails.find(e => e.id === emailId) || inboxEmails.find(e => e.id === emailId)
+        || folderEmails.find(e => e.id === selectedEmailId) || inboxEmails.find(e => e.id === selectedEmailId);
+      if (!email) { console.error("[task] No email found for id:", emailId); return; }
       const title = document.getElementById(`etask-title-${emailId}`)?.value || email.subject;
       const project = document.getElementById(`etask-proj-${emailId}`)?.value || "";
       const priority = document.getElementById(`etask-pri-${emailId}`)?.value || "normal";
@@ -5375,8 +5376,9 @@
     function showTaskCardInThread(msgId) {
       const card = document.getElementById("email-task-card-thread");
       if (!card) return;
-      const email = folderEmails.find(e => e.id === msgId) || inboxEmails.find(e => e.id === msgId);
-      if (!email) return;
+      const email = folderEmails.find(e => e.id === msgId) || inboxEmails.find(e => e.id === msgId)
+        || folderEmails.find(e => e.id === selectedEmailId) || inboxEmails.find(e => e.id === selectedEmailId);
+      if (!email) { console.error("[task] No email found for:", msgId); return; }
       const triage = triageEmail(email);
       const projectOpts = projects.filter(p => !p.archived)
         .map(p => `<option value="${esc(p.name)}" ${triage.suggestedProject === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("");
