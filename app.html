@@ -5158,9 +5158,9 @@
             <button class="email-action-btn" onclick="openReply('${threadId}', false)">↩ Reply</button>
             <button class="email-action-btn" onclick="openReply('${threadId}', true)">↩↩ Reply All</button>
             <button class="email-action-btn" onclick="openForward('${threadId}')">↪ Forward</button>
-            <button class="email-action-btn" onclick="archiveEmail('${selectedMsgId}')">📥 Archive</button>
-            <button class="email-action-btn danger" onclick="deleteEmail('${selectedMsgId}')">🗑 Delete</button>
-            <button class="email-action-btn task-action" onclick="showTaskCardInThread('${selectedMsgId}')">✚ Task</button>
+            <button class="email-action-btn" onclick="archiveEmail(selectedEmailId)">📥 Archive</button>
+            <button class="email-action-btn danger" onclick="deleteEmail(selectedEmailId)">🗑 Delete</button>
+            <button class="email-action-btn task-action" onclick="showTaskCardInThread(selectedEmailId)">✚ Task</button>
           </div>`;
 
         sortedMsgs.forEach((msg, i) => {
