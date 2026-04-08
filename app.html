@@ -5374,8 +5374,9 @@
     }
 
     function showTaskCardInThread(msgId) {
+      alert("Task button clicked! msgId: " + msgId);
       const card = document.getElementById("email-task-card-thread");
-      if (!card) return;
+      if (!card) { alert("Card element not found!"); return; }
       const email = folderEmails.find(e => e.id === msgId) || inboxEmails.find(e => e.id === msgId)
         || folderEmails.find(e => e.id === selectedEmailId) || inboxEmails.find(e => e.id === selectedEmailId);
       if (!email) { console.error("[task] No email found for:", msgId); return; }
