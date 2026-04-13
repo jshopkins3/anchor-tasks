@@ -3607,8 +3607,8 @@ Be specific and actionable. Use borrower names everywhere. If a note mentions a 
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 2000,
+            model: "claude-sonnet-4-6-20250620",
+            max_tokens: 4000,
             messages: [{ role: "user", content: prompt }],
           }),
         });
