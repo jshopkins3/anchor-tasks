@@ -799,9 +799,12 @@ function appendTriageLog(entries) {
 // Check if an email should be auto-marked read based on triage rules
 function shouldAutoRead(email, rules) {
   const from = (email.from || "").toLowerCase();
+  const to = (email.to || "").toLowerCase();
   const subject = (email.subject || "");
   const snippet = (email.snippet || "");
   const combined = subject + " " + snippet;
+  // MCM email = loan ops address — emails sent here are 90% loan-related
+  const sentToMCM = to.includes("@mychomeloans.com");
 
   // NEVER auto-read if email contains a loan number (highest priority safety rail)
   if (rules.loanNumberPattern) {
@@ -819,21 +822,26 @@ function shouldAutoRead(email, rules) {
   // Content-based detection: mass-email rate sheet blasts from lender AEs
   // These come from real people but are bulk-sent marketing — "Web Version" is the giveaway
   const snippetLower = snippet.toLowerCase();
-  const subjectLower = subject.toLowerCase();
-  if (snippetLower.includes("web version") || snippetLower.includes("view in browser") || snippetLower.includes("click here to download")) {
+  const isMassEmail = snippetLower.includes("web version") || snippetLower.includes("view in browser") || snippetLower.includes("click here to download");
+  if (isMassEmail) {
     // Mass email detected — check if subject matches rate sheet patterns
     if (/rate sheet|daily rate|today'?s rates|re-?price|pricing update|better pricing|bigger opportunities|closing calendar|important dates/i.test(subject + " " + snippet)) {
       return { autoRead: true, reason: "mass_email: rate sheet blast" };
     }
     // Generic mass marketing from any sender
     if (/unsubscribe|web version|view in browser|email preferences/i.test(snippet)) {
-      // But still protect allowlisted domains for non-rate-sheet mass emails
+      // Protect if sent to MCM address (loan ops) — likely pipeline-related even if mass-sent
+      if (sentToMCM) return { autoRead: false, reason: "mass_email_but_sent_to_mcm" };
+      // Still protect allowlisted domains for non-rate-sheet mass emails
       for (const pattern of (rules.allowlist || [])) {
         if (from.includes(pattern.toLowerCase())) return { autoRead: false, reason: "allowlisted_mass_email" };
       }
       return { autoRead: true, reason: "mass_email: marketing blast" };
     }
   }
+
+  // Non-mass emails sent to MCM address — extra protection, never auto-read
+  if (sentToMCM) return { autoRead: false, reason: "sent_to_mcm" };
 
   // Allowlisted domains — protect everything not caught above
   for (const pattern of (rules.allowlist || [])) {
@@ -3258,7 +3266,7 @@ const server = http.createServer(async (req, res) => {
             const msg = await r.json();
             const h = msg.payload?.headers || [];
             const getH = n => (h.find(x => x.name.toLowerCase() === n.toLowerCase()) || {}).value || "";
-            return { id: msg.id, threadId: msg.threadId, from: getH("From"), subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "" };
+            return { id: msg.id, threadId: msg.threadId, from: getH("From"), to: getH("To"), subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "" };
           } catch { return null; }
         }))).filter(Boolean);
         if (!emails.length) {
