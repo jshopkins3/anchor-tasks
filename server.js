@@ -1483,6 +1483,67 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { task: tasks[idx] });
     }
 
+    // Dan: Projects CRUD
+    if (urlPath === "/api/dan/projects-list" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const email = req.session?.email || "john@myanchormortgage.com";
+      const projects = getVisibleProjects(email);
+      return json(res, 200, { projects });
+    }
+
+    if (urlPath === "/api/dan/projects-create" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const email = req.session?.email || "john@myanchormortgage.com";
+      const projects = parseProjects(email);
+      const project = {
+        id: generateId(),
+        name: String(body.name || "").substring(0, 200),
+        description: String(body.description || "").substring(0, 500),
+        owner: String(body.owner || "").substring(0, 100),
+        ownerEmail: email,
+        members: body.members || [],
+        archived: false,
+      };
+      if (!project.name) return json(res, 400, { error: "Project name required" });
+      projects.push(project);
+      writeProjects(projects, email);
+      // Create project detail if notes/ethos provided
+      if (body.notes || body.ethos) {
+        writeProjectDetail(project.id, {
+          notes: body.notes || "",
+          ethos: body.ethos || "",
+          docs: [],
+          folderId: "",
+          folderUrl: "",
+        });
+      }
+      return json(res, 201, { project });
+    }
+
+    if (urlPath === "/api/dan/projects-update" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.id) return json(res, 400, { error: "Project id required" });
+      const email = req.session?.email || "john@myanchormortgage.com";
+      const projects = parseProjects(email);
+      const idx = projects.findIndex(p => p.id === body.id);
+      if (idx === -1) return json(res, 404, { error: "Project not found" });
+      if (body.name !== undefined) projects[idx].name = String(body.name).substring(0, 200);
+      if (body.description !== undefined) projects[idx].description = String(body.description).substring(0, 500);
+      if (body.owner !== undefined) projects[idx].owner = String(body.owner).substring(0, 100);
+      if (body.archived !== undefined) projects[idx].archived = !!body.archived;
+      writeProjects(projects, email);
+      // Update detail if provided
+      if (body.notes !== undefined || body.ethos !== undefined) {
+        const detail = readProjectDetail(projects[idx].id);
+        if (body.notes !== undefined) detail.notes = body.notes;
+        if (body.ethos !== undefined) detail.ethos = body.ethos;
+        writeProjectDetail(projects[idx].id, detail);
+      }
+      return json(res, 200, { project: projects[idx] });
+    }
+
     // Dan: Google Drive access
     if (urlPath === "/api/dan/drive-search" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
@@ -1945,7 +2006,68 @@ const server = http.createServer(async (req, res) => {
       const filtered = tasks.filter(t => t.id !== id);
       if (filtered.length === tasks.length) return json(res, 404, { error: "Task not found" });
       writeTasks(filtered, req.session.email);
+      // Clean up task detail file
+      const detailFile = userFile(req.session.email, `task-${id}.json`);
+      try { if (fs.existsSync(detailFile)) fs.unlinkSync(detailFile); } catch {}
       return json(res, 200, { ok: true });
+    }
+
+    /* ── Task notes & attachments ──────────────────────────────── */
+    const taskDetailMatch = urlPath.match(/^\/api\/tasks\/([^/]+)\/detail$/);
+    if (taskDetailMatch && req.method === "GET") {
+      const id = taskDetailMatch[1];
+      const detailFile = userFile(req.session.email, `task-${id}.json`);
+      try {
+        if (fs.existsSync(detailFile)) return json(res, 200, JSON.parse(fs.readFileSync(detailFile, "utf8")));
+      } catch {}
+      return json(res, 200, { notes: "", attachments: [] });
+    }
+
+    if (taskDetailMatch && req.method === "PATCH") {
+      const id = taskDetailMatch[1];
+      const body = JSON.parse(await readBody(req));
+      const detailFile = userFile(req.session.email, `task-${id}.json`);
+      let detail = { notes: "", attachments: [] };
+      try { if (fs.existsSync(detailFile)) detail = JSON.parse(fs.readFileSync(detailFile, "utf8")); } catch {}
+      if (body.notes !== undefined) detail.notes = String(body.notes).substring(0, 10000);
+      if (body.attachments !== undefined) detail.attachments = (body.attachments || []).slice(0, 20);
+      fs.writeFileSync(detailFile, JSON.stringify(detail, null, 2), "utf8");
+      return json(res, 200, detail);
+    }
+
+    const taskAttachMatch = urlPath.match(/^\/api\/tasks\/([^/]+)\/attachment$/);
+    if (taskAttachMatch && req.method === "POST") {
+      const id = taskAttachMatch[1];
+      const contentType = req.headers["content-type"] || "";
+      const filename = url.searchParams.get("name") || "attachment";
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const buf = Buffer.concat(chunks);
+      // Save to user's task attachments directory
+      const attachDir = userFile(req.session.email, `task-${id}-attachments`);
+      if (!fs.existsSync(attachDir)) fs.mkdirSync(attachDir, { recursive: true });
+      const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 100);
+      const filepath = path.join(attachDir, safeName);
+      fs.writeFileSync(filepath, buf);
+      // Add to task detail
+      const detailFile = userFile(req.session.email, `task-${id}.json`);
+      let detail = { notes: "", attachments: [] };
+      try { if (fs.existsSync(detailFile)) detail = JSON.parse(fs.readFileSync(detailFile, "utf8")); } catch {}
+      detail.attachments.push({ name: filename, file: safeName, size: buf.length, type: contentType, addedAt: Date.now() });
+      fs.writeFileSync(detailFile, JSON.stringify(detail, null, 2), "utf8");
+      return json(res, 200, { ok: true, attachment: detail.attachments[detail.attachments.length - 1] });
+    }
+
+    const taskAttachFileMatch = urlPath.match(/^\/api\/tasks\/([^/]+)\/attachment\/(.+)$/);
+    if (taskAttachFileMatch && req.method === "GET") {
+      const [, id, filename] = taskAttachFileMatch;
+      const filepath = path.join(userFile(req.session.email, `task-${id}-attachments`), decodeURIComponent(filename));
+      if (!fs.existsSync(filepath)) return json(res, 404, { error: "Attachment not found" });
+      const buf = fs.readFileSync(filepath);
+      const ext = path.extname(filepath).toLowerCase();
+      const mimeMap = { ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".doc": "application/msword", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".xls": "application/vnd.ms-excel", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+      res.writeHead(200, { "Content-Type": mimeMap[ext] || "application/octet-stream", "Content-Disposition": `attachment; filename="${decodeURIComponent(filename)}"`, "Content-Length": buf.length });
+      return res.end(buf);
     }
 
     /* ── PROJECTS API ──────────────────────────────────────────────── */
