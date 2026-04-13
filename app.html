@@ -2135,7 +2135,7 @@
               <a onclick="switchToTab('email')" style="font-size:10px;color:var(--gold);cursor:pointer;font-weight:600;">Inbox &rarr;</a>
             </div>
           </div>
-          <div id="hub-email-list" style="max-height:240px;overflow-y:auto;padding:0;">
+          <div id="hub-email-list" style="max-height:400px;overflow-y:auto;padding:0;">
             <div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">
               <span style="display:inline-block;animation:pulse 1.5s infinite;">&#9881;</span> Dan is triaging your inbox...
             </div>
@@ -2451,6 +2451,7 @@
               <a href="/api/gcal-auth" class="email-toolbar-btn" style="text-decoration:none;" title="Reconnect Google">⚙</a>
             </div>
           </div>
+          <div id="email-triage-bar" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border-default);background:var(--bg-page,#fafafa);"></div>
           <div id="email-list-items"><div class="email-empty" style="height:200px;"><div class="email-body-loading">Loading inbox...</div></div></div>
         </div>
         <div class="email-resize-handle" id="email-resize-handle"></div>
@@ -2793,11 +2794,13 @@
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               <button onclick="setReactorFilter('new')" id="reactor-filter-new" class="reactor-filter active" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--gold);background:var(--gold-dim);color:var(--gold);">New</button>
               <button onclick="setReactorFilter('reacted')" id="reactor-filter-reacted" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">Reacted</button>
-              <button onclick="setReactorFilter('dismissed')" id="reactor-filter-dismissed" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">Dismissed</button>
               <button onclick="setReactorFilter('all')" id="reactor-filter-all" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">All</button>
-              <button onclick="pollReactorFeed()" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">Refresh</button>
+              <button onclick="pollReactorFeed()" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">&#8635; Poll Now</button>
             </div>
           </div>
+          <!-- Emerging Themes -->
+          <div id="reactor-themes" style="display:none;margin-bottom:14px;"></div>
+          <!-- Feed grouped by source -->
           <div id="reactor-feed-list" style="display:flex;flex-direction:column;gap:8px;">
             <div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:13px;">Loading...</div>
           </div>
@@ -4376,6 +4379,8 @@
             const el = document.getElementById("email-list-items");
             if (el) el.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Loading...</div>`;
             loadEmailLabels();
+            triageFilterCategory = null; // reset filter when switching to email tab
+            renderTriageBar();
             if (currentFolder === "INBOX" && inboxEmails.length) {
               folderEmails = inboxEmails;
               renderEmailList();
@@ -5056,8 +5061,8 @@
             <span style="font-size:10px;font-weight:700;color:${cat.color};text-transform:uppercase;letter-spacing:0.5px;">${esc(cat.label)}</span>
             <span style="font-size:10px;color:var(--text-faint);">(${cat.emails.length})</span>
           </div>`;
-          // Email rows (max 3 per category to keep compact)
-          const show = cat.emails.slice(0, 3);
+          // Email rows (max 5 per category)
+          const show = cat.emails.slice(0, 5);
           for (const e of show) {
             const fromName = (e.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
             const summ = e.summary ? ` — ${e.summary}` : "";
@@ -5068,8 +5073,8 @@
               </div>
             </div>`;
           }
-          if (cat.emails.length > 3) {
-            html += `<div style="padding:3px 14px 5px 24px;font-size:10px;color:var(--text-faint);">+${cat.emails.length - 3} more</div>`;
+          if (cat.emails.length > 5) {
+            html += `<div style="padding:3px 14px 5px 24px;font-size:10px;color:var(--text-faint);">+${cat.emails.length - 5} more</div>`;
           }
         }
         // Show auto-read summary at bottom
@@ -5080,12 +5085,88 @@
           </div>`;
         }
         el.innerHTML = html;
+        // Also update the email tab triage bar if it exists
+        renderTriageBar();
       } catch (err) {
         console.error("[email-triage]", err);
         el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Triage unavailable</div>';
       }
     }
     function refreshEmailTriage() { loadEmailTriage(true); }
+
+    // Triage bar in the email tab — shows category pills for quick filtering
+    let triageFilterCategory = null; // null = show all, or "urgent"|"needs_response"|"fyi"|"archive"
+    function renderTriageBar() {
+      const bar = document.getElementById("email-triage-bar");
+      if (!bar || !triageData || !triageData.categories || !triageData.categories.length) {
+        if (bar) bar.style.display = "none";
+        return;
+      }
+      bar.style.display = "flex";
+      bar.style.gap = "6px";
+      bar.style.alignItems = "center";
+      bar.style.flexWrap = "wrap";
+      // "All" pill
+      const allActive = !triageFilterCategory;
+      let html = `<button onclick="setTriageFilter(null)" style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${allActive ? 'var(--gold)' : 'rgba(63,63,70,0.3)'};background:${allActive ? 'var(--gold-dim,rgba(212,175,55,0.15))' : 'transparent'};color:${allActive ? 'var(--gold)' : 'var(--text-secondary)'};">All</button>`;
+      for (const cat of triageData.categories) {
+        const active = triageFilterCategory === cat.priority;
+        html += `<button onclick="setTriageFilter('${cat.priority}')" style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${active ? cat.color : 'rgba(63,63,70,0.3)'};background:${active ? cat.color + '18' : 'transparent'};color:${active ? cat.color : 'var(--text-secondary)'};">
+          ${cat.emoji} ${cat.label} <span style="font-weight:400;opacity:0.8;">${cat.emails.length}</span>
+        </button>`;
+      }
+      if (triageData.autoRead > 0) {
+        html += `<span style="margin-left:auto;font-size:10px;color:var(--text-faint);">⚓ ${triageData.autoRead} auto-cleared</span>`;
+      }
+      bar.innerHTML = html;
+    }
+
+    function setTriageFilter(category) {
+      triageFilterCategory = category;
+      renderTriageBar();
+      if (!triageData || !triageData.categories) return;
+      if (!category) {
+        // Show all — re-render the normal email list
+        renderEmailList();
+        return;
+      }
+      // Filter: find which email IDs are in this triage category
+      const cat = triageData.categories.find(c => c.priority === category);
+      if (!cat) { renderEmailList(); return; }
+      const triageIds = new Set(cat.emails.map(e => e.id));
+      // Filter folderEmails to only those IDs and re-render
+      const listEl = document.getElementById("email-list-items");
+      if (!listEl) return;
+      const filtered = folderEmails.filter(e => triageIds.has(e.id));
+      if (!filtered.length) {
+        listEl.innerHTML = `<div class="email-empty" style="height:200px;"><div class="email-empty-icon">${cat.emoji}</div><div class="email-empty-text">No ${cat.label.toLowerCase()} emails</div></div>`;
+        return;
+      }
+      // Re-use the row renderer from renderEmailList
+      let html = `<div class="email-bulk-bar" style="padding:4px 16px;"><input type="checkbox" class="email-checkbox" onchange="toggleSelectAll(this.checked)" title="Select all"></div>`;
+      for (const e of filtered) {
+        const hasAttachment = e.snippet && /attach/i.test(e.snippet);
+        const checked = selectedEmailIds.has(e.id);
+        // Find summary from triage data
+        const triageEmail = cat.emails.find(te => te.id === e.id);
+        const summary = triageEmail && triageEmail.summary ? ` — ${triageEmail.summary}` : "";
+        html += `
+        <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}', '${e.threadId}')">
+          <input type="checkbox" class="email-checkbox" ${checked ? "checked" : ""} onclick="event.stopPropagation();toggleEmailCheck('${e.id}')" >
+          <span class="email-star ${e.starred ? 'starred' : ''}" onclick="event.stopPropagation();toggleStar('${e.id}', ${!e.starred})" title="${e.starred ? 'Unstar' : 'Star'}">★</span>
+          ${typeof emailAvatarHtml === "function" ? emailAvatarHtml(e.from) : ""}
+          <div class="email-row-content">
+            <div class="email-row-top">
+              <span class="email-row-from">${esc(e.from)}</span>
+              <span class="email-row-time">${typeof formatEmailDate === "function" ? formatEmailDate(e.date) : ""}</span>
+            </div>
+            <div class="email-row-subject">${esc(e.subject)}${summary ? `<span style="color:var(--text-faint);font-weight:400;font-size:11px;">${esc(summary)}</span>` : ""}</div>
+            <div class="email-row-snippet">${esc(e.snippet || "")}</div>
+          </div>
+        </div>`;
+      }
+      listEl.innerHTML = html;
+    }
 
     /* ── Inbox ───────────────────────────────────────────────── */
     let inboxEmails = [];
@@ -6293,8 +6374,13 @@
       currentPageToken = null;
       selectedEmailId = null;
       folderEmails = [];
+      triageFilterCategory = null;
       document.getElementById("email-search-input").value = "";
       document.getElementById("email-search-clear").style.display = "none";
+      // Show triage bar only for INBOX
+      const bar = document.getElementById("email-triage-bar");
+      if (bar) bar.style.display = labelId === "INBOX" ? "" : "none";
+      if (labelId === "INBOX") renderTriageBar();
       // Check if this is a search-based virtual folder (like Anchor)
       const sysFolder = SYSTEM_FOLDERS.find(f => f.id === labelId);
       if (sysFolder?.search) {
