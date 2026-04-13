@@ -2840,11 +2840,26 @@
         googleClientId = cfg.clientId || "";
       } catch {}
 
-      await Promise.all([loadTasks(), loadProjects(), loadGoals(), loadCalEvents(), loadInbox(), loadJournalEntries()]);
-      renderAll();
+      // Load core data in parallel, render progressively
       setupTabs();
       setupFilters();
-      updateHubView();
+
+      // Fast: local data (tasks, projects, goals, journal)
+      const fastLoads = Promise.all([loadTasks(), loadProjects(), loadGoals(), loadJournalEntries()]);
+      // Slow: external APIs (calendar, email)
+      const slowLoads = Promise.all([loadCalEvents(), loadInbox()]);
+
+      // Render as soon as local data is ready — don't wait for external APIs
+      fastLoads.then(() => {
+        renderAll();
+        updateHubView(); // starts its own async fetches for pipeline/mbs/content
+      });
+
+      // When slow data arrives, refresh
+      slowLoads.then(() => {
+        renderAll();
+        updateHubView();
+      });
 
       // Show gcal feedback from OAuth redirect
       const urlParams = new URLSearchParams(window.location.search);
@@ -4042,216 +4057,80 @@
       if (tab) tab.click();
     }
 
+    let _hubUpdateRunning = false;
     async function updateHubView() {
-      // Greeting
+      if (_hubUpdateRunning) return; // debounce
+      _hubUpdateRunning = true;
+      try { await _doUpdateHubView(); } finally { _hubUpdateRunning = false; }
+    }
+    async function _doUpdateHubView() {
+      // Greeting — instant
       const hour = new Date().getHours();
       const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
       const el = document.getElementById("hub-greeting");
       if (el) el.textContent = `${greeting}, Captain.`;
 
-      // Date
       const dateEl = document.getElementById("hub-date");
       if (dateEl) {
         const d = new Date();
         dateEl.textContent = d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
       }
 
-      // ── Pipeline data ──
-      let activeLoans = [];
-      try {
-        if (!pipelineLoaded || pipelineLoans.length === 0) {
-          const resp = await fetch("/api/pipeline/loans");
-          if (resp.ok) {
-            const data = await resp.json();
-            pipelineLoans = data.loans || [];
-            pipelineLoaded = true;
-          }
-        }
-        const activeStages = new Set(["APPLICATION_INTAKE","QUALIFICATION","PREAPPROVED","DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
-        activeLoans = pipelineLoans.filter(l => activeStages.has(l.loanStatus));
-      } catch (e) { console.error("[hub] Pipeline fetch error:", e); }
+      // ── Kick off ALL network fetches in parallel immediately ──
+      const pipelinePromise = (!pipelineLoaded || pipelineLoans.length === 0)
+        ? fetch("/api/pipeline/loans").then(r => r.ok ? r.json() : null).catch(() => null)
+        : Promise.resolve(null); // already cached
+      const mbsPromise = fetch("/api/mbs").then(r => r.ok ? r.json() : null).catch(() => null);
+      const contentPromise = fetch("/api/briefing").then(r => r.ok ? r.json() : null).catch(() => null);
 
-      // Pipeline stats
-      const pipeCount = document.getElementById("hub-pipeline-count");
-      const pipeVol = document.getElementById("hub-pipeline-vol");
-      if (pipeCount) pipeCount.textContent = activeLoans.length;
-      const totalVol = activeLoans.reduce((s, l) => s + (l.loanAmount || 0), 0);
-      if (pipeVol) pipeVol.textContent = totalVol > 0 ? `$${(totalVol / 1000000).toFixed(1)}M volume` : "No active loans";
-
-      // Closing this week
-      const closingCount = document.getElementById("hub-closing-count");
-      const closingNames = document.getElementById("hub-closing-names");
+      // ── PHASE 1: Render local panels instantly (tasks, email, calendar) ──
       const now = new Date();
-      const endOfWeek = new Date(now); endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
-      const closingThisWeek = activeLoans.filter(l => {
-        if (!l.closingDate) return false;
-        const cd = new Date(l.closingDate);
-        return cd >= now && cd <= endOfWeek;
-      });
-      if (closingCount) closingCount.textContent = closingThisWeek.length;
-      if (closingNames) closingNames.textContent = closingThisWeek.length > 0
-        ? closingThisWeek.map(l => l.borrowerLast || l.borrowerName?.split(" ").pop() || "").join(", ")
-        : "None this week";
 
-      // Tasks due today
-      const focusCount = document.getElementById("hub-focus-count");
-      const taskSub = document.getElementById("hub-task-sub");
+      // Task stats
       const todayTasks = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.todayFocus) : [];
-      const overdueTasks = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date(now.toDateString())).length : 0;
-      if (focusCount) focusCount.textContent = todayTasks.length;
-      if (taskSub) taskSub.textContent = overdueTasks > 0 ? `${overdueTasks} overdue` : `${(typeof tasks !== "undefined") ? tasks.filter(t=>!t.done).length : 0} total open`;
+      const overdueCount = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date(now.toDateString())).length : 0;
+      const focusCountEl = document.getElementById("hub-focus-count");
+      const taskSubEl = document.getElementById("hub-task-sub");
+      if (focusCountEl) focusCountEl.textContent = todayTasks.length;
+      if (taskSubEl) taskSubEl.textContent = overdueCount > 0 ? `${overdueCount} overdue` : `${(typeof tasks !== "undefined") ? tasks.filter(t=>!t.done).length : 0} total open`;
 
-      // Email count
-      const emailCount = document.getElementById("hub-email-count");
-      const emailSub = document.getElementById("hub-email-sub");
+      // Email stats
       const unread = (typeof inboxEmails !== "undefined") ? inboxEmails.filter(e => e.unread).length : 0;
-      if (emailCount) emailCount.textContent = unread || "--";
-      if (emailSub) emailSub.textContent = unread > 0 ? "needs attention" : "all caught up";
+      const emailCountEl = document.getElementById("hub-email-count");
+      const emailSubEl = document.getElementById("hub-email-sub");
+      if (emailCountEl) emailCountEl.textContent = unread || "--";
+      if (emailSubEl) emailSubEl.textContent = unread > 0 ? "needs attention" : "all caught up";
 
-      // ── MBS ticker ──
-      try {
-        const mbsResp = await fetch("/api/market-data");
-        if (mbsResp.ok) {
-          const marketData = await mbsResp.json();
-          const rates = marketData.rates || marketData;
-          console.log("[hub] MBS raw data:", JSON.stringify(rates).substring(0, 500));
-          const mbsEl = document.getElementById("hub-mbs-change");
-          const tyrEl = document.getElementById("hub-10yr");
-          if (rates && mbsEl) {
-            // Walk all keys to find MBS/treasury values
-            const allKeys = Object.keys(rates);
-            const changeKey = allKeys.find(k => /change|bps|delta/i.test(k));
-            const priceKey = allKeys.find(k => /price|mbs|coupon/i.test(k));
-            const treasuryKey = allKeys.find(k => /treas|10yr|ten.*year|yield/i.test(k));
-            const change = changeKey ? rates[changeKey] : null;
-            const price = priceKey ? rates[priceKey] : null;
-            if (change != null && !isNaN(parseFloat(change))) {
-              const c = parseFloat(change);
-              mbsEl.textContent = (c >= 0 ? "+" : "") + c.toFixed(2);
-              mbsEl.style.color = c >= 0 ? "#22c55e" : "#ef4444";
-            } else if (price != null) {
-              mbsEl.textContent = price;
-            } else if (rates.note) {
-              mbsEl.textContent = "N/A";
-              mbsEl.style.color = "var(--text-faint)";
-            }
-            const tyr = treasuryKey ? rates[treasuryKey] : null;
-            if (tyrEl && tyr != null) tyrEl.textContent = String(tyr).includes("%") ? tyr : tyr + "%";
-          }
-        }
-      } catch (e) { console.error("[hub] MBS fetch error:", e); }
-
-      // ── Compliance Alerts ──
-      const alertsEl = document.getElementById("hub-alerts");
-      const alertsList = document.getElementById("hub-alerts-list");
-      const inProcessStages = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
-      const alerts = [];
-      for (const loan of activeLoans) {
-        if (inProcessStages.has(loan.loanStatus)) {
-          if (!loan.closingDate) {
-            alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:#ef4444;">No closing date set</span></div>`);
-          } else {
-            const cd = new Date(loan.closingDate);
-            const daysOut = Math.ceil((cd - now) / 86400000);
-            if (daysOut < 0) {
-              alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#ef4444;">Closing date passed ${Math.abs(daysOut)}d ago</span></div>`);
-            } else if (daysOut <= 3) {
-              alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#f59e0b;">Closing in ${daysOut} day${daysOut !== 1 ? "s" : ""}</span></div>`);
-            }
-          }
-          // Stale check: no status change in 14+ days
-          if (loan.lastStatusChange) {
-            const daysSince = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000);
-            if (daysSince > 14) {
-              alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:#f59e0b;">No movement in ${daysSince} days</span></div>`);
-            }
-          }
-        }
-        // Stale pre-approvals
-        if (loan.loanStatus === "PREAPPROVED" && loan.lastStatusChange) {
-          const daysSince = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000);
-          if (daysSince > 30) {
-            alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#f59e0b;">Pre-approval stale (${daysSince}d)</span></div>`);
-          }
-        }
-      }
-      if (alertsEl) {
-        alertsEl.style.display = alerts.length > 0 ? "block" : "none";
-        if (alertsList) alertsList.innerHTML = alerts.join("");
-      }
-
-      // ── Pipeline panel ──
-      const pipeList = document.getElementById("hub-pipeline-list");
-      if (pipeList) {
-        const stageColors = { APPLICATION_INTAKE:"#6366f1", QUALIFICATION:"#8b5cf6", PREAPPROVED:"#3b82f6", DISCLOSURE_SENT:"#0ea5e9", APPROVED_WITH_CONDITION:"#f59e0b", CLEAR_TO_CLOSE:"#10b981", DOCS_OUT:"#14b8a6", DOCS_SIGNED:"#06b6d4" };
-        const stageLabels = { APPLICATION_INTAKE:"Intake", QUALIFICATION:"Qual", PREAPPROVED:"Pre-Appr", DISCLOSURE_SENT:"Disclosed", APPROVED_WITH_CONDITION:"Cond Appr", CLEAR_TO_CLOSE:"CTC", DOCS_OUT:"Docs Out", DOCS_SIGNED:"Docs Signed" };
-        // Sort: in-process first, then by amount desc
-        const sorted = [...activeLoans].sort((a, b) => {
-          const aProc = inProcessStages.has(a.loanStatus) ? 0 : 1;
-          const bProc = inProcessStages.has(b.loanStatus) ? 0 : 1;
-          if (aProc !== bProc) return aProc - bProc;
-          return (b.loanAmount || 0) - (a.loanAmount || 0);
-        });
-        if (sorted.length === 0) {
-          pipeList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">No active loans</div>';
-        } else {
-          pipeList.innerHTML = sorted.map(loan => {
-            const color = stageColors[loan.loanStatus] || "#6366f1";
-            const initials = (loan.borrowerFirst?.[0] || "") + (loan.borrowerLast?.[0] || "");
-            return `<div onclick="showLoanDetail('${loan.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
-              <div style="width:32px;height:32px;border-radius:50%;background:${color}20;color:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${initials || "?"}</div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${loan.borrowerName || "Unknown"}</div>
-                <div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">$${(loan.loanAmount || 0).toLocaleString()} &bull; ${loan.loanPurpose || ""}</div>
-              </div>
-              <div style="padding:3px 8px;border-radius:99px;font-size:10px;font-weight:600;background:${color}18;color:${color};white-space:nowrap;">${stageLabels[loan.loanStatus] || loan.loanStatus}</div>
-            </div>`;
-          }).join("");
-        }
-      }
-
-      // ── Today's Focus panel ──
+      // Today's Focus panel
       const focusList = document.getElementById("hub-focus-list");
       if (focusList) {
         let focusHtml = '';
-
-        // Overdue tasks (red, top priority)
         const overdue = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date(now.toDateString()) && !t.todayFocus) : [];
         if (overdue.length > 0) {
           focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.05em;background:rgba(239,68,68,0.04);">Overdue</div>`;
           for (const t of overdue.slice(0, 3)) {
             focusHtml += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);background:rgba(239,68,68,0.02);">
               <button class="task-check" onclick="toggleTask('${t.id}').then(()=>updateHubView())" style="flex-shrink:0;"></button>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
-                <div style="font-size:10px;color:#ef4444;margin-top:2px;">Was due ${t.due}</div>
-              </div>
+              <div style="flex:1;min-width:0;"><div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
+              <div style="font-size:10px;color:#ef4444;margin-top:2px;">Was due ${t.due}</div></div>
               <span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">OVERDUE</span>
             </div>`;
           }
         }
-
-        // Today's focus tasks
         if (todayTasks.length > 0) {
           focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;">Focus</div>`;
           for (const t of todayTasks.slice(0, 6)) {
-            const projectBadge = t.project === "Active Loans" ? `<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(59,130,246,0.1);color:#3b82f6;margin-left:4px;">${t.project}</span>` : "";
+            const pb = t.project === "Active Loans" ? `<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(59,130,246,0.1);color:#3b82f6;margin-left:4px;">${t.project}</span>` : "";
             focusHtml += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);">
               <button class="task-check" onclick="toggleTask('${t.id}').then(()=>updateHubView())" style="flex-shrink:0;"></button>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}${projectBadge}</div>
-                ${t.due ? `<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Due ${t.due}</div>` : ""}
-              </div>
+              <div style="flex:1;min-width:0;"><div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}${pb}</div>
+              ${t.due ? `<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Due ${t.due}</div>` : ""}</div>
               ${t.priority === "high" || t.priority === "urgent" ? '<span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">' + t.priority.toUpperCase() + '</span>' : ""}
             </div>`;
           }
         }
-
-        // Next up: upcoming calendar events for today
-        const todayStr = new Date().toISOString().substring(0, 10);
-        const upcomingEvents = (typeof calEvents !== "undefined" ? calEvents : [])
-          .filter(ev => (ev.start || "").substring(0, 10) === todayStr && !ev.allDay)
-          .sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+        const todayStr2 = now.toISOString().substring(0, 10);
+        const upcomingEvents = (typeof calEvents !== "undefined" ? calEvents : []).filter(ev => (ev.start || "").substring(0, 10) === todayStr2 && !ev.allDay).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
         if (upcomingEvents.length > 0) {
           focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.05em;">Today's Meetings</div>`;
           for (const ev of upcomingEvents.slice(0, 3)) {
@@ -4262,56 +4141,116 @@
             </div>`;
           }
         }
-
-        if (!focusHtml) {
-          focusHtml = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">All clear! No tasks or meetings right now.</div>';
-        }
-        focusList.innerHTML = focusHtml;
+        focusList.innerHTML = focusHtml || '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">All clear! No tasks or meetings right now.</div>';
       }
 
-      // ── Email panel ──
+      // Email panel
       const emailList = document.getElementById("hub-email-list");
       if (emailList && typeof inboxEmails !== "undefined") {
         const unreadEmails = inboxEmails.filter(e => e.unread).slice(0, 5);
-        if (unreadEmails.length === 0) {
-          emailList.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Inbox clear</div>';
-        } else {
-          emailList.innerHTML = unreadEmails.map(e => {
-            return `<div onclick="switchToTab('email')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
-              <div style="font-size:12px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.from || "")}</div>
-              <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(e.subject || "")}</div>
-            </div>`;
-          }).join("");
-        }
+        emailList.innerHTML = unreadEmails.length === 0
+          ? '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Inbox clear</div>'
+          : unreadEmails.map(e => `<div onclick="switchToTab('email')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'"><div style="font-size:12px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.from || "")}</div><div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(e.subject || "")}</div></div>`).join("");
       }
 
-      // ── Calendar panel ──
+      // Calendar panel
       const calList = document.getElementById("hub-calendar-list");
       if (calList && typeof calEvents !== "undefined") {
-        const todayStr = new Date().toISOString().substring(0, 10);
+        const todayStr = now.toISOString().substring(0, 10);
         const todayEvents = calEvents.filter(ev => (ev.start || "").substring(0, 10) === todayStr);
-        if (todayEvents.length === 0) {
-          calList.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">No events today</div>';
-        } else {
-          calList.innerHTML = todayEvents.map(ev => {
-            const timeLabel = ev.allDay ? "All day" : (typeof formatEventTime === "function" ? formatEventTime(ev.start) : new Date(ev.start).toLocaleTimeString("en-US", {hour:"numeric", minute:"2-digit"}));
-            return `<div onclick="switchToTab('calendar')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:11px;color:var(--gold);font-weight:600;min-width:55px;">${timeLabel}</span>
-                <span style="font-size:12px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ev.title || "")}</span>
-              </div>
-            </div>`;
-          }).join("");
-        }
+        calList.innerHTML = todayEvents.length === 0
+          ? '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">No events today</div>'
+          : todayEvents.map(ev => {
+              const timeLabel = ev.allDay ? "All day" : (typeof formatEventTime === "function" ? formatEventTime(ev.start) : new Date(ev.start).toLocaleTimeString("en-US", {hour:"numeric", minute:"2-digit"}));
+              return `<div onclick="switchToTab('calendar')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'"><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:11px;color:var(--gold);font-weight:600;min-width:55px;">${timeLabel}</span><span style="font-size:12px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ev.title || "")}</span></div></div>`;
+            }).join("");
       }
 
-      // ── Content panel ──
+      // ── PHASE 2: Await network data and render pipeline/MBS/content ──
+
+      // Pipeline
+      const pipeData = await pipelinePromise;
+      if (pipeData) { pipelineLoans = pipeData.loans || []; pipelineLoaded = true; }
+      const activeStages = new Set(["APPLICATION_INTAKE","QUALIFICATION","PREAPPROVED","DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+      const activeLoans = pipelineLoans.filter(l => activeStages.has(l.loanStatus));
+
+      // Pipeline stats
+      const pipeCount = document.getElementById("hub-pipeline-count");
+      const pipeVol = document.getElementById("hub-pipeline-vol");
+      if (pipeCount) pipeCount.textContent = activeLoans.length;
+      const totalVol = activeLoans.reduce((s, l) => s + (l.loanAmount || 0), 0);
+      if (pipeVol) pipeVol.textContent = totalVol > 0 ? `$${(totalVol / 1000000).toFixed(1)}M volume` : "No active loans";
+
+      const endOfWeek = new Date(now); endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
+      const closingThisWeek = activeLoans.filter(l => { if (!l.closingDate) return false; const cd = new Date(l.closingDate); return cd >= now && cd <= endOfWeek; });
+      const closingCountEl = document.getElementById("hub-closing-count");
+      const closingNamesEl = document.getElementById("hub-closing-names");
+      if (closingCountEl) closingCountEl.textContent = closingThisWeek.length;
+      if (closingNamesEl) closingNamesEl.textContent = closingThisWeek.length > 0 ? closingThisWeek.map(l => l.borrowerLast || l.borrowerName?.split(" ").pop() || "").join(", ") : "None this week";
+
+      // Compliance alerts
+      const alertsEl = document.getElementById("hub-alerts");
+      const alertsListEl = document.getElementById("hub-alerts-list");
+      const inProcessStages = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+      const alerts = [];
+      for (const loan of activeLoans) {
+        if (inProcessStages.has(loan.loanStatus)) {
+          if (!loan.closingDate) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:#ef4444;">No closing date set</span></div>`);
+          else { const cd = new Date(loan.closingDate); const d = Math.ceil((cd - now) / 86400000); if (d < 0) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#ef4444;">Closing date passed ${Math.abs(d)}d ago</span></div>`); else if (d <= 3) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#f59e0b;">Closing in ${d} day${d !== 1 ? "s" : ""}</span></div>`); }
+          if (loan.lastStatusChange) { const ds = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000); if (ds > 14) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:#f59e0b;">No movement in ${ds} days</span></div>`); }
+        }
+        if (loan.loanStatus === "PREAPPROVED" && loan.lastStatusChange) { const ds = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000); if (ds > 30) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#f59e0b;">Pre-approval stale (${ds}d)</span></div>`); }
+      }
+      if (alertsEl) { alertsEl.style.display = alerts.length > 0 ? "block" : "none"; if (alertsListEl) alertsListEl.innerHTML = alerts.join(""); }
+
+      // Pipeline panel
+      const pipeList = document.getElementById("hub-pipeline-list");
+      if (pipeList) {
+        const stageColors = { APPLICATION_INTAKE:"#6366f1", QUALIFICATION:"#8b5cf6", PREAPPROVED:"#3b82f6", DISCLOSURE_SENT:"#0ea5e9", APPROVED_WITH_CONDITION:"#f59e0b", CLEAR_TO_CLOSE:"#10b981", DOCS_OUT:"#14b8a6", DOCS_SIGNED:"#06b6d4" };
+        const stageLabelsShort = { APPLICATION_INTAKE:"Intake", QUALIFICATION:"Qual", PREAPPROVED:"Pre-Appr", DISCLOSURE_SENT:"Disclosed", APPROVED_WITH_CONDITION:"Cond Appr", CLEAR_TO_CLOSE:"CTC", DOCS_OUT:"Docs Out", DOCS_SIGNED:"Docs Signed" };
+        const sorted = [...activeLoans].sort((a, b) => { const ap = inProcessStages.has(a.loanStatus) ? 0 : 1; const bp = inProcessStages.has(b.loanStatus) ? 0 : 1; return ap !== bp ? ap - bp : (b.loanAmount || 0) - (a.loanAmount || 0); });
+        pipeList.innerHTML = sorted.length === 0
+          ? '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">No active loans</div>'
+          : sorted.map(loan => {
+              const color = stageColors[loan.loanStatus] || "#6366f1";
+              const initials = (loan.borrowerFirst?.[0] || "") + (loan.borrowerLast?.[0] || "");
+              return `<div onclick="showLoanDetail('${loan.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+                <div style="width:32px;height:32px;border-radius:50%;background:${color}20;color:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${initials || "?"}</div>
+                <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${loan.borrowerName || "Unknown"}</div><div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">$${(loan.loanAmount || 0).toLocaleString()} &bull; ${loan.loanPurpose || ""}</div></div>
+                <div style="padding:3px 8px;border-radius:99px;font-size:10px;font-weight:600;background:${color}18;color:${color};white-space:nowrap;">${stageLabelsShort[loan.loanStatus] || loan.loanStatus}</div>
+              </div>`;
+            }).join("");
+      }
+
+      // MBS ticker (from parallel promise — lightweight /api/mbs)
+      try {
+        const mbsData = await mbsPromise;
+        const mbs = mbsData?.mbs;
+        console.log("[hub] MBS raw:", JSON.stringify(mbs).substring(0, 500));
+        const mbsEl = document.getElementById("hub-mbs-change");
+        const tyrEl = document.getElementById("hub-10yr");
+        if (mbs && mbsEl) {
+          const allKeys = Object.keys(mbs);
+          const changeKey = allKeys.find(k => /change|bps|delta/i.test(k));
+          const priceKey = allKeys.find(k => /price|mbs|coupon|current/i.test(k));
+          const treasuryKey = allKeys.find(k => /treas|10yr|ten.*year|yield/i.test(k));
+          const change = changeKey ? mbs[changeKey] : null;
+          const price = priceKey ? mbs[priceKey] : null;
+          if (change != null && !isNaN(parseFloat(change))) { const c = parseFloat(change); mbsEl.textContent = (c >= 0 ? "+" : "") + c.toFixed(2); mbsEl.style.color = c >= 0 ? "#22c55e" : "#ef4444"; }
+          else if (price != null) { mbsEl.textContent = price; mbsEl.style.color = "var(--text-heading)"; }
+          const tyr = treasuryKey ? mbs[treasuryKey] : null;
+          if (tyrEl && tyr != null) tyrEl.textContent = String(tyr).includes("%") ? tyr : tyr + "%";
+        } else if (mbsEl) {
+          mbsEl.textContent = "N/A"; mbsEl.style.color = "var(--text-faint)";
+        }
+      } catch (e) { console.error("[hub] MBS error:", e); }
+
+      // Content panel (from parallel promise)
       const contentList = document.getElementById("hub-content-list");
       if (contentList) {
         try {
-          const bRes = await fetch("/api/briefing");
-          if (bRes.ok) {
-            const bData = await bRes.json();
+          const bData = await contentPromise;
+          if (bData) {
             const recs = bData.briefing?.contentRecommendations || [];
             const upcoming = recs.slice(0, 3);
             if (upcoming.length === 0) {
@@ -7736,9 +7675,16 @@
       modal.style.display = "flex";
       content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin 0.8s linear infinite;"></div>Loading loan details...</div>';
 
+      // Ensure pipeline data is loaded
+      if (!pipelineLoaded || pipelineLoans.length === 0) {
+        try {
+          const resp = await fetch("/api/pipeline/loans");
+          if (resp.ok) { const data = await resp.json(); pipelineLoans = data.loans || []; pipelineLoaded = true; }
+        } catch (e) { console.error("[loan-detail] Pipeline fetch error:", e); }
+      }
       const loan = pipelineLoans.find(l => l.id === loanId);
       if (!loan) {
-        content.innerHTML = '<div style="padding:20px;color:#ef4444;">Loan not found</div>';
+        content.innerHTML = '<div style="padding:20px;color:#ef4444;">Loan not found. Try refreshing the page.</div>';
         return;
       }
 
@@ -7838,10 +7784,12 @@
       }
 
       // Quick actions
+      const commandUrl = "${location.origin}".replace("anchor-tasks", "anchorcommand").replace("localhost:8080", "anchorcommand.myanchormortgage.com");
       html += `<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <button onclick="document.getElementById('loan-detail-modal').style.display='none';switchToTab('pipeline')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);">Open in Pipeline</button>
+        <a href="https://anchorcommand.myanchormortgage.com" target="_blank" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;">Open in Command</a>
         <button onclick="quickAddLoanTask('${loanId}','${(loan.borrowerName||"").replace(/'/g,"")}')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);">+ Add Task</button>
-        <button onclick="askDanAboutLoan('${(loan.borrowerName||"").replace(/'/g,"")}')" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600;">Ask Dan</button>
+        <button onclick="askDanAboutLoan('${(loan.borrowerName||"").replace(/'/g,"")}')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);">Ask Dan</button>
+        <button onclick="document.getElementById('loan-detail-modal').style.display='none';switchToTab('pipeline')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-secondary);">Pipeline Review</button>
       </div>`;
 
       // Open tasks

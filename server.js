@@ -3312,7 +3312,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { rec });
     }
 
-    // Get market data snapshot
+    // Get market data snapshot (full — slow, used for briefings)
     if (urlPath === "/api/market-data" && req.method === "GET") {
       if (!req.session) return json(res, 401, { error: "Not authenticated" });
       try {
@@ -3321,6 +3321,18 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, data);
       } catch (e) {
         return json(res, 500, { error: e.message });
+      }
+    }
+
+    // Lightweight MBS-only endpoint (fast — for Hub ticker)
+    if (urlPath === "/api/mbs" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const md = require("./market-data");
+        const mbs = await md.fetchMBSData();
+        return json(res, 200, { mbs: mbs || null });
+      } catch (e) {
+        return json(res, 200, { mbs: null, error: e.message });
       }
     }
 
