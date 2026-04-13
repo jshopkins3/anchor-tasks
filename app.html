@@ -7661,9 +7661,10 @@
           if (resp.ok) { const data = await resp.json(); pipelineLoans = data.loans || []; pipelineLoaded = true; }
         } catch (e) { console.error("[loan-detail] Pipeline fetch error:", e); }
       }
-      const loan = pipelineLoans.find(l => l.id === loanId);
+      console.log("[loan-detail] Looking for loanId:", loanId, "in", pipelineLoans.length, "loans. Sample IDs:", pipelineLoans.slice(0, 3).map(l => l.id));
+      const loan = pipelineLoans.find(l => l.id === loanId || l.displayId === loanId);
       if (!loan) {
-        content.innerHTML = '<div style="padding:20px;color:#ef4444;">Loan not found. Try refreshing the page.</div>';
+        content.innerHTML = '<div style="padding:20px;color:#ef4444;">Loan not found (id: ' + loanId + '). Try refreshing the page.</div>';
         return;
       }
 
