@@ -689,8 +689,7 @@ function loadTriageRules() {
         "mailer-daemon@", "donotreply@",
         // Railway deployment crash notifications
         "notify.railway.app",
-        // Wholesale lender rate sheets (specific reps/marketing, NOT loan ops)
-        "marsha.russo@elend.com",       // eLend daily rate blasts
+        // Wholesale lender marketing addresses (NOT AE personal emails)
         "dsandusky@lsmortgage.com",     // LS Mortgage promos
         "tpocomms@kindlending.com",     // Kind Lending rate sheets
         "cwilliams@bluepointmtg.com",   // BluePoint rate sheets
@@ -751,7 +750,7 @@ function migrateTriageRules() {
     const defaults = loadTriageRules.__defaults || [];
     // Merge blocklist: add any new default entries not already present
     const newBlocklist = [
-      "notify.railway.app", "marsha.russo@elend.com", "dsandusky@lsmortgage.com",
+      "notify.railway.app", "dsandusky@lsmortgage.com",
       "tpocomms@kindlending.com", "cwilliams@bluepointmtg.com", "jbeard@orionlending.com",
       "e.rocketprotpo.com", "t.rocketprotpo.com", "kimberwhite@jnba.com",
       "newsletters@housingwire.com", "@substack.com", "@beehiiv.com",
@@ -760,7 +759,13 @@ function migrateTriageRules() {
       "@flowkey.com", "@capitalone.com", "lenderhomepage.com", "mortgagemarketplace.ai",
     ];
     const newAllowlist = ["@elend.com", "@kindlending.com", "@rocketmortgage.com"];
+    // Remove entries that should no longer be blocklisted (AEs who also send personal emails)
+    const removeFromBlocklist = ["marsha.russo@elend.com"];
     let changed = false;
+    for (const entry of removeFromBlocklist) {
+      const idx = existing.blocklist.indexOf(entry);
+      if (idx !== -1) { existing.blocklist.splice(idx, 1); changed = true; }
+    }
     for (const entry of newBlocklist) {
       if (!existing.blocklist.includes(entry)) { existing.blocklist.push(entry); changed = true; }
     }
@@ -769,7 +774,7 @@ function migrateTriageRules() {
     }
     if (changed) {
       fs.writeFileSync(TRIAGE_RULES_FILE, JSON.stringify(existing, null, 2));
-      console.log("[triage] Migrated rules: added new blocklist/allowlist entries");
+      console.log("[triage] Migrated rules: added/removed blocklist/allowlist entries");
     }
   } catch (e) { console.error("[triage] Migration error:", e.message); }
 }
@@ -806,13 +811,31 @@ function shouldAutoRead(email, rules) {
     }
   }
 
-  // Check blocklist FIRST — specific sender blocks beat domain-level allows
-  // (e.g., marsha.russo@elend.com rate sheets blocked even though @elend.com is allowlisted)
+  // Check blocklist — specific sender/domain blocks
   for (const pattern of (rules.blocklist || [])) {
     if (from.includes(pattern.toLowerCase())) return { autoRead: true, reason: `blocklist: ${pattern}` };
   }
 
-  // Allowlisted domains — protect everything NOT specifically blocklisted
+  // Content-based detection: mass-email rate sheet blasts from lender AEs
+  // These come from real people but are bulk-sent marketing — "Web Version" is the giveaway
+  const snippetLower = snippet.toLowerCase();
+  const subjectLower = subject.toLowerCase();
+  if (snippetLower.includes("web version") || snippetLower.includes("view in browser") || snippetLower.includes("click here to download")) {
+    // Mass email detected — check if subject matches rate sheet patterns
+    if (/rate sheet|daily rate|today'?s rates|re-?price|pricing update|better pricing|bigger opportunities|closing calendar|important dates/i.test(subject + " " + snippet)) {
+      return { autoRead: true, reason: "mass_email: rate sheet blast" };
+    }
+    // Generic mass marketing from any sender
+    if (/unsubscribe|web version|view in browser|email preferences/i.test(snippet)) {
+      // But still protect allowlisted domains for non-rate-sheet mass emails
+      for (const pattern of (rules.allowlist || [])) {
+        if (from.includes(pattern.toLowerCase())) return { autoRead: false, reason: "allowlisted_mass_email" };
+      }
+      return { autoRead: true, reason: "mass_email: marketing blast" };
+    }
+  }
+
+  // Allowlisted domains — protect everything not caught above
   for (const pattern of (rules.allowlist || [])) {
     if (from.includes(pattern.toLowerCase())) return { autoRead: false, reason: "allowlisted" };
   }
