@@ -6733,6 +6733,8 @@
         threadId: opts.threadId || "",
         inReplyTo: opts.inReplyTo || "",
         references: opts.references || "",
+        attachments: [], // local File objects from file picker
+        forwardedAttachments: opts.forwardedAttachments || [], // { messageId, attachmentId, filename, mimeType, size }
       };
       renderComposePanel();
     }
@@ -6782,8 +6784,11 @@
             <textarea id="compose-body" placeholder="Write your message...">${esc(composeState.body)}</textarea>
             <div id="compose-sig-preview" style="border-top:1px solid var(--border-default);padding-top:8px;margin-top:8px;opacity:.6;"></div>
           </div>
+          <div id="compose-attachments-preview" style="display:none;padding:4px 12px;border-top:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:6px;"></div>
           <div class="compose-footer">
             <button class="compose-send-btn" id="compose-send-btn" onclick="sendCompose()">Send</button>
+            <input type="file" id="compose-file-input" multiple style="display:none;" onchange="handleComposeFiles(this.files)" />
+            <button class="email-action-btn" onclick="document.getElementById('compose-file-input').click()" title="Attach files" style="font-size:16px;padding:6px 10px;">📎</button>
             <div style="position:relative;">
               <button class="email-action-btn" onclick="toggleEmojiPicker()" title="Emoji" style="font-size:16px;padding:6px 10px;">😊</button>
               <div id="emoji-picker" style="display:none;position:absolute;bottom:40px;left:0;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:8px;width:280px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10;"></div>
@@ -6796,6 +6801,8 @@
         const preview = document.getElementById("compose-sig-preview");
         if (preview && sig.html) preview.innerHTML = sig.html;
       }).catch(() => {});
+      // Render forwarded attachments if present
+      setTimeout(() => renderComposeAttachments(), 50);
       // Focus appropriate field
       setTimeout(() => {
         if (!composeState.to) document.getElementById("compose-to")?.focus();
@@ -6934,6 +6941,43 @@
       composeState = null;
     }
 
+    function handleComposeFiles(files) {
+      if (!composeState) return;
+      for (const f of files) {
+        if (f.size > 25 * 1024 * 1024) { alert(`${f.name} is too large (max 25MB)`); continue; }
+        composeState.attachments.push(f);
+      }
+      renderComposeAttachments();
+      document.getElementById("compose-file-input").value = "";
+    }
+
+    function removeComposeAttachment(idx, type) {
+      if (!composeState) return;
+      if (type === "forwarded") composeState.forwardedAttachments.splice(idx, 1);
+      else composeState.attachments.splice(idx, 1);
+      renderComposeAttachments();
+    }
+
+    function renderComposeAttachments() {
+      const el = document.getElementById("compose-attachments-preview");
+      if (!el || !composeState) return;
+      const localAtts = (composeState.attachments || []).map((f, i) =>
+        `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-secondary);">
+          📄 ${f.name} <span style="color:var(--text-faint);">(${(f.size/1024).toFixed(0)}KB)</span>
+          <button onclick="removeComposeAttachment(${i},'local')" style="background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:14px;padding:0 2px;">&times;</button>
+        </span>`
+      );
+      const fwdAtts = (composeState.forwardedAttachments || []).map((a, i) =>
+        `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;font-size:11px;color:#3b82f6;">
+          📎 ${a.filename} <span style="color:var(--text-faint);">(fwd)</span>
+          <button onclick="removeComposeAttachment(${i},'forwarded')" style="background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:14px;padding:0 2px;">&times;</button>
+        </span>`
+      );
+      const all = localAtts.concat(fwdAtts);
+      el.style.display = all.length > 0 ? "flex" : "none";
+      el.innerHTML = all.join("");
+    }
+
     async function sendCompose() {
       const btn = document.getElementById("compose-send-btn");
       if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
@@ -6944,17 +6988,33 @@
       const body = document.getElementById("compose-body")?.value || "";
       if (!to.trim()) { if (btn) { btn.disabled = false; btn.textContent = "Send"; } return; }
       try {
-        const payload = { to, subject, body };
-        if (cc) payload.cc = cc;
-        if (bcc) payload.bcc = bcc;
-        if (composeState?.threadId) payload.threadId = composeState.threadId;
-        if (composeState?.inReplyTo) payload.inReplyTo = composeState.inReplyTo;
-        if (composeState?.references) payload.references = composeState.references;
-        const res = await fetch("/api/gmail-send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+        const hasLocalAttachments = composeState?.attachments?.length > 0;
+        const hasFwdAttachments = composeState?.forwardedAttachments?.length > 0;
+        let res;
+
+        if (hasLocalAttachments || hasFwdAttachments) {
+          // Use FormData for file uploads
+          const fd = new FormData();
+          fd.append("to", to);
+          fd.append("subject", subject);
+          fd.append("body", body);
+          if (cc) fd.append("cc", cc);
+          if (bcc) fd.append("bcc", bcc);
+          if (composeState?.threadId) fd.append("threadId", composeState.threadId);
+          if (composeState?.inReplyTo) fd.append("inReplyTo", composeState.inReplyTo);
+          if (composeState?.references) fd.append("references", composeState.references);
+          for (const f of (composeState.attachments || [])) fd.append("files", f, f.name);
+          if (hasFwdAttachments) fd.append("forwardedAttachments", JSON.stringify(composeState.forwardedAttachments));
+          res = await fetch("/api/gmail-send", { method: "POST", body: fd });
+        } else {
+          const payload = { to, subject, body };
+          if (cc) payload.cc = cc;
+          if (bcc) payload.bcc = bcc;
+          if (composeState?.threadId) payload.threadId = composeState.threadId;
+          if (composeState?.inReplyTo) payload.inReplyTo = composeState.inReplyTo;
+          if (composeState?.references) payload.references = composeState.references;
+          res = await fetch("/api/gmail-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        }
         const data = await res.json();
         if (data.success) {
           closeCompose();
@@ -6998,7 +7058,8 @@
       const lastMsg = thread.messages[thread.messages.length - 1];
       const subject = lastMsg.subject?.startsWith("Fwd:") ? lastMsg.subject : `Fwd: ${lastMsg.subject}`;
       const fwdText = `\n\n\n---------- Forwarded message ----------\nFrom: ${lastMsg.from}\nDate: ${formatEmailDateFull(lastMsg.date)}\nSubject: ${lastMsg.subject}\nTo: ${lastMsg.to || ""}\n\n${lastMsg.body?.type === "text" ? lastMsg.body.data : ""}`;
-      openCompose({ mode: "forward", subject, body: fwdText });
+      const fwdAttachments = (lastMsg.attachments || []).map(a => ({ messageId: lastMsg.id, attachmentId: a.attachmentId, filename: a.name, mimeType: a.mimeType, size: a.size }));
+      openCompose({ mode: "forward", subject, body: fwdText, forwardedAttachments: fwdAttachments });
     }
 
     function openReplyFromSingle(msgId) {
@@ -7028,7 +7089,8 @@
       if (!data) return;
       const subject = data.subject?.startsWith("Fwd:") ? data.subject : `Fwd: ${data.subject}`;
       const fwdText = `\n\n\n---------- Forwarded message ----------\nFrom: ${data.from}\nDate: ${formatEmailDateFull(data.date)}\nSubject: ${data.subject}\nTo: ${data.to || ""}\n\n${data.body?.type === "text" ? data.body.data : ""}`;
-      openCompose({ mode: "forward", subject, body: fwdText });
+      const fwdAttachments = (data.attachments || []).map(a => ({ messageId: data.id, attachmentId: a.attachmentId, filename: a.name, mimeType: a.mimeType, size: a.size }));
+      openCompose({ mode: "forward", subject, body: fwdText, forwardedAttachments: fwdAttachments });
     }
 
     /* ── Contact autocomplete ─────────────────────────────────── */
@@ -8244,7 +8306,7 @@
                 <select onchange="updateLeadStatus('${lead.id}', this.value)" style="padding:4px 8px;font-size:11px;border-radius:4px;border:1px solid ${color};background:${color}15;color:${color};font-weight:600;cursor:pointer;">
                   ${Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}" ${k === lead.status ? 'selected' : ''}>${v}</option>`).join('')}
                 </select>
-                ${lead.email && lead.status !== "application-sent" && lead.status !== "submitted" && lead.status !== "converted" ? `<button onclick="sendApplicationEmail('${lead.id}')" style="background:#1B3A6B;border:none;font-size:11px;cursor:pointer;color:white;padding:4px 10px;border-radius:4px;font-weight:600;" title="Send application link email">&#9993; Send App Link</button>` : ''}
+                ${lead.email && lead.status !== "converted" ? `<button onclick="sendApplicationEmail('${lead.id}')" style="background:#1B3A6B;border:none;font-size:11px;cursor:pointer;color:white;padding:4px 10px;border-radius:4px;font-weight:600;" title="Send application link email">${lead.status === "application-sent" ? "&#9993; Resend App Link" : "&#9993; Send App Link"}</button>` : ''}
                 <button onclick="editLead('${lead.id}')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--text-secondary);" title="Edit">&#9998;</button>
                 <button onclick="deleteLead('${lead.id}')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--text-secondary);" title="Delete">&times;</button>
               </div>

@@ -876,13 +876,11 @@ async function gmailGetSignature() {
   } catch { return ""; }
 }
 
-async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId }) {
+async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, attachments }) {
   const accessToken = await getGCalAccessToken();
   if (!accessToken) return { error: "No access token" };
   try {
-    // Fetch Gmail signature and append
     const plainBody = body || "";
-    // Use local signature from app settings (not Gmail API)
     let signature = "";
     try {
       const sigData = JSON.parse(fs.readFileSync(EMAIL_SIGNATURE_FILE, "utf8"));
@@ -898,8 +896,7 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     if (references) rawLines.push(`References: ${references}`);
     rawLines.push(`MIME-Version: 1.0`);
 
-    // Build the raw email using base64-encoded parts to avoid boundary conflicts
-    const boundary = `000000000000${crypto.randomBytes(12).toString("hex")}`;
+    const altBoundary = `alt_${crypto.randomBytes(12).toString("hex")}`;
     const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
     const htmlContent = signature
       ? `<div dir="ltr"><div dir="ltr"><div style="font-family:Arial,sans-serif;font-size:14px;color:#000">${escapedBody}</div></div><br clear="all"><div><br></div>-- <br><div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature">${signature}</div></div>`
@@ -907,19 +904,53 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     const textPart = Buffer.from(plainBody, "utf8").toString("base64");
     const htmlPart = Buffer.from(htmlContent, "utf8").toString("base64");
 
-    rawLines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
-    rawLines.push("");
-    rawLines.push(`--${boundary}`);
-    rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
-    rawLines.push(`Content-Transfer-Encoding: base64`);
-    rawLines.push("");
-    rawLines.push(textPart);
-    rawLines.push(`--${boundary}`);
-    rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
-    rawLines.push(`Content-Transfer-Encoding: base64`);
-    rawLines.push("");
-    rawLines.push(htmlPart);
-    rawLines.push(`--${boundary}--`);
+    const hasAttachments = attachments && attachments.length > 0;
+
+    if (hasAttachments) {
+      // multipart/mixed wrapping multipart/alternative + attachments
+      const mixedBoundary = `mix_${crypto.randomBytes(12).toString("hex")}`;
+      rawLines.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`);
+      rawLines.push("");
+      rawLines.push(`--${mixedBoundary}`);
+      rawLines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
+      rawLines.push("");
+      rawLines.push(`--${altBoundary}`);
+      rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
+      rawLines.push(`Content-Transfer-Encoding: base64`);
+      rawLines.push("");
+      rawLines.push(textPart);
+      rawLines.push(`--${altBoundary}`);
+      rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
+      rawLines.push(`Content-Transfer-Encoding: base64`);
+      rawLines.push("");
+      rawLines.push(htmlPart);
+      rawLines.push(`--${altBoundary}--`);
+
+      for (const att of attachments) {
+        rawLines.push(`--${mixedBoundary}`);
+        rawLines.push(`Content-Type: ${att.mimeType || "application/octet-stream"}; name="${(att.filename || "attachment").replace(/"/g, "''")}"`);
+        rawLines.push(`Content-Disposition: attachment; filename="${(att.filename || "attachment").replace(/"/g, "''")}"`);
+        rawLines.push(`Content-Transfer-Encoding: base64`);
+        rawLines.push("");
+        rawLines.push(att.data); // already base64
+      }
+      rawLines.push(`--${mixedBoundary}--`);
+    } else {
+      rawLines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
+      rawLines.push("");
+      rawLines.push(`--${altBoundary}`);
+      rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
+      rawLines.push(`Content-Transfer-Encoding: base64`);
+      rawLines.push("");
+      rawLines.push(textPart);
+      rawLines.push(`--${altBoundary}`);
+      rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
+      rawLines.push(`Content-Transfer-Encoding: base64`);
+      rawLines.push("");
+      rawLines.push(htmlPart);
+      rawLines.push(`--${altBoundary}--`);
+    }
+
     const rawEmail = rawLines.join("\r\n");
     const encoded = Buffer.from(rawEmail).toString("base64url");
     const payload = { raw: encoded };
@@ -2642,14 +2673,79 @@ const server = http.createServer(async (req, res) => {
 
     /* ── GMAIL: Send email ─────────────────────────────────────── */
     if (urlPath === "/api/gmail-send" && req.method === "POST") {
-      const body = JSON.parse(await readBody(req));
-      const result = await gmailSendEmail(body);
+      const contentType = req.headers["content-type"] || "";
+      let emailPayload;
+
+      if (contentType.includes("multipart/form-data")) {
+        // Handle file uploads via multipart form-data
+        const rawData = await new Promise((resolve, reject) => {
+          const chunks = []; let size = 0;
+          req.on("data", c => { size += c.length; if (size > 25 * 1024 * 1024) { reject(new Error("Upload too large (max 25MB)")); req.destroy(); } chunks.push(c); });
+          req.on("end", () => resolve(Buffer.concat(chunks)));
+          req.on("error", reject);
+        });
+
+        // Parse multipart form data
+        const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
+        if (!boundaryMatch) return json(res, 400, { error: "Invalid multipart boundary" });
+        const boundary = boundaryMatch[1] || boundaryMatch[2];
+        const parts = [];
+        const raw = rawData.toString("binary");
+        const delimiter = `--${boundary}`;
+        const segments = raw.split(delimiter).slice(1); // skip preamble
+
+        for (const seg of segments) {
+          if (seg.startsWith("--")) break; // end boundary
+          const headerEnd = seg.indexOf("\r\n\r\n");
+          if (headerEnd === -1) continue;
+          const headerStr = seg.substring(0, headerEnd);
+          const bodyStr = seg.substring(headerEnd + 4, seg.endsWith("\r\n") ? seg.length - 2 : seg.length);
+          const nameMatch = headerStr.match(/name="([^"]+)"/);
+          const filenameMatch = headerStr.match(/filename="([^"]+)"/);
+          const ctMatch = headerStr.match(/Content-Type:\s*([^\r\n]+)/i);
+          if (nameMatch) {
+            if (filenameMatch) {
+              parts.push({ type: "file", name: nameMatch[1], filename: filenameMatch[1], mimeType: ctMatch ? ctMatch[1].trim() : "application/octet-stream", data: Buffer.from(bodyStr, "binary").toString("base64") });
+            } else {
+              parts.push({ type: "field", name: nameMatch[1], value: bodyStr });
+            }
+          }
+        }
+
+        const field = (name) => (parts.find(p => p.type === "field" && p.name === name) || {}).value || "";
+        const attachments = parts.filter(p => p.type === "file").map(p => ({ filename: p.filename, mimeType: p.mimeType, data: p.data }));
+
+        // Also handle forwarded attachments (fetched from Gmail by messageId+attachmentId)
+        const fwdAttachmentsJson = field("forwardedAttachments");
+        if (fwdAttachmentsJson) {
+          try {
+            const fwdAtts = JSON.parse(fwdAttachmentsJson);
+            const accessToken = await getGCalAccessToken();
+            for (const fa of fwdAtts) {
+              if (!fa.messageId || !fa.attachmentId) continue;
+              try {
+                const attResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${fa.messageId}/attachments/${fa.attachmentId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+                if (attResp.ok) {
+                  const attData = await attResp.json();
+                  attachments.push({ filename: fa.filename || "attachment", mimeType: fa.mimeType || "application/octet-stream", data: (attData.data || "").replace(/-/g, "+").replace(/_/g, "/") });
+                }
+              } catch (e) { console.error(`[gmail] Failed to fetch forwarded attachment: ${e.message}`); }
+            }
+          } catch {}
+        }
+
+        emailPayload = { to: field("to"), cc: field("cc"), bcc: field("bcc"), subject: field("subject"), body: field("body"), threadId: field("threadId"), inReplyTo: field("inReplyTo"), references: field("references"), attachments: attachments.length > 0 ? attachments : undefined };
+      } else {
+        // Standard JSON payload (no attachments)
+        emailPayload = JSON.parse(await readBody(req));
+      }
+
+      const result = await gmailSendEmail(emailPayload);
       if (!result || result.error) return json(res, 500, { error: result?.error || "Send failed. You may need to re-authorize: click ⚙ in email toolbar." });
-      // Update contacts cache
-      for (const addr of parseEmailAddress(body.to)) updateEmailContact(addr.email, addr.name);
-      for (const addr of parseEmailAddress(body.cc)) updateEmailContact(addr.email, addr.name);
-      for (const addr of parseEmailAddress(body.bcc)) updateEmailContact(addr.email, addr.name);
-      console.log(`[gmail] Sent email to ${body.to}: "${body.subject}"`);
+      for (const addr of parseEmailAddress(emailPayload.to)) updateEmailContact(addr.email, addr.name);
+      for (const addr of parseEmailAddress(emailPayload.cc)) updateEmailContact(addr.email, addr.name);
+      for (const addr of parseEmailAddress(emailPayload.bcc)) updateEmailContact(addr.email, addr.name);
+      console.log(`[gmail] Sent email to ${emailPayload.to}: "${emailPayload.subject}"${emailPayload.attachments ? ` (${emailPayload.attachments.length} attachment(s))` : ""}`);
       return json(res, 200, { success: true, messageId: result.id, threadId: result.threadId });
     }
 
