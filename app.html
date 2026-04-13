@@ -2840,26 +2840,11 @@
         googleClientId = cfg.clientId || "";
       } catch {}
 
-      // Load core data in parallel, render progressively
+      await Promise.all([loadTasks(), loadProjects(), loadGoals(), loadCalEvents(), loadInbox(), loadJournalEntries()]);
+      renderAll();
       setupTabs();
       setupFilters();
-
-      // Fast: local data (tasks, projects, goals, journal)
-      const fastLoads = Promise.all([loadTasks(), loadProjects(), loadGoals(), loadJournalEntries()]);
-      // Slow: external APIs (calendar, email)
-      const slowLoads = Promise.all([loadCalEvents(), loadInbox()]);
-
-      // Render as soon as local data is ready — don't wait for external APIs
-      fastLoads.then(() => {
-        renderAll();
-        updateHubView(); // starts its own async fetches for pipeline/mbs/content
-      });
-
-      // When slow data arrives, refresh
-      slowLoads.then(() => {
-        renderAll();
-        updateHubView();
-      });
+      updateHubView();
 
       // Show gcal feedback from OAuth redirect
       const urlParams = new URLSearchParams(window.location.search);
@@ -4057,13 +4042,7 @@
       if (tab) tab.click();
     }
 
-    let _hubUpdateRunning = false;
     async function updateHubView() {
-      if (_hubUpdateRunning) return; // debounce
-      _hubUpdateRunning = true;
-      try { await _doUpdateHubView(); } finally { _hubUpdateRunning = false; }
-    }
-    async function _doUpdateHubView() {
       // Greeting — instant
       const hour = new Date().getHours();
       const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";

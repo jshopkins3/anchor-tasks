@@ -29,11 +29,19 @@ async function fetchMBSData() {
     return null;
   }
   try {
-    const resp = await fetch(`${BM_API_URL}/api/mbs-data/latest`, {
+    const url = `${BM_API_URL}/api/mbs-data/latest`;
+    console.log("[market-data] Fetching MBS from:", url);
+    const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${BM_API_KEY}` },
     });
-    if (!resp.ok) throw new Error(`MBS API ${resp.status}`);
-    return await resp.json();
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error("[market-data] MBS API error:", resp.status, body.substring(0, 200));
+      throw new Error(`MBS API ${resp.status}`);
+    }
+    const data = await resp.json();
+    console.log("[market-data] MBS response keys:", data ? Object.keys(data) : "null");
+    return data;
   } catch (e) {
     console.error("[market-data] MBS fetch error:", e.message);
     return null;
