@@ -3,70 +3,92 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Anchor Tasks</title>
+  <title>Anchor Command</title>
   <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#0f0f11" />
+  <meta name="theme-color" content="#0A1628" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Anchor Tasks" />
+  <meta name="apple-mobile-web-app-title" content="Anchor Command" />
   <link rel="apple-touch-icon" sizes="180x180" href="/dan-icon-180.png" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
+    :root {
+      --navy: #0A1628; --navy-mid: #132240; --navy-light: #1B3058;
+      --gold: #C9A84C; --gold-light: #E8D48B; --gold-dim: rgba(201,168,76,0.10);
+      --sand: #FAF8F4; --cream: #F3EFE7; --card: #FFFFFF;
+      --border: #E8E4DC; --text: #1E2A3A; --muted: #6B7A8D; --subtle: #94A3B8;
+      --accent: #2874A6; --accent-bg: #EBF5FB;
+      --green: #2D8B55; --green-bg: #E6F4EC;
+      --red: #C0392B; --red-bg: #FDEDEC;
+      --yellow: #C49B1A; --yellow-bg: #FFF8E1;
+      --r: 12px; --r-lg: 18px;
+      --shadow: 0 1px 4px rgba(10,22,40,0.04), 0 4px 16px rgba(10,22,40,0.06);
+      --shadow-hover: 0 2px 8px rgba(10,22,40,0.06), 0 8px 32px rgba(10,22,40,0.10);
+      --font: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --display: 'Playfair Display', Georgia, serif;
+      --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       min-height: 100vh;
-      background: #09090b;
-      color: #e4e4e7;
-      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--sand);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
     }
 
     /* ── Top bar ─────────────────────────────────────────────────── */
     .topbar {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 24px;
-      background: #18181b;
-      border-bottom: 1px solid #27272a;
+      padding: 0 28px; height: 60px;
+      background: var(--navy);
+      border-bottom: 2px solid var(--gold);
       position: sticky; top: 0; z-index: 50;
     }
     .topbar-left { display: flex; align-items: center; gap: 12px; }
     .topbar-logo {
-      width: 32px; height: 32px; border-radius: 8px;
-      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      width: 34px; height: 34px; border-radius: 8px;
+      background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.05));
+      border: 1px solid rgba(201,168,76,0.3);
       display: flex; align-items: center; justify-content: center;
     }
-    .topbar-logo svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .topbar h1 { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.01em; }
+    .topbar-logo svg { width: 18px; height: 18px; fill: none; stroke: var(--gold); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .topbar h1 { font-family: var(--display); font-size: 18px; font-weight: 700; color: var(--gold); letter-spacing: 0.01em; }
+    .topbar-sub { font-size: 10px; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.12em; margin-top: -2px; }
     .topbar-right { display: flex; align-items: center; gap: 12px; }
     .user-pill {
       display: flex; align-items: center; gap: 8px;
-      background: #27272a; border-radius: 20px; padding: 4px 12px 4px 4px;
-      font-size: 13px; color: #a1a1aa;
+      background: rgba(255,255,255,0.08); border-radius: 20px; padding: 4px 12px 4px 4px;
+      font-size: 12px; color: rgba(255,255,255,0.6);
     }
     .user-pill img { width: 24px; height: 24px; border-radius: 50%; }
     .btn-logout {
-      background: none; border: 1px solid #3f3f46; color: #a1a1aa;
-      border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
-      font-family: inherit;
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.5);
+      border-radius: 8px; padding: 6px 12px; font-size: 11px; cursor: pointer;
+      font-family: inherit; transition: all 0.2s;
     }
-    .btn-logout:hover { border-color: #52525b; color: #e4e4e7; }
+    .btn-logout:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
 
     /* ── Tabs ─────────────────────────────────────────────────────── */
     .tabs {
-      display: flex; gap: 0; padding: 0 24px;
-      background: #18181b; border-bottom: 1px solid #27272a;
+      display: flex; gap: 2px; padding: 0 24px;
+      background: var(--navy-mid); border-bottom: 1px solid rgba(201,168,76,0.15);
+      overflow-x: auto; scrollbar-width: none;
     }
+    .tabs::-webkit-scrollbar { display: none; }
     .tab {
-      padding: 10px 20px; font-size: 13px; font-weight: 600; color: #71717a;
+      padding: 10px 16px; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.45);
       cursor: pointer; border-bottom: 2px solid transparent;
-      transition: all .15s;
+      white-space: nowrap; transition: all 0.2s var(--ease);
     }
-    .tab:hover { color: #a1a1aa; }
-    .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+    .tab:hover { color: rgba(255,255,255,0.8); }
+    .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
 
     /* ── Main layout ─────────────────────────────────────────────── */
-    .main { padding: 24px; max-width: 1100px; margin: 0 auto; }
-    .section { display: none; }
+    .main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
+    .section { display: none; animation: fadeUp 0.3s var(--ease) both; }
     .section.active { display: block; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     #sec-email.active {
       display: block;
       margin-left: calc(-50vw + 50%); margin-right: calc(-50vw + 50%);
@@ -75,16 +97,17 @@
 
     /* ── Cards ────────────────────────────────────────────────────── */
     .card {
-      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
       padding: 20px; margin-bottom: 16px;
+      box-shadow: var(--shadow);
     }
     .card-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 16px;
     }
-    .card-header h2 { font-size: 15px; font-weight: 600; color: #fff; }
+    .card-header h2 { font-size: 15px; font-weight: 600; color: var(--navy); }
     .badge {
-      background: #27272a; color: #a1a1aa; font-size: 11px; font-weight: 600;
+      background: var(--gold-dim); color: var(--gold); font-size: 11px; font-weight: 600;
       padding: 2px 8px; border-radius: 10px;
     }
 
@@ -93,20 +116,20 @@
       display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
     }
     .add-row input, .add-row select {
-      background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7;
+      background: var(--card); border: 1px solid var(--border); color: var(--text);
       border-radius: 8px; padding: 8px 12px; font-size: 13px;
       font-family: inherit; outline: none;
     }
-    .add-row input:focus, .add-row select:focus { border-color: #3b82f6; }
-    .add-row input::placeholder { color: #52525b; }
+    .add-row input:focus, .add-row select:focus { border-color: var(--gold); }
+    .add-row input::placeholder { color: var(--subtle); }
     .add-row .inp-title { flex: 1; min-width: 200px; }
     .add-row .inp-sm { width: 120px; }
     .btn-add {
-      background: #3b82f6; color: #fff; border: none; border-radius: 8px;
-      padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
-      font-family: inherit;
+      background: var(--navy); color: var(--gold); border: 1px solid var(--gold);
+      border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: all 0.2s;
     }
-    .btn-add:hover { background: #2563eb; }
+    .btn-add:hover { background: var(--gold); color: var(--navy); }
 
     /* ── Task list ────────────────────────────────────────────────── */
     .task-list { list-style: none; }
@@ -1415,8 +1438,149 @@
 
     /* ── Quick links bar ─────────────────────────────────────── */
     .quick-links { display: flex; gap: 10px; padding: 8px 0 0; flex-wrap: wrap; }
-    .quick-link { display: inline-flex; align-items: center; gap: 6px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 6px 14px; font-size: 12px; color: #a1a1aa; text-decoration: none; cursor: pointer; }
-    .quick-link:hover { border-color: #3b82f6; color: #e4e4e7; }
+    .quick-link { display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 12px; color: var(--muted); text-decoration: none; cursor: pointer; transition: all 0.2s; box-shadow: var(--shadow); }
+    .quick-link:hover { border-color: var(--gold); color: var(--navy); }
+
+    /* ══════════════════════════════════════════════════════════════
+       HUB THEME OVERRIDES — remap dark zinc palette to navy/gold/sand
+       ══════════════════════════════════════════════════════════════ */
+
+    /* Task items */
+    .task-item:hover { background: var(--cream); }
+    .task-item + .task-item { border-top: 1px solid var(--border); }
+    .task-check { border-color: var(--border); }
+    .task-check:hover { border-color: var(--gold); }
+    .task-check.done { background: var(--green); border-color: var(--green); }
+    .task-title { color: var(--text); }
+    .task-title.done { color: var(--subtle); }
+    .task-tag { background: var(--cream); color: var(--muted); }
+    .task-tag.pri-high { background: var(--yellow-bg); color: var(--yellow); }
+    .task-tag.pri-urgent { background: var(--red-bg); color: var(--red); }
+    .task-tag.pri-low { color: var(--subtle); }
+    .task-tag.due { background: var(--accent-bg); color: var(--accent); }
+    .task-tag.project-tag { background: rgba(139,92,246,.08); color: #7c3aed; }
+    .task-tag.assignee-tag { background: var(--green-bg); color: var(--green); }
+    .task-delete { color: var(--border); }
+    .task-delete:hover { color: var(--red); background: var(--red-bg); }
+    .task-edit { color: var(--subtle); }
+    .task-edit:hover { color: var(--accent); background: var(--accent-bg); }
+
+    /* Edit drawer */
+    .edit-drawer { background: var(--cream); border-color: var(--border); }
+    .edit-drawer label { color: var(--muted); }
+    .edit-drawer input, .edit-drawer select { background: var(--card); border-color: var(--border); color: var(--text); }
+    .edit-drawer input:focus, .edit-drawer select:focus { border-color: var(--gold); }
+    .btn-save { background: var(--navy); color: var(--gold); border: 1px solid var(--gold); }
+    .btn-save:hover { background: var(--gold); color: var(--navy); }
+    .btn-cancel { background: var(--card); color: var(--muted); border-color: var(--border); }
+    .btn-cancel:hover { color: var(--text); border-color: var(--muted); }
+
+    /* Project list */
+    .project-item:hover { background: var(--cream); }
+
+    /* Today view */
+    .today-header { border-bottom-color: var(--border); }
+    .today-date { color: var(--navy); font-family: var(--display); }
+    .today-subtitle { color: var(--muted); }
+    .today-section-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }
+    .today-section-header { border-bottom: 1px solid var(--border); }
+    .today-section-title { color: var(--navy); font-weight: 700; }
+    .today-section-count { background: var(--gold-dim); color: var(--gold); }
+    .today-empty { color: var(--subtle); }
+    .today-add-row { border-top: 1px solid var(--border); }
+    .today-add-label { color: var(--muted); }
+    .btn-ai-prioritize { background: linear-gradient(135deg, var(--navy), var(--navy-light)); border: 1px solid var(--gold); color: var(--gold); }
+    .btn-ai-prioritize:hover { background: var(--gold); color: var(--navy); }
+    .btn-icon { color: var(--muted); border-color: var(--border); }
+    .btn-icon:hover { color: var(--navy); border-color: var(--navy); }
+
+    /* Goals */
+    .goal-card { background: var(--card); border-color: var(--border); box-shadow: var(--shadow); }
+    .goal-card:hover { border-color: var(--gold); box-shadow: var(--shadow-hover); }
+
+    /* Calendar */
+    .cal-toolbar { background: var(--card); border-color: var(--border); }
+    .cal-nav-btn { background: var(--card); border-color: var(--border); color: var(--text); }
+    .cal-nav-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+    /* Board (kanban) */
+    .kanban-col { background: var(--cream); border-color: var(--border); }
+    .kanban-card { background: var(--card); border-color: var(--border); box-shadow: var(--shadow); }
+    .kanban-card:hover { border-color: var(--gold); box-shadow: var(--shadow-hover); }
+
+    /* Journal */
+    .journal-sidebar { background: var(--card); border-color: var(--border); }
+    .journal-entry-item { border-bottom-color: var(--border); }
+    .journal-entry-item:hover { background: var(--cream); }
+    .journal-entry-item.active { background: var(--gold-dim); border-left: 3px solid var(--gold); }
+    .journal-editor textarea { background: var(--card); border-color: var(--border); color: var(--text); }
+    .journal-editor textarea:focus { border-color: var(--gold); }
+
+    /* Notebook */
+    .notebook-tabs button { color: var(--muted); border-color: var(--border); }
+    .notebook-tabs button.active { color: var(--gold); border-color: var(--gold); background: var(--gold-dim); }
+
+    /* Finance */
+    .finance-card { background: var(--card); border-color: var(--border); box-shadow: var(--shadow); }
+
+    /* Email overrides */
+    .email-list-item { border-bottom-color: var(--border); }
+    .email-list-item:hover { background: var(--cream); }
+    .email-bulk-bar { background: var(--cream); border-bottom-color: var(--border); }
+    .email-bulk-btn { background: var(--card); border-color: var(--border); color: var(--muted); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* Global text color overrides for dark-theme remnants */
+    .card-header h2, h2, h3 { color: var(--navy); }
+
+    /* ── Hub Home View ───────────────────────────────────────────── */
+    .hub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+    @media (max-width: 900px) { .hub-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { .hub-grid { grid-template-columns: 1fr; } }
+    .hub-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 20px 22px; text-decoration: none; color: var(--text);
+      display: flex; align-items: center; gap: 16px;
+      cursor: pointer; transition: all 0.22s var(--ease);
+      box-shadow: var(--shadow);
+    }
+    .hub-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+    .hub-card .hub-ico {
+      font-size: 28px; flex-shrink: 0;
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--gold-dim); border: 1px solid rgba(201,168,76,0.2);
+    }
+    .hub-card .hub-name { font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 2px; }
+    .hub-card .hub-desc { font-size: 12px; color: var(--muted); }
+    .hub-card .hub-badge {
+      margin-left: auto; font-size: 18px; font-weight: 700; color: var(--gold);
+      font-family: var(--display);
+    }
+
+    .hub-section-title {
+      font-family: var(--display); font-size: 22px; font-weight: 700;
+      color: var(--navy); margin-bottom: 16px; padding-bottom: 8px;
+      border-bottom: 2px solid var(--gold-dim);
+    }
+
+    .hub-stats {
+      background: linear-gradient(135deg, var(--navy), var(--navy-light));
+      border-radius: var(--r-lg); padding: 20px 28px; margin-bottom: 24px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+      overflow: hidden; border: 1px solid rgba(201,168,76,0.2);
+    }
+    @media (max-width: 700px) { .hub-stats { grid-template-columns: repeat(2, 1fr); } }
+    .hub-stat { padding: 14px 16px; background: rgba(255,255,255,0.04); }
+    .hub-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+    .hub-stat-val { color: #fff; font-weight: 700; font-size: 24px; font-family: var(--display); }
+    .hub-stat-val.gold { color: var(--gold); }
+    .hub-stat-sub { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -1425,9 +1589,12 @@
   <div class="topbar">
     <div class="topbar-left">
       <div class="topbar-logo">
-        <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 19h20L12 2z" stroke="currentColor" fill="none" stroke-width="1.5"/><circle cx="12" cy="14" r="2" fill="currentColor"/></svg>
       </div>
-      <h1>ANCHOR TASKS</h1>
+      <div>
+        <h1>Anchor Command</h1>
+        <div class="topbar-sub">Personal Command Center</div>
+      </div>
     </div>
     <div class="topbar-right">
       <div class="user-pill" id="user-pill"></div>
@@ -1436,9 +1603,10 @@
   </div>
 
   <!-- Quick links + Tabs -->
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid #27272a;background:#09090b;">
-    <div class="tabs" style="border-bottom:none;padding:0;">
-      <div class="tab active" data-tab="today">Today</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--navy-mid);border-bottom:1px solid rgba(201,168,76,0.15);">
+    <div class="tabs" style="border-bottom:none;padding:0;background:transparent;">
+      <div class="tab active" data-tab="hub">Hub</div>
+      <div class="tab" data-tab="today">Today</div>
       <div class="tab" data-tab="calendar">Calendar</div>
       <div class="tab" data-tab="tasks">Tasks</div>
       <div class="tab" data-tab="board">Board</div>
@@ -1454,9 +1622,8 @@
       <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
     </div>
     <div class="quick-links">
-      <a class="quick-link" href="https://anchorcommand.myanchormortgage.com/processor-app_2.html" target="_blank">🏠 Anchor Command</a>
-      <a class="quick-link" href="https://mycommunitymortgage.myarive.com" target="_blank">📋 Arive</a>
-      <a class="quick-link" href="https://sites.google.com/myanchormortgage.com/anchormortgage/anchor-navigation-portal?authuser=0" target="_blank">🌐 Intranet</a>
+      <a class="quick-link" href="https://anchorcommand.myanchormortgage.com/processor-app_2.html" target="_blank">Pipeline</a>
+      <a class="quick-link" href="https://mycommunitymortgage.myarive.com" target="_blank">Arive</a>
       <a class="quick-link" href="https://mail.google.com/mail/u/0/" target="_blank">✉️ Gmail</a>
       <a class="quick-link" href="https://calendar.google.com/calendar/u/0/" target="_blank">📅 Google Calendar</a>
       <a class="quick-link" href="https://broker-marketplace.com/marketplace" target="_blank">🏪 Broker Marketplace</a>
@@ -1466,7 +1633,102 @@
   <div class="main">
 
     <!-- ── Today section ─────────────────────────────────────── -->
-    <div class="section active" id="sec-today">
+    <!-- ── Hub Home View ──────────────────────────────────────── -->
+    <div class="section active" id="sec-hub">
+      <div style="margin-bottom:20px;">
+        <h2 style="font-family:var(--display);font-size:28px;font-weight:700;color:var(--navy);margin-bottom:2px;" id="hub-greeting">Good morning, Captain.</h2>
+        <p style="color:var(--muted);font-size:14px;font-style:italic;" id="hub-date"></p>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="hub-stats" id="hub-stats">
+        <div class="hub-stat">
+          <div class="hub-stat-label">Today's Focus</div>
+          <div class="hub-stat-val gold" id="hub-focus-count">--</div>
+          <div class="hub-stat-sub">tasks pinned</div>
+        </div>
+        <div class="hub-stat">
+          <div class="hub-stat-label">Open Tasks</div>
+          <div class="hub-stat-val" id="hub-task-count">--</div>
+          <div class="hub-stat-sub">across all projects</div>
+        </div>
+        <div class="hub-stat">
+          <div class="hub-stat-label">Goals</div>
+          <div class="hub-stat-val gold" id="hub-goal-count">--</div>
+          <div class="hub-stat-sub">in progress</div>
+        </div>
+        <div class="hub-stat">
+          <div class="hub-stat-label">Unread Email</div>
+          <div class="hub-stat-val" id="hub-email-count">--</div>
+          <div class="hub-stat-sub">in inbox</div>
+        </div>
+      </div>
+
+      <!-- Command Cards -->
+      <div class="hub-section-title">Command Center</div>
+      <div class="hub-grid">
+        <div class="hub-card" onclick="switchToTab('today')">
+          <div class="hub-ico">&#9788;</div>
+          <div><div class="hub-name">Today's Focus</div><div class="hub-desc">Focus list, calendar, inbox, priorities</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('tasks')">
+          <div class="hub-ico">&#9745;</div>
+          <div><div class="hub-name">Tasks</div><div class="hub-desc">All tasks, filters, assignments</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('calendar')">
+          <div class="hub-ico">&#128197;</div>
+          <div><div class="hub-name">Calendar</div><div class="hub-desc">Schedule, events, deadlines</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('email')">
+          <div class="hub-ico">&#9993;</div>
+          <div><div class="hub-name">Email</div><div class="hub-desc">Gmail inbox, compose, search</div></div>
+          <div class="hub-badge" id="hub-email-badge"></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('content')">
+          <div class="hub-ico">&#9781;</div>
+          <div><div class="hub-name">Content Studio</div><div class="hub-desc">Reactor feed, content calendar, drafts</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('goals')">
+          <div class="hub-ico">&#127919;</div>
+          <div><div class="hub-name">Goals</div><div class="hub-desc">Track progress, milestones</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('projects')">
+          <div class="hub-ico">&#128194;</div>
+          <div><div class="hub-name">Projects</div><div class="hub-desc">Active projects, task breakdown</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('journal')">
+          <div class="hub-ico">&#128214;</div>
+          <div><div class="hub-name">Journal</div><div class="hub-desc">Daily reflections, notes</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('finance')">
+          <div class="hub-ico">&#128176;</div>
+          <div><div class="hub-name">Finance</div><div class="hub-desc">P&L snapshot, revenue tracking</div></div>
+        </div>
+      </div>
+
+      <!-- Quick Access -->
+      <div class="hub-section-title">Quick Access</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:28px;">
+        <a class="hub-card" href="https://anchorcommand.myanchormortgage.com/processor-app_2.html" target="_blank" style="padding:14px 16px;">
+          <div class="hub-ico" style="width:36px;height:36px;font-size:20px;">&#9875;</div>
+          <div><div class="hub-name" style="font-size:13px;">Loan Pipeline</div><div class="hub-desc">Anchor Command</div></div>
+        </a>
+        <a class="hub-card" href="https://mycommunitymortgage.myarive.com" target="_blank" style="padding:14px 16px;">
+          <div class="hub-ico" style="width:36px;height:36px;font-size:20px;">&#128203;</div>
+          <div><div class="hub-name" style="font-size:13px;">Arive LOS</div><div class="hub-desc">Loan origination</div></div>
+        </a>
+        <a class="hub-card" href="https://mail.google.com" target="_blank" style="padding:14px 16px;">
+          <div class="hub-ico" style="width:36px;height:36px;font-size:20px;">&#9993;</div>
+          <div><div class="hub-name" style="font-size:13px;">Gmail</div><div class="hub-desc">Direct access</div></div>
+        </a>
+        <a class="hub-card" href="https://drive.google.com" target="_blank" style="padding:14px 16px;">
+          <div class="hub-ico" style="width:36px;height:36px;font-size:20px;">&#128193;</div>
+          <div><div class="hub-name" style="font-size:13px;">Google Drive</div><div class="hub-desc">Files & docs</div></div>
+        </a>
+      </div>
+    </div>
+
+    <div class="section" id="sec-today">
 
       <!-- Header row -->
       <div class="today-header">
@@ -1944,6 +2206,7 @@
       renderAll();
       setupTabs();
       setupFilters();
+      updateHubView();
 
       // Show gcal feedback from OAuth redirect
       const urlParams = new URLSearchParams(window.location.search);
@@ -3135,6 +3398,53 @@
       window.location.href = "/login.html";
     }
 
+    /* ── Hub Home View Logic ────────────────────────────────── */
+    function switchToTab(tabName) {
+      const tab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+      if (tab) tab.click();
+    }
+
+    function updateHubView() {
+      // Greeting based on time of day
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+      const el = document.getElementById("hub-greeting");
+      if (el) el.textContent = `${greeting}, Captain.`;
+
+      // Date
+      const dateEl = document.getElementById("hub-date");
+      if (dateEl) {
+        const d = new Date();
+        const opts = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+        dateEl.textContent = d.toLocaleDateString("en-US", opts);
+      }
+
+      // Stats
+      const focusCount = document.getElementById("hub-focus-count");
+      const taskCount = document.getElementById("hub-task-count");
+      const goalCount = document.getElementById("hub-goal-count");
+      const emailCount = document.getElementById("hub-email-count");
+      const emailBadge = document.getElementById("hub-email-badge");
+
+      if (focusCount && typeof tasks !== "undefined") {
+        const pinned = tasks.filter(t => t.todayFocus && !t.done).length;
+        focusCount.textContent = pinned;
+      }
+      if (taskCount && typeof tasks !== "undefined") {
+        const open = tasks.filter(t => !t.done).length;
+        taskCount.textContent = open;
+      }
+      if (goalCount && typeof goals !== "undefined") {
+        const active = goals.filter(g => !g.done).length;
+        goalCount.textContent = active;
+      }
+      if (emailCount && typeof inboxEmails !== "undefined") {
+        const unread = inboxEmails.filter(e => e.unread).length;
+        emailCount.textContent = unread || "--";
+        if (emailBadge) emailBadge.textContent = unread > 0 ? unread : "";
+      }
+    }
+
     /* ── Tabs ─────────────────────────────────────────────────── */
     function setupTabs() {
       document.querySelectorAll(".tab").forEach(tab => {
@@ -3143,6 +3453,9 @@
           document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
           tab.classList.add("active");
           document.getElementById(`sec-${tab.dataset.tab}`).classList.add("active");
+          if (tab.dataset.tab === "hub") {
+            updateHubView();
+          }
           if (tab.dataset.tab === "calendar") {
             calLoading = false;
             calCursor = new Date();
