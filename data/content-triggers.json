@@ -1,0 +1,57 @@
+{
+  "triggers": [
+    {
+      "id": "housingwire-1776078410560-4341",
+      "source": "HousingWire",
+      "sourceIcon": "HW",
+      "category": "industry",
+      "title": "Is housing inventory about to turn negative year over year?",
+      "link": "https://www.housingwire.com/articles/is-housing-inventory-about-to-turn-negative-year-over-year/",
+      "summary": "U.S. inventory growth slowed to 3.21% year over year as rates neared 6.64%, with new listings down 7.9% from 2025.",
+      "pubDate": "Sat, 11 Apr 2026 23:23:02 +0000",
+      "fetchedAt": "2026-04-13T11:06:50.560Z",
+      "status": "new",
+      "reactedContent": null
+    },
+    {
+      "id": "housingwire-1776078410560-ig1l",
+      "source": "HousingWire",
+      "sourceIcon": "HW",
+      "category": "industry",
+      "title": "Interactive dashboards: A move from optional to essential",
+      "link": "https://www.housingwire.com/articles/interactive-dashboards-a-move-from-optional-to-essential/",
+      "summary": "Mortgage servicers and their partners need dashboards for speed and transparency.\n\nInteractive dashboards are a practical application of business intelligence (BI) technology, designed to make data accessible and actionable for day-to-day decisions. Microsoft Power BI and similar platforms allow use",
+      "pubDate": "Mon, 13 Apr 2026 06:45:00 +0000",
+      "fetchedAt": "2026-04-13T11:06:50.560Z",
+      "status": "new",
+      "reactedContent": null
+    },
+    {
+      "id": "housingwire-1776078410560-owbx",
+      "source": "HousingWire",
+      "sourceIcon": "HW",
+      "category": "industry",
+      "title": "How to create a real estate agent development plan when you’ve hit a plateau",
+      "link": "https://www.housingwire.com/articles/real-estate-agent-development-plan/",
+      "summary": "Stuck at the same production level? Use this 90-day real estate agent development plan to reset your pipeline, improve conversions and grow listings.",
+      "pubDate": "Mon, 13 Apr 2026 07:30:00 +0000",
+      "fetchedAt": "2026-04-13T11:06:50.560Z",
+      "status": "new",
+      "reactedContent": null
+    },
+    {
+      "id": "housingwire-1776078410560-989a",
+      "source": "HousingWire",
+      "sourceIcon": "HW",
+      "category": "industry",
+      "title": "Guild’s Jim Cory on Bayview deal and reverse mortgage trends",
+      "link": "https://www.housingwire.com/articles/guild-jim-cory-reverse-trends/",
+      "summary": "Guild’s Jim Cory says Bayview’s acquisition was not disruptive as reverse lending expands beyond HECM into proprietary products.",
+      "pubDate": "Mon, 13 Apr 2026 10:00:00 +0000",
+      "fetchedAt": "2026-04-13T11:06:50.560Z",
+      "status": "new",
+      "reactedContent": null
+    }
+  ],
+  "lastPoll": "2026-04-13T11:06:52.835Z"
+}

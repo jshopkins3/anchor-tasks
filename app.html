@@ -21,12 +21,63 @@
       --green: #2D8B55; --green-bg: #E6F4EC;
       --red: #C0392B; --red-bg: #FDEDEC;
       --yellow: #C49B1A; --yellow-bg: #FFF8E1;
+      /* Semantic surface tokens */
+      --bg-page: #FAF8F4; --bg-card: #FFFFFF; --bg-hover: #F3EFE7; --bg-input: #FFFFFF;
+      --bg-panel: #FFFFFF; --bg-deepest: #FFFFFF; --bg-active: #EBF5FB;
+      --border-default: #E8E4DC; --border-strong: #D1CCC3; --border-focus: #C9A84C;
+      --text-primary: #1E2A3A; --text-secondary: #6B7A8D; --text-faint: #94A3B8;
+      --text-heading: #0A1628; --text-body: #2D3748; --text-on-accent: #FFFFFF;
+      --input-border: #D1CCC3; --input-bg: #FFFFFF;
+      --overlay: rgba(10,22,40,0.5);
+      --purple: #7c3aed; --purple-bg: rgba(124,58,237,.08); --purple-light: #8b5cf6;
+      --blue: #2874A6; --blue-bg: #EBF5FB; --blue-light: #3b82f6;
+      --teal: #0d9488; --teal-bg: rgba(13,148,136,.08);
+      --orange: #c2410c; --orange-bg: rgba(194,65,12,.08);
+      --check-done: #2D8B55; --check-border: #D1CCC3;
+      --progress-bg: #E8E4DC; --progress-fill: linear-gradient(90deg, #2874A6, #5BA3D9);
+      --goal-fill: linear-gradient(90deg, #7c3aed, #2874A6);
+      --morning-bg: linear-gradient(135deg, #EBF5FB 0%, #E8E4DC 50%, #FAF8F4 100%);
+      --morning-border: rgba(40,116,166,0.3);
+      --morning-stripe: linear-gradient(90deg, #2874A6, #7c3aed, #2874A6);
+      --compose-bg: #FFFFFF;
+      --thread-bg: #F8F6F2; --thread-expanded: #FFFFFF;
       --r: 12px; --r-lg: 18px;
       --shadow: 0 1px 4px rgba(10,22,40,0.04), 0 4px 16px rgba(10,22,40,0.06);
       --shadow-hover: 0 2px 8px rgba(10,22,40,0.06), 0 8px 32px rgba(10,22,40,0.10);
       --font: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
       --display: 'Playfair Display', Georgia, serif;
       --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    [data-theme="dark"] {
+      --sand: #09090b; --cream: #1f1f23; --card: #18181b;
+      --border: #27272a; --text: #e4e4e7; --muted: #71717a; --subtle: #52525b;
+      --accent: #60a5fa; --accent-bg: rgba(59,130,246,.1);
+      --green: #4ade80; --green-bg: rgba(34,197,94,.1);
+      --red: #f87171; --red-bg: rgba(239,68,68,.15);
+      --yellow: #fbbf24; --yellow-bg: rgba(245,158,11,.15);
+      --bg-page: #09090b; --bg-card: #18181b; --bg-hover: #1f1f23; --bg-input: #27272a;
+      --bg-panel: #0f0f11; --bg-deepest: #09090b; --bg-active: #1a1a2e;
+      --border-default: #27272a; --border-strong: #3f3f46; --border-focus: #3b82f6;
+      --text-primary: #e4e4e7; --text-secondary: #a1a1aa; --text-faint: #52525b;
+      --text-heading: #ffffff; --text-body: #d4d4d8; --text-on-accent: #ffffff;
+      --input-border: #3f3f46; --input-bg: #27272a;
+      --overlay: rgba(0,0,0,0.7);
+      --purple: #a78bfa; --purple-bg: rgba(139,92,246,.12); --purple-light: #c4b5fd;
+      --blue: #3b82f6; --blue-bg: rgba(59,130,246,.1); --blue-light: #60a5fa;
+      --teal: #34d399; --teal-bg: rgba(16,185,129,.12);
+      --orange: #f59e0b; --orange-bg: rgba(245,158,11,.15);
+      --check-done: #3b82f6; --check-border: #3f3f46;
+      --progress-bg: #27272a; --progress-fill: linear-gradient(90deg, #3b82f6, #60a5fa);
+      --goal-fill: linear-gradient(90deg, #8b5cf6, #3b82f6);
+      --morning-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --morning-border: rgba(59,130,246,.3);
+      --morning-stripe: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+      --compose-bg: #0f0f12;
+      --thread-bg: #0a0a0c; --thread-expanded: #09090b;
+      --gold: #C9A84C; --gold-light: #E8D48B; --gold-dim: rgba(201,168,76,0.15);
+      --navy: #0A1628; --navy-mid: #132240; --navy-light: #1B3058;
+      --shadow: 0 1px 4px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.3);
+      --shadow-hover: 0 2px 8px rgba(0,0,0,0.3), 0 8px 32px rgba(0,0,0,0.4);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -1442,101 +1493,450 @@
     .quick-link:hover { border-color: var(--gold); color: var(--navy); }
 
     /* ══════════════════════════════════════════════════════════════
-       HUB THEME OVERRIDES — remap dark zinc palette to navy/gold/sand
+       COMPREHENSIVE THEME OVERRIDES — semantic tokens for light/dark
        ══════════════════════════════════════════════════════════════ */
 
-    /* Task items */
-    .task-item:hover { background: var(--cream); }
-    .task-item + .task-item { border-top: 1px solid var(--border); }
-    .task-check { border-color: var(--border); }
-    .task-check:hover { border-color: var(--gold); }
-    .task-check.done { background: var(--green); border-color: var(--green); }
-    .task-title { color: var(--text); }
-    .task-title.done { color: var(--subtle); }
-    .task-tag { background: var(--cream); color: var(--muted); }
+    /* ── Task items ──────────────────────────────────────────── */
+    .task-item:hover { background: var(--bg-hover); }
+    .task-item + .task-item { border-top: 1px solid var(--border-default); }
+    .task-check { border-color: var(--check-border); }
+    .task-check:hover { border-color: var(--border-focus); }
+    .task-check.done { background: var(--check-done); border-color: var(--check-done); }
+    .task-title { color: var(--text-primary); }
+    .task-title.done { color: var(--text-faint); }
+    .task-tag { background: var(--bg-hover); color: var(--text-secondary); }
     .task-tag.pri-high { background: var(--yellow-bg); color: var(--yellow); }
     .task-tag.pri-urgent { background: var(--red-bg); color: var(--red); }
-    .task-tag.pri-low { color: var(--subtle); }
-    .task-tag.due { background: var(--accent-bg); color: var(--accent); }
-    .task-tag.project-tag { background: rgba(139,92,246,.08); color: #7c3aed; }
+    .task-tag.pri-low { color: var(--text-faint); }
+    .task-tag.due { background: var(--blue-bg); color: var(--blue); }
+    .task-tag.project-tag { background: var(--purple-bg); color: var(--purple); }
     .task-tag.assignee-tag { background: var(--green-bg); color: var(--green); }
-    .task-delete { color: var(--border); }
+    .task-tag.personal-tag { background: var(--purple-bg); color: var(--purple-light); }
+    .task-delete { color: var(--border-strong); }
     .task-delete:hover { color: var(--red); background: var(--red-bg); }
-    .task-edit { color: var(--subtle); }
-    .task-edit:hover { color: var(--accent); background: var(--accent-bg); }
+    .task-edit { color: var(--text-faint); }
+    .task-edit:hover { color: var(--blue); background: var(--blue-bg); }
 
-    /* Edit drawer */
-    .edit-drawer { background: var(--cream); border-color: var(--border); }
-    .edit-drawer label { color: var(--muted); }
-    .edit-drawer input, .edit-drawer select { background: var(--card); border-color: var(--border); color: var(--text); }
-    .edit-drawer input:focus, .edit-drawer select:focus { border-color: var(--gold); }
+    /* ── Edit drawer ─────────────────────────────────────────── */
+    .edit-drawer { background: var(--bg-hover); border-color: var(--border-default); }
+    .edit-drawer label { color: var(--text-secondary); }
+    .edit-drawer input, .edit-drawer select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .edit-drawer input:focus, .edit-drawer select:focus { border-color: var(--border-focus); }
     .btn-save { background: var(--navy); color: var(--gold); border: 1px solid var(--gold); }
     .btn-save:hover { background: var(--gold); color: var(--navy); }
-    .btn-cancel { background: var(--card); color: var(--muted); border-color: var(--border); }
-    .btn-cancel:hover { color: var(--text); border-color: var(--muted); }
+    .btn-cancel { background: var(--bg-card); color: var(--text-secondary); border-color: var(--border-default); }
+    .btn-cancel:hover { color: var(--text-primary); border-color: var(--text-secondary); }
 
-    /* Project list */
-    .project-item:hover { background: var(--cream); }
+    /* ── Project list ────────────────────────────────────────── */
+    .project-item:hover { background: var(--bg-hover); }
+    .project-item + .project-item { border-top: 1px solid var(--border-default); }
+    .project-dot { background: var(--blue); }
+    .project-dot.archived { background: var(--border-strong); }
+    .project-name { color: var(--text-primary); }
+    .project-name.archived { color: var(--text-faint); }
+    .project-desc { color: var(--text-secondary); }
+    .project-actions button { color: var(--border-strong); }
+    .project-actions button:hover { color: var(--text-secondary); background: var(--bg-hover); }
 
-    /* Today view */
-    .today-header { border-bottom-color: var(--border); }
-    .today-date { color: var(--navy); font-family: var(--display); }
-    .today-subtitle { color: var(--muted); }
-    .today-section-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }
-    .today-section-header { border-bottom: 1px solid var(--border); }
-    .today-section-title { color: var(--navy); font-weight: 700; }
+    /* ── Empty state ──────────────────────────────────────────── */
+    .empty { color: var(--text-faint); }
+
+    /* ── Stats row ────────────────────────────────────────────── */
+    .stat-card { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
+    .stat-label { color: var(--text-secondary); }
+    .stat-value { color: var(--text-heading); }
+
+    /* ── Filter row ───────────────────────────────────────────── */
+    .filter-btn { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text-secondary); }
+    .filter-btn:hover { border-color: var(--text-faint); color: var(--text-primary); }
+    .filter-btn.active { background: var(--navy); border-color: var(--gold); color: var(--gold); }
+
+    /* ── Project detail view ─────────────────────────────────── */
+    .detail-back { color: var(--text-secondary); }
+    .detail-back:hover { color: var(--text-primary); }
+    .detail-title { color: var(--text-heading); }
+    .detail-desc { color: var(--text-secondary); }
+    .detail-owner { color: var(--text-secondary); }
+    .detail-owner span { color: var(--text-primary); }
+    .detail-stat { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
+    .detail-progress-bar { background: var(--progress-bg); }
+    .detail-progress-fill { background: var(--progress-fill); }
+    .detail-section-label { color: var(--text-secondary); }
+
+    /* ── Kanban Board ──────────────────────────────────────── */
+    .board-toolbar select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .board-toolbar select:focus { border-color: var(--border-focus); }
+    .board-toolbar label { color: var(--text-secondary); }
+    .board-column { background: var(--bg-page); border-color: var(--border-default); }
+    .board-column-header { border-bottom-color: var(--border-default); }
+    .board-col-todo .board-column-title { color: var(--text-secondary); }
+    .board-col-inprogress .board-column-title { color: var(--blue); }
+    .board-col-done .board-column-title { color: var(--green); }
+    .board-column-count { background: var(--bg-hover); color: var(--text-secondary); }
+    .board-swimlane-title { color: var(--purple); }
+    .board-card { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
+    .board-card:hover { border-color: var(--border-strong); }
+    .board-card.drag-over { border-color: var(--border-focus); box-shadow: 0 0 0 1px var(--border-focus); }
+    .board-card-title { color: var(--text-primary); }
+    .board-card-tag { background: var(--bg-hover); color: var(--text-secondary); }
+    .board-card-tag.pri-urgent { background: var(--red-bg); color: var(--red); }
+    .board-card-tag.pri-high { background: var(--yellow-bg); color: var(--yellow); }
+    .board-card-tag.pri-low { color: var(--text-faint); }
+    .board-card-tag.assignee { background: var(--green-bg); color: var(--green); }
+    .board-card-tag.due { background: var(--blue-bg); color: var(--blue); }
+    .board-card-tag.personal { background: var(--purple-bg); color: var(--purple-light); }
+    .board-card.pri-border-low { border-left-color: var(--border-strong); }
+    .board-drop-zone.drag-active { border-color: var(--border-focus); background: var(--blue-bg); }
+    .board-empty { color: var(--text-faint); }
+    .board-card-move { border-color: var(--border-strong); color: var(--text-secondary); }
+    .board-card-move:hover { color: var(--purple); border-color: var(--purple); }
+
+    /* ── Move popover ───────────────────────────────────────── */
+    .move-popover { background: var(--bg-card); border-color: var(--border-strong); box-shadow: var(--shadow-hover); }
+    .move-popover select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .move-popover select:focus { border-color: var(--border-focus); }
+
+    /* ── Goals section ─────────────────────────────────────── */
+    .goal-card { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
+    .goal-card.cat-personal { border-left-color: var(--purple); }
+    .goal-card.cat-professional { border-left-color: var(--blue); }
+    .goal-title { color: var(--text-heading); }
+    .goal-category.personal { background: var(--purple-bg); color: var(--purple); }
+    .goal-category.professional { background: var(--blue-bg); color: var(--blue); }
+    .goal-desc { color: var(--text-secondary); }
+    .goal-target { color: var(--text-secondary); }
+    .goal-progress-bar { background: var(--progress-bg); }
+    .goal-progress-fill { background: var(--goal-fill); }
+    .goal-progress-label { color: var(--text-secondary); }
+    .goal-actions button { border-color: var(--border-strong); color: var(--text-secondary); }
+    .goal-actions button:hover { color: var(--text-primary); border-color: var(--text-faint); }
+    .goal-linked-task { color: var(--text-secondary); }
+    .goal-linked-task-title.done { color: var(--text-faint); }
+    .goal-unlink { color: var(--border-strong); }
+    .goal-form { background: var(--bg-card); border-color: var(--border-default); }
+    .goal-form label { color: var(--text-secondary); }
+    .goal-form input, .goal-form select, .goal-form textarea { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .goal-form input:focus, .goal-form select:focus, .goal-form textarea:focus { border-color: var(--border-focus); }
+
+    /* ── Eisenhower Matrix ──────────────────────────────────── */
+    .matrix-quadrant { background: var(--bg-page); border-color: var(--border-default); }
+    .matrix-header { border-bottom-color: var(--border-default); }
+    .q-do .matrix-title { color: var(--red); }
+    .q-schedule .matrix-title { color: var(--blue); }
+    .q-delegate .matrix-title { color: var(--yellow); }
+    .q-eliminate .matrix-title { color: var(--text-secondary); }
+    .matrix-subtitle { color: var(--text-faint); }
+    .matrix-count { background: var(--bg-hover); color: var(--text-secondary); }
+    .matrix-drop-zone.drag-active { border-color: var(--border-focus); background: var(--blue-bg); }
+    .matrix-axis-label { color: var(--text-faint); }
+
+    /* ── Inbox (simple email items) ──────────────────────────── */
+    .email-item { border-bottom-color: var(--border-default); }
+    .email-unread-dot { background: var(--blue); }
+    .email-from { color: var(--text-primary); }
+    .email-time { color: var(--text-faint); }
+    .email-subject { color: var(--text-secondary); }
+    .email-snippet { color: var(--text-faint); }
+    .email-btn { border-color: var(--border-strong); color: var(--text-secondary); }
+    .email-btn:hover { color: var(--text-primary); border-color: var(--text-faint); }
+    .email-btn.task-btn:hover { color: var(--blue); border-color: var(--blue); background: var(--blue-bg); }
+    .email-btn.read-btn:hover { color: var(--teal); border-color: var(--teal); }
+    .email-task-form { background: var(--bg-hover); }
+    .email-task-form input, .email-task-form select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .email-task-form input:focus, .email-task-form select:focus { border-color: var(--border-focus); }
+
+    /* ── Calendar view ──────────────────────────────────────── */
+    .cal-nav-btn { background: var(--bg-card); border-color: var(--border-strong); color: var(--text-primary); }
+    .cal-nav-btn:hover { border-color: var(--text-faint); }
+    .cal-period-label { color: var(--text-heading); }
+    .cal-today-btn { border-color: var(--border-strong); color: var(--text-secondary); }
+    .cal-today-btn:hover { color: var(--text-primary); border-color: var(--text-faint); }
+    .cal-view-toggle { border-color: var(--border-strong); }
+    .cal-view-btn { color: var(--text-secondary); }
+    .cal-view-btn + .cal-view-btn { border-left-color: var(--border-strong); }
+    .cal-view-btn.active { background: var(--navy); color: var(--gold); }
+    .cal-view-btn:not(.active):hover { background: var(--bg-hover); color: var(--text-primary); }
+    .cal-legend-label { color: var(--text-secondary); }
+    .cal-month { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
+    .cal-dow-row { border-bottom-color: var(--border-default); }
+    .cal-dow { color: var(--text-faint); }
+    .cal-cell { border-right-color: var(--border-default); border-bottom-color: var(--border-default); }
+    .cal-cell:hover { background: var(--bg-hover); }
+    .cal-cell.today .cal-day-num { background: var(--navy); color: var(--gold); }
+    .cal-cell.selected { background: var(--blue-bg); }
+    .cal-day-num { color: var(--text-secondary); }
+    .cal-cell.today:not(.selected) .cal-day-num { background: var(--navy); color: var(--gold); }
+    .cal-event-chip.personal { background: rgba(40,116,166,.15); color: var(--blue); }
+    .cal-event-chip.task { background: var(--purple-bg); color: var(--purple); }
+    .cal-more { color: var(--text-faint); }
+    .cal-day-panel { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
+    .cal-day-panel-header { color: var(--text-heading); border-bottom-color: var(--border-default); }
+    .cal-day-event { border-left-color: var(--blue); }
+    .cal-day-event.task { border-left-color: var(--purple); background: var(--purple-bg); }
+    .cal-day-event-time { color: var(--text-secondary); }
+    .cal-day-event-title { color: var(--text-primary); }
+    .cal-day-event-sub { color: var(--text-secondary); }
+    .week7-day { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
+    .week7-day-header { border-bottom-color: var(--border-default); }
+    .week7-day-header:hover { background: var(--bg-hover); }
+    .week7-day-date { color: var(--text-heading); }
+    .week7-day-name { color: var(--text-secondary); }
+    .week7-day-header.today .week7-day-date { color: var(--gold); }
+    .week7-day-header.today .week7-day-name { color: var(--gold); }
+    .week7-empty { color: var(--text-faint); }
+
+    /* ── Today view ──────────────────────────────────────────── */
+    .today-date { color: var(--text-heading); font-family: var(--display); }
+    .today-subtitle { color: var(--text-secondary); }
+    .today-section-card { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--r); box-shadow: var(--shadow); }
+    .today-section-header { border-bottom: 1px solid var(--border-default); }
+    .today-section-title { color: var(--text-heading); font-weight: 700; }
     .today-section-count { background: var(--gold-dim); color: var(--gold); }
-    .today-empty { color: var(--subtle); }
-    .today-add-row { border-top: 1px solid var(--border); }
-    .today-add-label { color: var(--muted); }
+    .today-empty { color: var(--text-faint); }
+    .today-add-row { border-top: 1px solid var(--border-default); }
+    .today-add-label { color: var(--text-faint); }
     .btn-ai-prioritize { background: linear-gradient(135deg, var(--navy), var(--navy-light)); border: 1px solid var(--gold); color: var(--gold); }
     .btn-ai-prioritize:hover { background: var(--gold); color: var(--navy); }
-    .btn-icon { color: var(--muted); border-color: var(--border); }
-    .btn-icon:hover { color: var(--navy); border-color: var(--navy); }
+    .btn-icon { background: var(--bg-card); color: var(--text-secondary); border-color: var(--border-strong); }
+    .btn-icon:hover { color: var(--text-heading); border-color: var(--text-secondary); }
 
-    /* Goals */
-    .goal-card { background: var(--card); border-color: var(--border); box-shadow: var(--shadow); }
-    .goal-card:hover { border-color: var(--gold); box-shadow: var(--shadow-hover); }
+    /* ── Focus items ─────────────────────────────────────────── */
+    .focus-item { border-bottom-color: var(--border-default); }
+    .focus-rank { color: var(--text-faint); }
+    .focus-check { border-color: var(--check-border); }
+    .focus-check:hover { border-color: var(--border-focus); }
+    .focus-check.done { background: var(--check-done); border-color: var(--check-done); }
+    .focus-title { color: var(--text-primary); }
+    .focus-title.done { color: var(--text-faint); }
+    .focus-tag { background: var(--bg-hover); color: var(--text-secondary); }
+    .focus-tag.scheduled { background: var(--teal-bg); color: var(--teal); }
+    .focus-tag.due-today { background: var(--yellow-bg); color: var(--yellow); }
+    .focus-tag.overdue { background: var(--red-bg); color: var(--red); }
+    .focus-tag.pri-urgent { background: var(--red-bg); color: var(--red); }
+    .focus-tag.pri-high { background: var(--yellow-bg); color: var(--yellow); }
+    .focus-btn { border-color: var(--border-strong); color: var(--text-secondary); }
+    .focus-btn:hover { color: var(--text-primary); border-color: var(--text-faint); }
+    .focus-btn.schedule-btn:hover { color: var(--blue); border-color: var(--blue); }
+    .focus-btn.remove-btn:hover { color: var(--red); border-color: var(--red); }
+    .focus-btn.scheduled { color: var(--teal); border-color: var(--teal); background: var(--teal-bg); }
 
-    /* Calendar */
-    .cal-toolbar { background: var(--card); border-color: var(--border); }
-    .cal-nav-btn { background: var(--card); border-color: var(--border); color: var(--text); }
-    .cal-nav-btn:hover { border-color: var(--gold); color: var(--gold); }
+    /* ── Calendar events (today sidebar) ─────────────────────── */
+    .gcal-connect-btn { border-color: var(--border-strong); color: var(--text-secondary); }
+    .gcal-connect-btn:hover { color: var(--blue); border-color: var(--blue); }
+    .gcal-connected-badge { color: var(--teal); background: var(--teal-bg); }
+    .cal-event { border-bottom-color: var(--border-default); }
+    .cal-event-time { color: var(--text-secondary); }
+    .cal-event-dot { background: var(--blue); }
+    .cal-event-title { color: var(--text-primary); }
+    .cal-event-loc { color: var(--text-secondary); }
 
-    /* Board (kanban) */
-    .kanban-col { background: var(--cream); border-color: var(--border); }
-    .kanban-card { background: var(--card); border-color: var(--border); box-shadow: var(--shadow); }
-    .kanban-card:hover { border-color: var(--gold); box-shadow: var(--shadow-hover); }
+    /* ── AI suggestions ──────────────────────────────────────── */
+    .ai-note { color: var(--text-faint); }
+    .ai-suggestion-item:hover { background: var(--bg-hover); }
+    .ai-score-bar { background: var(--purple-bg); }
 
-    /* Journal */
-    .journal-sidebar { background: var(--card); border-color: var(--border); }
-    .journal-entry-item { border-bottom-color: var(--border); }
-    .journal-entry-item:hover { background: var(--cream); }
-    .journal-entry-item.active { background: var(--gold-dim); border-left: 3px solid var(--gold); }
-    .journal-editor textarea { background: var(--card); border-color: var(--border); color: var(--text); }
-    .journal-editor textarea:focus { border-color: var(--gold); }
+    /* ── Needs Attention ─────────────────────────────────────── */
+    .attention-item { border-bottom-color: var(--border-default); }
+    .attention-label { color: var(--text-primary); }
+    .attention-count { color: var(--text-secondary); }
+    .attention-action { border-color: var(--border-strong); color: var(--text-secondary); }
+    .attention-action:hover { color: var(--text-primary); border-color: var(--text-faint); }
 
-    /* Notebook */
-    .notebook-tabs button { color: var(--muted); border-color: var(--border); }
+    /* ── Modal (schedule, etc) ───────────────────────────────── */
+    .modal-overlay { background: var(--overlay); }
+    .modal-box { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow-hover); }
+    .modal-title { color: var(--text-heading); }
+    .modal-close { color: var(--text-secondary); }
+    .modal-close:hover { color: var(--text-primary); }
+    .modal-task-name { color: var(--text-secondary); background: var(--bg-hover); }
+    .modal-field label { color: var(--text-secondary); }
+    .modal-field input, .modal-field select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .modal-field input:focus, .modal-field select:focus { border-color: var(--border-focus); }
+    .modal-allday { color: var(--text-secondary); }
+    .tp-select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .tp-select:focus { border-color: var(--border-focus); }
+    .ampm-group { border-color: var(--border-strong); }
+    .ampm-btn { color: var(--text-secondary); }
+    .ampm-btn + .ampm-btn { border-left-color: var(--border-strong); }
+    .ampm-btn.active { background: var(--navy); color: var(--gold); }
+    .ampm-btn:not(.active):hover { background: var(--bg-hover); color: var(--text-primary); }
+    .time-block-label { color: var(--text-secondary); }
+    .time-to-sep { color: var(--text-faint); }
+    .time-picker-row .tp-sep { color: var(--text-faint); }
+
+    /* ── Morning Brief ───────────────────────────────────────── */
+    .morning-brief { background: var(--morning-bg); border-color: var(--morning-border); }
+    .morning-brief::before { background: var(--morning-stripe); }
+    .morning-brief-greeting { color: var(--text-heading); }
+    .morning-brief-date { color: var(--blue); }
+    .morning-brief-dismiss { color: var(--text-faint); }
+    .morning-brief-dismiss:hover { color: var(--text-secondary); }
+    .brief-stat { color: var(--text-secondary); }
+    .brief-stat strong { color: var(--text-primary); }
+    .brief-stat.warn strong { color: var(--red); }
+    .brief-stat.caution strong { color: var(--yellow); }
+    .brief-priorities { border-top-color: var(--morning-border); }
+    .brief-priorities-label { color: var(--blue); }
+    .brief-priority-item { color: var(--text-secondary); }
+    .brief-priority-num { color: var(--blue); }
+    .brief-priority-title { color: var(--text-primary); }
+
+    /* ── Journal ──────────────────────────────────────────────── */
+    .journal-sidebar { border-right-color: var(--border-default); }
+    .journal-entry-item:hover { background: var(--bg-hover); }
+    .journal-entry-item.active { border-left-color: var(--gold); background: var(--gold-dim); }
+    .journal-entry-date { color: var(--text-faint); }
+    .journal-entry-title { color: var(--text-primary); }
+    .journal-entry-preview { color: var(--text-secondary); }
+    .journal-date-label { color: var(--text-secondary); }
+    .journal-title-input { border-bottom-color: var(--border-default); color: var(--text-primary); }
+    .journal-title-input:focus { border-bottom-color: var(--border-focus); }
+    .journal-body-input { color: var(--text-body); }
+    .journal-save-btn { background: var(--navy); color: var(--gold); }
+    .journal-save-btn:hover { background: var(--gold); color: var(--navy); }
+    .journal-delete-btn { border-color: var(--border-strong); color: var(--text-secondary); }
+    .journal-saved-msg { color: var(--teal); }
+
+    /* ── Notebook ─────────────────────────────────────────────── */
+    .notebook-tabs button { color: var(--text-secondary); border-color: var(--border-default); }
     .notebook-tabs button.active { color: var(--gold); border-color: var(--gold); background: var(--gold-dim); }
 
-    /* Finance */
-    .finance-card { background: var(--card); border-color: var(--border); box-shadow: var(--shadow); }
+    /* ── Finance ──────────────────────────────────────────────── */
+    .finance-card { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow); }
 
-    /* Email overrides */
-    .email-list-item { border-bottom-color: var(--border); }
-    .email-list-item:hover { background: var(--cream); }
-    .email-bulk-bar { background: var(--cream); border-bottom-color: var(--border); }
-    .email-bulk-btn { background: var(--card); border-color: var(--border); color: var(--muted); }
+    /* ── Email (full layout) ─────────────────────────────────── */
+    .email-list-pane { border-right-color: var(--border-default); }
+    .email-resize-handle::after { background: var(--border-strong); }
+    .email-resize-handle:hover::after { background: var(--border-focus); }
+    .email-resize-handle.dragging::after { background: var(--border-focus); }
+    .email-list-toolbar { border-bottom-color: var(--border-default); background: var(--bg-page); }
+    .email-toolbar-title { color: var(--text-primary); }
+    .email-toolbar-count { background: var(--navy); color: var(--gold); }
+    .email-toolbar-btn { color: var(--text-secondary); }
+    .email-toolbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-default); }
+    .email-toolbar-btn[title]:hover { color: var(--blue); }
+    .email-row { border-bottom-color: var(--border-default); }
+    .email-row:hover { background: var(--bg-hover); }
+    .email-row.active { background: var(--bg-active); border-left-color: var(--gold); }
+    .email-row.unread .email-row-from { color: var(--text-heading); }
+    .email-row.unread .email-row-subject { color: var(--text-primary); }
+    .email-row-from { color: var(--text-secondary); }
+    .email-row-time { color: var(--text-faint); }
+    .email-row-subject { color: var(--text-secondary); }
+    .email-row-snippet { color: var(--text-faint); }
+    .email-row-badge { background: var(--blue-bg); color: var(--blue); }
+    .email-row-badge.work { background: var(--teal-bg); color: var(--teal); }
+    .email-row-badge.personal { background: var(--yellow-bg); color: var(--yellow); }
+    #borrower-emails-list .email-row:hover { background: var(--bg-hover); }
+    .email-detail-subject { color: var(--text-heading); }
+    .email-detail-sender { border-bottom-color: var(--border-default); }
+    .email-detail-sender-name { color: var(--text-primary); }
+    .email-detail-sender-email { color: var(--text-secondary); }
+    .email-detail-date { color: var(--text-faint); }
+    .email-action-btn { background: var(--bg-card); border-color: var(--border-default); color: var(--text-secondary); }
+    .email-action-btn:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--bg-hover); }
+    .email-action-btn.task-action:hover { border-color: var(--blue); color: var(--blue); }
+    .email-body-container pre { color: var(--text-body); }
+    .email-body-loading { color: var(--text-faint); }
+    .email-body-loading::before { border-color: var(--border-default); border-top-color: var(--blue); }
+    .email-attachment { background: var(--bg-card); border-color: var(--border-default); color: var(--text-secondary); }
+    .email-attachment:hover { border-color: var(--blue); color: var(--blue); background: var(--bg-active); }
+    .email-attachment-name { color: var(--text-primary); }
+    .email-attachment-size { color: var(--text-faint); }
+    .email-task-card { background: var(--bg-card); border-color: var(--border-default); }
+    .email-task-card-title { color: var(--text-secondary); }
+    .email-task-card input, .email-task-card select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+    .email-task-card input:focus, .email-task-card select:focus { border-color: var(--border-focus); }
+    .email-empty { color: var(--text-faint); }
+    .email-empty-text { color: var(--text-secondary); }
+    .email-empty-sub { color: var(--text-faint); }
 
-    /* Scrollbar */
+    /* ── Email folder sidebar ───────────────────────────────── */
+    .email-folder-sidebar { border-right-color: var(--border-default); }
+    .email-compose-btn { background: var(--navy); color: var(--gold); }
+    .email-compose-btn:hover { background: var(--gold); color: var(--navy); }
+    .email-folder-item { color: var(--text-secondary); }
+    .email-folder-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .email-folder-item.active { background: var(--bg-active); color: var(--blue); border-left-color: var(--gold); }
+    .email-folder-count { color: var(--text-secondary); background: var(--bg-hover); }
+    .email-folder-count.unread { background: var(--navy); color: var(--gold); }
+    .email-folder-divider { background: var(--border-default); }
+    .email-folder-label { color: var(--text-faint); }
+    .email-star { color: var(--text-faint); }
+    .email-search-input { background: var(--input-bg); border-color: var(--border-default); color: var(--text-primary); }
+    .email-search-input:focus { border-color: var(--border-focus); }
+    .email-search-input::placeholder { color: var(--text-faint); }
+    .email-search-icon { color: var(--text-faint); }
+    .email-search-clear { color: var(--text-faint); }
+    .email-search-clear:hover { color: var(--text-secondary); }
+
+    /* ── Thread view ────────────────────────────────────────── */
+    .email-thread-subject { color: var(--text-heading); }
+    .email-thread-count { color: var(--text-faint); }
+    .email-thread-msg { border-color: var(--border-default); background: var(--thread-bg); }
+    .email-thread-msg.expanded { background: var(--thread-expanded); }
+    .email-thread-msg-header:hover { background: var(--bg-hover); }
+    .email-thread-msg.expanded .email-thread-msg-header { border-bottom-color: var(--border-default); }
+    .email-thread-msg-from { color: var(--text-primary); }
+    .email-thread-msg-to { color: var(--text-faint); }
+    .email-thread-msg-snippet { color: var(--text-faint); }
+    .email-thread-msg-date { color: var(--text-faint); }
+    .email-thread-msg-body pre { color: var(--text-body); }
+
+    /* ── Compose panel ──────────────────────────────────────── */
+    .compose-panel { background: var(--compose-bg); border-color: var(--border-default); }
+    .compose-header { background: var(--navy); border-bottom-color: var(--border-default); }
+    .compose-header-title { color: var(--gold); }
+    .compose-header-btn { color: var(--text-secondary); }
+    .compose-header-btn:hover { color: var(--text-primary); }
+    .compose-field-row { border-bottom-color: var(--border-default); }
+    .compose-field-label { color: var(--text-faint); }
+    .compose-field-input { color: var(--text-primary); }
+    .compose-field-input::placeholder { color: var(--text-faint); }
+    .compose-cc-toggle { color: var(--text-faint); }
+    .compose-cc-toggle:hover { color: var(--text-secondary); }
+    .compose-body-area textarea { color: var(--text-body); }
+    .compose-body-area textarea::placeholder { color: var(--text-faint); }
+    .compose-footer { border-top-color: var(--border-default); }
+    .compose-send-btn { background: var(--navy); color: var(--gold); }
+    .compose-send-btn:hover { background: var(--gold); color: var(--navy); }
+    .compose-discard-btn { color: var(--text-secondary); }
+    .compose-autocomplete { background: var(--bg-card); border-color: var(--border-default); box-shadow: var(--shadow-hover); }
+    .compose-autocomplete-item:hover { background: var(--bg-active); }
+    .compose-autocomplete-name { color: var(--text-primary); }
+    .compose-autocomplete-email { color: var(--text-faint); }
+    .compose-chip { background: var(--bg-active); border-color: var(--border-default); color: var(--blue); }
+    .compose-chip-remove { color: var(--text-faint); }
+    .compose-chip-remove:hover { color: var(--red); }
+    .compose-field-chips input { color: var(--text-primary); }
+    .compose-field-chips input::placeholder { color: var(--text-faint); }
+
+    /* ── Multi-select & bulk ─────────────────────────────────── */
+    .email-checkbox { accent-color: var(--gold); }
+    .email-bulk-bar { background: var(--bg-active); border-bottom-color: var(--border-default); }
+    .email-bulk-bar span { color: var(--blue); }
+    .email-bulk-btn { background: var(--bg-card); border-color: var(--border-default); color: var(--text-secondary); }
+    .email-bulk-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+    .email-load-more { color: var(--text-faint); }
+    .email-load-more:hover { color: var(--blue); }
+
+    /* ── Scrollbar ────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+    ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
-    /* Global text color overrides for dark-theme remnants */
-    .card-header h2, h2, h3 { color: var(--navy); }
+    /* ── Global text color overrides ──────────────────────────── */
+    .card-header h2, h2, h3 { color: var(--text-heading); }
+
+    /* ── Theme toggle ────────────────────────────────────────── */
+    .theme-toggle {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 5px 10px; cursor: pointer;
+      font-size: 16px; line-height: 1; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .theme-toggle:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
 
     /* ── Hub Home View ───────────────────────────────────────────── */
     .hub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
@@ -1597,6 +1997,9 @@
       </div>
     </div>
     <div class="topbar-right">
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+        <span class="theme-icon" id="theme-icon">🌙</span>
+      </button>
       <div class="user-pill" id="user-pill"></div>
       <button class="btn-logout" onclick="logout()">Sign out</button>
     </div>
@@ -1614,7 +2017,7 @@
       <div class="tab" data-tab="matrix">Matrix</div>
       <div class="tab" data-tab="projects">Projects</div>
       <div class="tab" data-tab="journal">Journal</div>
-      <div class="tab" data-tab="email">Email <span id="email-tab-badge" style="display:none;background:#3b82f6;color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:16px;text-align:center;margin-left:4px;"></span></div>
+      <div class="tab" data-tab="email">Email <span id="email-tab-badge" style="display:none;background:var(--navy);color:var(--gold);font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:16px;text-align:center;margin-left:4px;"></span></div>
       <div class="tab" data-tab="notebook">Notebook</div>
       <div class="tab" data-tab="finance">Finance</div>
       <div class="tab" data-tab="content">Content</div>
@@ -1763,7 +2166,7 @@
             <div id="today-focus-list"></div>
             <div class="today-add-row" id="today-add-row">
               <span class="today-add-label">Add task to today:</span>
-              <select id="today-task-picker" style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none;">
+              <select id="today-task-picker" style="flex:1;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none;">
                 <option value="">— pick a task —</option>
               </select>
               <button class="btn-add" style="padding:6px 12px;font-size:12px;" onclick="pinSelectedTask()">Pin</button>
@@ -1944,10 +2347,10 @@
 
       <!-- Therapy view overlay -->
       <div id="therapy-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;overflow-y:auto;padding:40px 20px;">
-        <div style="max-width:720px;margin:0 auto;background:#18181b;border-radius:12px;padding:32px;">
+        <div style="max-width:720px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border-default);border-radius:12px;padding:32px;box-shadow:var(--shadow-hover);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
-            <h2 style="margin:0;font-size:18px;">Therapy Prep — Last 14 Days</h2>
-            <button onclick="closeTherapyView()" style="background:none;border:none;color:#a1a1aa;font-size:20px;cursor:pointer;">✕</button>
+            <h2 style="margin:0;font-size:18px;color:var(--text-heading);">Therapy Prep — Last 14 Days</h2>
+            <button onclick="closeTherapyView()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;">✕</button>
           </div>
           <div id="therapy-content"></div>
         </div>
@@ -1960,7 +2363,7 @@
         <div class="email-folder-sidebar" id="email-folder-sidebar">
           <button class="email-compose-btn" onclick="openCompose()">✏ Compose</button>
           <div id="email-folder-list"></div>
-          <div style="margin-top:auto;padding:8px 12px;border-top:1px solid #27272a;">
+          <div style="margin-top:auto;padding:8px 12px;border-top:1px solid var(--border-default);">
             <button class="email-folder-item" onclick="openSignatureEditor()" style="border:none;width:100%;text-align:left;background:none;font-family:inherit;cursor:pointer;">
               <span class="email-folder-icon">✍</span>
               <span class="email-folder-name">Signature</span>
@@ -1980,7 +2383,7 @@
               </div>
             </div>
             <div class="email-toolbar-actions">
-              <select class="email-toolbar-btn" id="email-sort-select" onchange="sortEmails(this.value)" title="Sort by" style="background:#18181b;color:#a1a1aa;font-size:12px;border:1px solid #27272a;border-radius:6px;padding:4px 6px;cursor:pointer;font-family:inherit;">
+              <select class="email-toolbar-btn" id="email-sort-select" onchange="sortEmails(this.value)" title="Sort by" style="background:var(--bg-card);color:var(--text-secondary);font-size:12px;border:1px solid var(--border-default);border-radius:6px;padding:4px 6px;cursor:pointer;font-family:inherit;">
                 <option value="date">Date</option>
                 <option value="sender">Sender</option>
                 <option value="subject">Subject</option>
@@ -2008,33 +2411,33 @@
     <div class="section" id="sec-finance">
       <div style="max-width:900px;margin:0 auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Finance</h2>
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0;">Finance</h2>
           <div style="display:flex;gap:8px;">
-            <select id="fin-month-select" onchange="loadFinanceMonth()" style="padding:6px 12px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;"></select>
-            <button onclick="document.getElementById('fin-import-form').style.display=document.getElementById('fin-import-form').style.display==='none'?'flex':'none'" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Import CSV</button>
+            <select id="fin-month-select" onchange="loadFinanceMonth()" style="padding:6px 12px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);"></select>
+            <button onclick="document.getElementById('fin-import-form').style.display=document.getElementById('fin-import-form').style.display==='none'?'flex':'none'" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Import CSV</button>
           </div>
         </div>
         <!-- Import form -->
-        <div id="fin-import-form" style="display:none;flex-direction:column;gap:10px;margin-bottom:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;padding:16px;">
+        <div id="fin-import-form" style="display:none;flex-direction:column;gap:10px;margin-bottom:16px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:16px;">
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="fin-import-account" style="flex:1;padding:8px 12px;font-size:13px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;">
+            <select id="fin-import-account" style="flex:1;padding:8px 12px;font-size:13px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);">
               <option value="">Select account...</option>
             </select>
-            <button onclick="document.getElementById('fin-add-acct').style.display='flex'" style="font-size:12px;padding:6px 12px;background:rgba(148,163,184,0.15);color:#94a3b8;border:none;border-radius:6px;cursor:pointer;">+ Account</button>
+            <button onclick="document.getElementById('fin-add-acct').style.display='flex'" style="font-size:12px;padding:6px 12px;background:var(--bg-hover);color:var(--text-secondary);border:none;border-radius:6px;cursor:pointer;">+ Account</button>
           </div>
           <div id="fin-add-acct" style="display:none;gap:8px;align-items:center;">
-            <input id="fin-acct-name" placeholder="Account name" style="flex:1;padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;outline:none;" />
-            <select id="fin-acct-type" style="padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;">
+            <input id="fin-acct-name" placeholder="Account name" style="flex:1;padding:6px 10px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);outline:none;" />
+            <select id="fin-acct-type" style="padding:6px 10px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);">
               <option value="checking">Checking</option><option value="savings">Savings</option><option value="credit">Credit Card</option>
             </select>
-            <input id="fin-acct-institution" placeholder="Bank name" style="width:120px;padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;outline:none;" />
-            <button onclick="addFinanceAccount()" style="font-size:12px;padding:6px 12px;background:#22c55e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Add</button>
+            <input id="fin-acct-institution" placeholder="Bank name" style="width:120px;padding:6px 10px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);outline:none;" />
+            <button onclick="addFinanceAccount()" style="font-size:12px;padding:6px 12px;background:var(--green);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;font-weight:600;">Add</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <input type="file" id="fin-csv-file" accept=".csv" style="flex:1;font-size:12px;color:#94a3b8;" />
-            <button onclick="importFinanceCSV()" id="fin-import-btn" style="padding:8px 16px;font-size:13px;font-weight:600;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;">Upload & Import</button>
+            <input type="file" id="fin-csv-file" accept=".csv" style="flex:1;font-size:12px;color:var(--text-secondary);" />
+            <button onclick="importFinanceCSV()" id="fin-import-btn" style="padding:8px 16px;font-size:13px;font-weight:600;background:var(--green);color:var(--text-on-accent);border:none;border-radius:8px;cursor:pointer;">Upload & Import</button>
           </div>
-          <div id="fin-import-status" style="font-size:12px;color:#71717a;"></div>
+          <div id="fin-import-status" style="font-size:12px;color:var(--text-secondary);"></div>
         </div>
         <!-- Summary cards -->
         <div id="fin-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;"></div>
@@ -2051,40 +2454,40 @@
     <div class="section" id="sec-notebook">
       <div style="max-width:900px;margin:0 auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Notebook</h2>
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0;">Notebook</h2>
           <div style="display:flex;gap:8px;">
-            <button onclick="showAddNoteForm()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">+ New Note</button>
-            <button onclick="showAddTabForm()" style="background:rgba(148,163,184,0.15);color:#94a3b8;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">+ Tab</button>
+            <button onclick="showAddNoteForm()" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">+ New Note</button>
+            <button onclick="showAddTabForm()" style="background:var(--bg-hover);color:var(--text-secondary);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">+ Tab</button>
           </div>
         </div>
         <!-- Notebook tabs -->
         <div id="notebook-tabs" style="display:flex;gap:4px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;"></div>
         <!-- Add tab form (hidden) -->
         <div id="nb-add-tab-form" style="display:none;gap:8px;margin-bottom:12px;align-items:center;">
-          <input id="nb-new-tab-name" placeholder="Tab name..." style="flex:1;padding:8px 12px;font-size:13px;background:#1e1e22;border:1px solid #3f3f46;border-radius:8px;color:#e4e4e7;outline:none;font-family:inherit;" />
+          <input id="nb-new-tab-name" placeholder="Tab name..." style="flex:1;padding:8px 12px;font-size:13px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text-primary);outline:none;font-family:inherit;" />
           <input id="nb-new-tab-color" type="color" value="#3b82f6" style="width:36px;height:32px;border:none;background:none;cursor:pointer;" />
-          <button onclick="addNotebookTab()" style="padding:6px 14px;font-size:12px;font-weight:600;background:#22c55e;color:#fff;border:none;border-radius:6px;cursor:pointer;">Add</button>
-          <button onclick="document.getElementById('nb-add-tab-form').style.display='none'" style="padding:6px 10px;font-size:12px;background:rgba(148,163,184,0.1);color:#71717a;border:none;border-radius:6px;cursor:pointer;">Cancel</button>
+          <button onclick="addNotebookTab()" style="padding:6px 14px;font-size:12px;font-weight:600;background:var(--green);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;">Add</button>
+          <button onclick="document.getElementById('nb-add-tab-form').style.display='none'" style="padding:6px 10px;font-size:12px;background:var(--bg-hover);color:var(--text-secondary);border:none;border-radius:6px;cursor:pointer;">Cancel</button>
         </div>
         <!-- Add note form (hidden) -->
-        <div id="nb-add-note-form" style="display:none;flex-direction:column;gap:8px;margin-bottom:16px;background:#18181b;border:1px solid #27272a;border-radius:10px;padding:16px;">
-          <textarea id="nb-note-content" placeholder="Write your note..." style="width:100%;min-height:100px;padding:10px 14px;font-size:14px;background:#0f0f11;border:1px solid #27272a;border-radius:8px;color:#e4e4e7;outline:none;font-family:inherit;resize:vertical;line-height:1.6;"></textarea>
+        <div id="nb-add-note-form" style="display:none;flex-direction:column;gap:8px;margin-bottom:16px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:16px;">
+          <textarea id="nb-note-content" placeholder="Write your note..." style="width:100%;min-height:100px;padding:10px 14px;font-size:14px;background:var(--bg-page);border:1px solid var(--border-default);border-radius:8px;color:var(--text-primary);outline:none;font-family:inherit;resize:vertical;line-height:1.6;"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <select id="nb-note-project" style="padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;">
+            <select id="nb-note-project" style="padding:6px 10px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);">
               <option value="">No project</option>
             </select>
-            <input id="nb-note-tags" placeholder="Tags (comma separated)" style="flex:1;min-width:150px;padding:6px 10px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;outline:none;" />
-            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#94a3b8;cursor:pointer;">
+            <input id="nb-note-tags" placeholder="Tags (comma separated)" style="flex:1;min-width:150px;padding:6px 10px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);outline:none;" />
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);cursor:pointer;">
               <input type="checkbox" id="nb-note-followup" /> Follow up
             </label>
-            <input type="date" id="nb-note-followup-date" style="padding:4px 8px;font-size:11px;background:#1e1e22;border:1px solid #3f3f46;border-radius:6px;color:#e4e4e7;" />
-            <button onclick="saveNewNote()" style="padding:6px 16px;font-size:13px;font-weight:600;background:#22c55e;color:#fff;border:none;border-radius:6px;cursor:pointer;">Save Note</button>
-            <button onclick="document.getElementById('nb-add-note-form').style.display='none'" style="padding:6px 10px;font-size:12px;background:rgba(148,163,184,0.1);color:#71717a;border:none;border-radius:6px;cursor:pointer;">Cancel</button>
+            <input type="date" id="nb-note-followup-date" style="padding:4px 8px;font-size:11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text-primary);" />
+            <button onclick="saveNewNote()" style="padding:6px 16px;font-size:13px;font-weight:600;background:var(--green);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;">Save Note</button>
+            <button onclick="document.getElementById('nb-add-note-form').style.display='none'" style="padding:6px 10px;font-size:12px;background:var(--bg-hover);color:var(--text-secondary);border:none;border-radius:6px;cursor:pointer;">Cancel</button>
           </div>
         </div>
         <!-- Search -->
         <div style="margin-bottom:12px;">
-          <input id="nb-search" placeholder="Search notes..." oninput="filterNotebookNotes()" style="width:100%;padding:8px 14px;font-size:13px;background:#1e1e22;border:1px solid #27272a;border-radius:8px;color:#e4e4e7;outline:none;font-family:inherit;" />
+          <input id="nb-search" placeholder="Search notes..." oninput="filterNotebookNotes()" style="width:100%;padding:8px 14px;font-size:13px;background:var(--input-bg);border:1px solid var(--border-default);border-radius:8px;color:var(--text-primary);outline:none;font-family:inherit;" />
         </div>
         <!-- Notes list -->
         <div id="notebook-notes" style="display:flex;flex-direction:column;gap:8px;"></div>
@@ -2095,19 +2498,19 @@
     <div class="section" id="sec-taglines">
       <div style="max-width:700px;margin:0 auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Tagline Library</h2>
-          <button onclick="document.getElementById('tagline-add-form').style.display=document.getElementById('tagline-add-form').style.display==='none'?'flex':'none'" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">+ Add Tagline</button>
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0;">Tagline Library</h2>
+          <button onclick="document.getElementById('tagline-add-form').style.display=document.getElementById('tagline-add-form').style.display==='none'?'flex':'none'" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">+ Add Tagline</button>
         </div>
         <div id="tagline-add-form" style="display:none;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-          <input id="tagline-input" placeholder="The line..." style="flex:1;min-width:250px;padding:10px 14px;font-size:13px;background:#1e1e22;border:1px solid #3f3f46;border-radius:8px;color:#e4e4e7;outline:none;font-family:inherit;" />
-          <select id="tagline-category" style="padding:8px 12px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:8px;color:#e4e4e7;">
+          <input id="tagline-input" placeholder="The line..." style="flex:1;min-width:250px;padding:10px 14px;font-size:13px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text-primary);outline:none;font-family:inherit;" />
+          <select id="tagline-category" style="padding:8px 12px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text-primary);">
             <option value="general">General</option><option value="signature">Signature</option><option value="bus">The Bus</option><option value="mission">Mission</option><option value="philosophy">Philosophy</option><option value="truth">Truth</option><option value="win">Win</option>
           </select>
-          <input id="tagline-source" placeholder="Source (default: John)" style="width:140px;padding:8px 12px;font-size:12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:8px;color:#e4e4e7;outline:none;" />
-          <button onclick="addTagline()" style="padding:8px 16px;font-size:13px;font-weight:600;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;">Save</button>
+          <input id="tagline-source" placeholder="Source (default: John)" style="width:140px;padding:8px 12px;font-size:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text-primary);outline:none;" />
+          <button onclick="addTagline()" style="padding:8px 16px;font-size:13px;font-weight:600;background:var(--green);color:var(--text-on-accent);border:none;border-radius:8px;cursor:pointer;">Save</button>
         </div>
         <div id="tagline-list" style="display:flex;flex-direction:column;gap:8px;">
-          <div style="text-align:center;padding:40px;color:#71717a;">Loading...</div>
+          <div style="text-align:center;padding:40px;color:var(--text-secondary);">Loading...</div>
         </div>
       </div>
     </div>
@@ -2120,42 +2523,42 @@
         <div id="reactor-feed-section" style="margin-bottom:28px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div>
-              <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Content Intelligence Feed</h2>
-              <p id="reactor-last-poll" style="font-size:11px;color:#71717a;margin:4px 0 0;">Polling RSS feeds every 2 hours</p>
+              <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0;">Content Intelligence Feed</h2>
+              <p id="reactor-last-poll" style="font-size:11px;color:var(--text-secondary);margin:4px 0 0;">Polling RSS feeds every 2 hours</p>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button onclick="setReactorFilter('new')" id="reactor-filter-new" class="reactor-filter active" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #3b82f6;background:rgba(59,130,246,0.15);color:#3b82f6;">New</button>
-              <button onclick="setReactorFilter('reacted')" id="reactor-filter-reacted" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">Reacted</button>
-              <button onclick="setReactorFilter('dismissed')" id="reactor-filter-dismissed" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">Dismissed</button>
-              <button onclick="setReactorFilter('all')" id="reactor-filter-all" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">All</button>
-              <button onclick="pollReactorFeed()" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">Refresh</button>
+              <button onclick="setReactorFilter('new')" id="reactor-filter-new" class="reactor-filter active" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--gold);background:var(--gold-dim);color:var(--gold);">New</button>
+              <button onclick="setReactorFilter('reacted')" id="reactor-filter-reacted" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">Reacted</button>
+              <button onclick="setReactorFilter('dismissed')" id="reactor-filter-dismissed" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">Dismissed</button>
+              <button onclick="setReactorFilter('all')" id="reactor-filter-all" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">All</button>
+              <button onclick="pollReactorFeed()" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:var(--text-secondary);">Refresh</button>
             </div>
           </div>
           <div id="reactor-feed-list" style="display:flex;flex-direction:column;gap:8px;">
-            <div style="text-align:center;padding:30px;color:#71717a;font-size:13px;">Loading triggers...</div>
+            <div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:13px;">Loading triggers...</div>
           </div>
-          <div style="margin-top:12px;padding:10px 14px;background:rgba(30,30,36,0.6);border-radius:8px;border:1px solid rgba(63,63,70,0.3);">
-            <div style="font-size:11px;font-weight:600;color:#a1a1aa;margin-bottom:4px;">RSS Sources</div>
+          <div style="margin-top:12px;padding:10px 14px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border-default);">
+            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">RSS Sources</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <span style="font-size:10px;color:#71717a;background:rgba(26,115,232,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#1a73e8">HW</b> HousingWire</span>
-              <span style="font-size:10px;color:#71717a;background:rgba(230,81,0,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#e65100">SG</b> Scotsman Guide</span>
-              <span style="font-size:10px;color:#71717a;background:rgba(46,125,50,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#2e7d32">MBA</b> MBA</span>
-              <span style="font-size:10px;color:#71717a;background:rgba(123,31,162,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#7b1fa2">MPA</b> MPA</span>
-              <span style="font-size:10px;color:#71717a;background:rgba(198,40,40,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#c62828">GS</b> Greg Sher</span>
-              <span style="font-size:10px;color:#71717a;background:rgba(0,119,181,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#0077b5">LI</b> LinkedIn (Zapier)</span>
+              <span style="font-size:10px;color:var(--text-secondary);background:rgba(26,115,232,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#1a73e8">HW</b> HousingWire</span>
+              <span style="font-size:10px;color:var(--text-secondary);background:rgba(230,81,0,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#e65100">SG</b> Scotsman Guide</span>
+              <span style="font-size:10px;color:var(--text-secondary);background:rgba(46,125,50,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#2e7d32">MBA</b> MBA</span>
+              <span style="font-size:10px;color:var(--text-secondary);background:rgba(123,31,162,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#7b1fa2">MPA</b> MPA</span>
+              <span style="font-size:10px;color:var(--text-secondary);background:rgba(198,40,40,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#c62828">GS</b> Greg Sher</span>
+              <span style="font-size:10px;color:var(--text-secondary);background:rgba(0,119,181,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#0077b5">LI</b> LinkedIn (Zapier)</span>
             </div>
           </div>
         </div>
 
         <!-- ── Content Calendar ────────────────────────────────── -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Content Calendar</h2>
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0;">Content Calendar</h2>
           <div style="display:flex;gap:8px;">
-            <button onclick="generateContentPlan()" id="content-gen-btn" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Generate 2-Week Plan</button>
+            <button onclick="generateContentPlan()" id="content-gen-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Generate 2-Week Plan</button>
           </div>
         </div>
         <div id="content-calendar-grid" style="display:flex;flex-direction:column;gap:10px;">
-          <div style="text-align:center;padding:40px;color:#71717a;">Click "Generate 2-Week Plan" to create your content calendar.</div>
+          <div style="text-align:center;padding:40px;color:var(--text-secondary);">Click "Generate 2-Week Plan" to create your content calendar.</div>
         </div>
       </div>
     </div>
@@ -2171,6 +2574,29 @@
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script>
+    /* ── Theme ────────────────────────────────────────────────── */
+    (function() {
+      const saved = localStorage.getItem('anchor-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.content = saved === 'dark' ? '#0A1628' : '#0A1628';
+    })();
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('anchor-theme', next);
+      const icon = document.getElementById('theme-icon');
+      if (icon) icon.textContent = next === 'dark' ? '☀️' : '🌙';
+    }
+    // Set correct icon on load
+    document.addEventListener('DOMContentLoaded', function() {
+      const theme = document.documentElement.getAttribute('data-theme') || 'light';
+      const icon = document.getElementById('theme-icon');
+      if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    });
+
     /* ── State ────────────────────────────────────────────────── */
     let tasks = [];
     let projects = [];
@@ -2311,13 +2737,13 @@
                 ${t.due ? `<span class="task-tag due">${t.due}</span>` : ""}
                 ${t.project ? `<span class="task-tag project-tag">${esc(t.project)}</span>` : ""}
                 ${t.linkedGoal ? (() => { const g = goals.find(g => g.id === t.linkedGoal); return g ? `<span class="task-tag" style="background:rgba(167,139,246,.12);color:#a78bfa;" title="Goal: ${esc(g.title)}">🎯 ${esc(g.title)}</span>` : ""; })() : ""}
-                ${t.emailId ? `<span class="task-tag" style="background:rgba(59,130,246,.12);color:#60a5fa;" title="${esc(t.emailSubject)}">✉</span>` : ""}
+                ${t.emailId ? `<span class="task-tag" style="background:var(--blue-bg);color:var(--blue);" title="${esc(t.emailSubject)}">✉</span>` : ""}
               </div>
             </div>
             <button class="task-edit" onclick="openEdit('${t.id}')" title="Edit">&#9998;</button>
             <button class="task-edit" onclick="showMovePopover('${t.id}', this)" title="Move to project" style="position:relative;">⇄</button>
-            <button class="task-edit" onclick="${t.todayFocus ? `unpinFromToday('${t.id}')` : `pinToToday('${t.id}')`}" title="${t.todayFocus ? "Remove from Today" : "Pin to Today"}" style="color:${t.todayFocus ? "#34d399" : "#3f3f46"}">${t.todayFocus ? "★" : "☆"}</button>
-            <button class="task-edit" onclick="openScheduleModal('${t.id}')" title="Schedule to calendar" style="color:${t.calEventId ? '#34d399' : '#3f3f46'}">📅</button>
+            <button class="task-edit" onclick="${t.todayFocus ? `unpinFromToday('${t.id}')` : `pinToToday('${t.id}')`}" title="${t.todayFocus ? "Remove from Today" : "Pin to Today"}" style="color:${t.todayFocus ? "var(--teal)" : "var(--text-faint)"}">${t.todayFocus ? "★" : "☆"}</button>
+            <button class="task-edit" onclick="openScheduleModal('${t.id}')" title="Schedule to calendar" style="color:${t.calEventId ? 'var(--teal)' : 'var(--text-faint)'}">📅</button>
             <button class="task-delete" onclick="deleteTask('${t.id}')" title="Delete">&times;</button>
           </div>
           ${editingTaskId === t.id ? `
@@ -2490,7 +2916,7 @@
           const attEl = document.getElementById(`ed-attachments-${id}`);
           if (attEl && detail.attachments?.length) {
             attEl.innerHTML = detail.attachments.map(a =>
-              `<a href="/api/tasks/${id}/attachment/${encodeURIComponent(a.file)}" download="${esc(a.name)}" style="display:inline-flex;align-items:center;gap:4px;background:#18181b;border:1px solid #27272a;border-radius:6px;padding:4px 8px;font-size:11px;color:#93c5fd;text-decoration:none;">📎 ${esc(a.name)} <span style="color:#52525b;font-size:10px;">${a.size > 1048576 ? (a.size/1048576).toFixed(1) + "MB" : Math.round(a.size/1024) + "KB"}</span></a>`
+              `<a href="/api/tasks/${id}/attachment/${encodeURIComponent(a.file)}" download="${esc(a.name)}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--blue);text-decoration:none;">📎 ${esc(a.name)} <span style="color:var(--text-faint);font-size:10px;">${a.size > 1048576 ? (a.size/1048576).toFixed(1) + "MB" : Math.round(a.size/1024) + "KB"}</span></a>`
             ).join("");
           }
         }).catch(() => {});
@@ -2732,12 +3158,12 @@
             </div>
             <div class="full" style="grid-column:1/-1;">
               <label>Notes</label>
-              <textarea id="ed-notes-${t.id}" rows="3" style="width:100%;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:8px;font-size:12px;font-family:inherit;outline:none;resize:vertical;" placeholder="Add context, notes, details..."></textarea>
+              <textarea id="ed-notes-${t.id}" rows="3" style="width:100%;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:8px;font-size:12px;font-family:inherit;outline:none;resize:vertical;" placeholder="Add context, notes, details..."></textarea>
             </div>
             <div class="full" style="grid-column:1/-1;">
               <label>Attachments</label>
               <div id="ed-attachments-${t.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
-              <label style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid #3f3f46;border-radius:6px;cursor:pointer;font-size:11px;color:#a1a1aa;">
+              <label style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border-strong);border-radius:6px;cursor:pointer;font-size:11px;color:var(--text-secondary);">
                 📎 Add File
                 <input type="file" style="display:none;" onchange="uploadTaskAttachment('${t.id}', this)">
               </label>
@@ -2758,11 +3184,11 @@
               <div class="detail-owner">Owner: <span>${esc(p.owner || "Unassigned")}</span></div>
               <div style="margin-top:10px;">
                 ${projectDetail.folderId
-                  ? `<a href="${esc(projectDetail.folderUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:#27272a;border:1px solid #3f3f46;color:#60a5fa;border-radius:8px;padding:6px 14px;font-size:12px;text-decoration:none;font-weight:600;">
+                  ? `<a href="${esc(projectDetail.folderUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:var(--bg-hover);border:1px solid var(--border-strong);color:var(--blue);border-radius:8px;padding:6px 14px;font-size:12px;text-decoration:none;font-weight:600;">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                       Open Drive Folder
                     </a>`
-                  : `<button onclick="createDriveFolder()" style="display:inline-flex;align-items:center;gap:6px;background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
+                  : `<button onclick="createDriveFolder()" style="display:inline-flex;align-items:center;gap:6px;background:var(--navy);color:var(--gold);border:1px solid var(--gold);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
                       Create Drive Folder
                     </button>`
@@ -2788,17 +3214,17 @@
           <div class="detail-progress-bar">
             <div class="detail-progress-fill" style="width: ${pct}%"></div>
           </div>
-          <div style="font-size:12px; color:#71717a; margin-top:-18px; margin-bottom:20px;">${pct}% complete (${doneCount}/${total})</div>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:-18px; margin-bottom:20px;">${pct}% complete (${doneCount}/${total})</div>
         </div>
 
         <div class="card" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
           <div>
             <div class="detail-section-label">Project Notes</div>
-            <textarea id="detail-notes" rows="5" style="width:100%;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;" placeholder="Project details, scope, goals...">${esc(projectDetail.notes || "")}</textarea>
+            <textarea id="detail-notes" rows="5" style="width:100%;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;" placeholder="Project details, scope, goals...">${esc(projectDetail.notes || "")}</textarea>
           </div>
           <div>
             <div class="detail-section-label">Ethos / Guiding Principles</div>
-            <textarea id="detail-ethos" rows="5" style="width:100%;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;" placeholder="Team values, decision principles...">${esc(projectDetail.ethos || "")}</textarea>
+            <textarea id="detail-ethos" rows="5" style="width:100%;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;" placeholder="Team values, decision principles...">${esc(projectDetail.ethos || "")}</textarea>
           </div>
           <div style="grid-column:1/-1; display:flex; justify-content:flex-end;">
             <button class="btn-save" onclick="saveDetailMeta()">Save Notes</button>
@@ -2809,11 +3235,11 @@
           <div class="detail-section-label">Team Members</div>
           <div id="detail-members-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
             ${(p.members || []).map(m => `
-              <span style="display:inline-flex;align-items:center;gap:4px;background:#1a1a2e;border:1px solid #27272a;border-radius:14px;padding:4px 10px 4px 12px;font-size:12px;color:#93c5fd;">
+              <span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-active);border:1px solid var(--border-default);border-radius:14px;padding:4px 10px 4px 12px;font-size:12px;color:var(--blue);">
                 ${esc(m)}
-                <button onclick="removeMember('${esc(m)}')" style="background:none;border:none;color:#52525b;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;" title="Remove">✕</button>
+                <button onclick="removeMember('${esc(m)}')" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;" title="Remove">✕</button>
               </span>
-            `).join("") || '<span style="font-size:12px;color:#52525b;">No members assigned</span>'}
+            `).join("") || '<span style="font-size:12px;color:var(--text-faint);">No members assigned</span>'}
           </div>
           <div class="add-row" style="margin-bottom:0;">
             <input class="inp-title" id="detail-add-member" placeholder="Email address..." style="max-width:300px;" onkeydown="if(event.key==='Enter')addMember()" />
@@ -2827,7 +3253,7 @@
             ${(projectDetail.docs || []).map((d, i) => `
               <div class="task-item">
                 <div class="task-body">
-                  <div class="task-title">${d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:underline;">${esc(d.name || d.url)}</a>` : esc(d.name)}</div>
+                  <div class="task-title">${d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;">${esc(d.name || d.url)}</a>` : esc(d.name)}</div>
                   ${d.notes ? `<div class="task-meta"><span class="task-tag">${esc(d.notes)}</span></div>` : ""}
                 </div>
                 <button class="task-delete" onclick="removeDoc(${i})" title="Remove">&times;</button>
@@ -2839,8 +3265,8 @@
             <input class="inp-title" id="detail-doc-url" placeholder="URL (optional)" />
             <input class="inp-sm" id="detail-doc-notes" placeholder="Notes..." />
             <button class="btn-add" onclick="addDoc()">Add Link</button>
-            <button class="btn-add" style="background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;" onclick="openDrivePicker()">Pick from Drive</button>
-            ${projectDetail.folderId ? '<button class="btn-add" style="background:#27272a;border:1px solid #3f3f46;color:#4ade80;" onclick="uploadToDriveFolder()">Upload to Drive</button>' : ''}
+            <button class="btn-add" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);" onclick="openDrivePicker()">Pick from Drive</button>
+            ${projectDetail.folderId ? '<button class="btn-add" style="background:var(--bg-hover);border:1px solid var(--border-strong);color:var(--green);" onclick="uploadToDriveFolder()">Upload to Drive</button>' : ''}
           </div>
         </div>
 
@@ -3966,7 +4392,7 @@
           : (ev.location ? `<div class="cal-day-event-sub">📍 ${esc(ev.location)}</div>` : "");
         const editData = encodeURIComponent(JSON.stringify({ id: ev.id, title: ev.title, start: ev.start, end: ev.end, allDay: ev.allDay, location: ev.location || "", source: ev.source }));
         const clickable = ev.source !== "task" ? `style="cursor:pointer;" onclick="openCalEventEdit(decodeURIComponent('${editData}'))"` : "";
-        const editHint = ev.source !== "task" ? `<span style="font-size:10px;color:#3f3f46;margin-left:6px;">✎ edit</span>` : "";
+        const editHint = ev.source !== "task" ? `<span style="font-size:10px;color:var(--text-faint);margin-left:6px;">✎ edit</span>` : "";
         return `<div class="cal-day-event ${ev.source}" ${clickable}>
           <div class="cal-day-event-time">${timeLabel}</div>
           <div style="flex:1;"><div class="cal-day-event-title">${esc(ev.title)}${editHint}</div>${sub}</div>
@@ -3979,8 +4405,8 @@
       ).join("");
 
       const scheduleRow = `
-        <div style="margin-top:14px;padding-top:12px;border-top:1px solid #27272a;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <select id="day-task-picker-${dateStr}" style="flex:1;min-width:160px;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none;">
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-default);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="day-task-picker-${dateStr}" style="flex:1;min-width:160px;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none;">
             <option value="">— schedule a task to this day —</option>
             ${taskOpts}
           </select>
@@ -3988,7 +4414,7 @@
         </div>`;
 
       const noEventsMsg = !dayEvts.length
-        ? `<div style="color:#3f3f46;font-size:13px;padding:8px 0;">No events for this day.</div>` : "";
+        ? `<div style="color:var(--text-faint);font-size:13px;padding:8px 0;">No events for this day.</div>` : "";
 
       return `<div class="cal-day-panel">
         <div class="cal-day-panel-header">${label}</div>
@@ -4154,18 +4580,18 @@
 
       if (notConnected) {
         badge.innerHTML = `<a href="/api/gcal-auth" class="gcal-connect-btn">Connect</a>`;
-        content.innerHTML = `<div class="today-empty">Gmail not connected. <a href="/api/gcal-auth" style="color:#3b82f6;">Connect</a></div>`;
+        content.innerHTML = `<div class="today-empty">Gmail not connected. <a href="/api/gcal-auth" style="color:var(--blue);">Connect</a></div>`;
         return;
       }
 
       const unread = emails.filter(e => e.unread).length;
       badge.innerHTML = unread
         ? `<span class="today-section-count">${unread}</span>`
-        : `<span style="font-size:10px;color:#52525b;">All read</span>`;
+        : `<span style="font-size:10px;color:var(--text-faint);">All read</span>`;
 
       if (!unread) {
         content.innerHTML = `<div class="today-empty" style="padding:12px 0;">
-          <div style="font-size:13px;color:#52525b;">Inbox zero! You're all caught up.</div>
+          <div style="font-size:13px;color:var(--text-faint);">Inbox zero! You're all caught up.</div>
         </div>`;
         return;
       }
@@ -4174,11 +4600,11 @@
       const topSenders = [...new Set(emails.filter(e => e.unread).map(e => e.from))].slice(0, 3);
       content.innerHTML = `
         <div style="padding:8px 0;cursor:pointer;" onclick="document.querySelector('.tab[data-tab=email]').click()">
-          <div style="font-size:14px;color:#e4e4e7;font-weight:600;margin-bottom:6px;">
+          <div style="font-size:14px;color:var(--text-primary);font-weight:600;margin-bottom:6px;">
             ${unread} unread email${unread !== 1 ? "s" : ""}
           </div>
-          <div style="font-size:12px;color:#71717a;margin-bottom:8px;">
-            From: ${topSenders.map(s => `<span style="color:#a1a1aa;">${esc(s)}</span>`).join(", ")}${topSenders.length < unread ? ` and ${unread - topSenders.length} more` : ""}
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+            From: ${topSenders.map(s => `<span style="color:var(--text-secondary);">${esc(s)}</span>`).join(", ")}${topSenders.length < unread ? ` and ${unread - topSenders.length} more` : ""}
           </div>
           <div style="font-size:12px;color:#3b82f6;">Open Email →</div>
         </div>`;
@@ -4447,7 +4873,7 @@
           const schedBadge = t.scheduledStart
             ? `<span class="focus-tag scheduled">📅 ${formatEventTime(t.scheduledStart)}</span>` : "";
           const projBadge = t.project ? `<span class="focus-tag">${esc(t.project)}</span>` : "";
-          const emailBadge = t.emailId ? `<span class="focus-tag" style="background:rgba(59,130,246,.12);color:#60a5fa;" title="${esc(t.emailSubject)}">✉</span>` : "";
+          const emailBadge = t.emailId ? `<span class="focus-tag" style="background:var(--blue-bg);color:var(--blue);" title="${esc(t.emailSubject)}">✉</span>` : "";
           const scheduleBtnClass = t.calEventId ? "focus-btn schedule-btn scheduled" : "focus-btn schedule-btn";
           const scheduleBtnLabel = t.calEventId ? "Scheduled" : "Schedule";
           return `
@@ -4829,7 +5255,7 @@
           <div style="font-size:11px;color:#34d399;margin-bottom:8px;">✓ Already scheduled — saving will update the event</div>
           <button class="btn-cancel" style="font-size:12px;margin-bottom:12px;width:100%;" onclick="unscheduleTask('${t.id}')">Remove from Calendar</button>` : ""}
 
-          ${!gcalConnected ? `<div style="font-size:11px;color:#f87171;margin-bottom:12px;">⚠ Google Calendar not connected — <a href="/api/gcal-auth" style="color:#60a5fa;">Connect now</a></div>` : ""}
+          ${!gcalConnected ? `<div style="font-size:11px;color:#f87171;margin-bottom:12px;">⚠ Google Calendar not connected — <a href="/api/gcal-auth" style="color:var(--blue);">Connect now</a></div>` : ""}
 
           <div class="modal-footer">
             <button class="btn-cancel" onclick="closeScheduleModal()">Cancel</button>
@@ -5036,10 +5462,10 @@
         content.innerHTML = `<div class="today-empty">No journal entries in the last 14 days.</div>`;
       } else {
         content.innerHTML = recent.map(e => `
-          <div style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid #27272a;">
-            <div style="font-size:12px;color:#71717a;margin-bottom:4px;">${formatJournalDateLabel(e.date)}</div>
-            ${e.title ? `<div style="font-size:15px;font-weight:600;color:#e4e4e7;margin-bottom:8px;">${esc(e.title)}</div>` : ""}
-            <div style="font-size:13px;color:#a1a1aa;white-space:pre-wrap;line-height:1.7;">${esc(e.content)}</div>
+          <div style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid var(--border-default);">
+            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">${formatJournalDateLabel(e.date)}</div>
+            ${e.title ? `<div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">${esc(e.title)}</div>` : ""}
+            <div style="font-size:13px;color:var(--text-secondary);white-space:pre-wrap;line-height:1.7;">${esc(e.content)}</div>
           </div>`).join("");
       }
       overlay.style.display = "block";
@@ -5063,7 +5489,7 @@
       const [eh, em, eIsAM] = endTimeParts;
 
       const sourceLabel = ev.source === "anchor" ? "Anchor Calendar" : "Personal Calendar";
-      const sourceColor = ev.source === "anchor" ? "#fcd34d" : "#93c5fd";
+      const sourceColor = ev.source === "anchor" ? "var(--yellow)" : "var(--blue)";
 
       const modal = document.createElement("div");
       modal.className = "modal-overlay";
@@ -5081,7 +5507,7 @@
 
         <div class="modal-field">
           <label>Date</label>
-          <input id="cee-date" type="date" value="${startDate}" style="width:100%;box-sizing:border-box;background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:7px 10px;font-size:13px;" />
+          <input id="cee-date" type="date" value="${startDate}" style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:7px 10px;font-size:13px;" />
         </div>
 
         <div class="modal-field">
@@ -5096,8 +5522,8 @@
             <div class="modal-field">
               <label>Start</label>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <select id="cee-sh" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildHourOpts(sh)}</select>
-                <select id="cee-sm" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildMinOpts(sm)}</select>
+                <select id="cee-sh" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:6px 8px;font-size:13px;">${buildHourOpts(sh)}</select>
+                <select id="cee-sm" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:6px 8px;font-size:13px;">${buildMinOpts(sm)}</select>
                 <div style="display:flex;gap:3px;">
                   <button class="ampm-btn ${sIsAM ? "active" : ""}" id="cee-s-am" onclick="setCeeAmPm('s','AM')">AM</button>
                   <button class="ampm-btn ${sIsAM ? "" : "active"}" id="cee-s-pm" onclick="setCeeAmPm('s','PM')">PM</button>
@@ -5107,8 +5533,8 @@
             <div class="modal-field">
               <label>End</label>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <select id="cee-eh" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildHourOpts(eh)}</select>
-                <select id="cee-em" style="background:#1f1f23;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:6px 8px;font-size:13px;">${buildMinOpts(em)}</select>
+                <select id="cee-eh" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:6px 8px;font-size:13px;">${buildHourOpts(eh)}</select>
+                <select id="cee-em" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:6px;padding:6px 8px;font-size:13px;">${buildMinOpts(em)}</select>
                 <div style="display:flex;gap:3px;">
                   <button class="ampm-btn ${eIsAM ? "active" : ""}" id="cee-e-am" onclick="setCeeAmPm('e','AM')">AM</button>
                   <button class="ampm-btn ${eIsAM ? "" : "active"}" id="cee-e-pm" onclick="setCeeAmPm('e','PM')">PM</button>
@@ -5663,7 +6089,7 @@
       } else if (body.type === "text") {
         container.innerHTML = `<pre>${esc(body.data)}</pre>`;
       } else {
-        container.innerHTML = `<div style="color:#71717a;font-size:14px;font-style:italic;">No content</div>`;
+        container.innerHTML = `<div style="color:var(--text-secondary);font-size:14px;font-style:italic;">No content</div>`;
       }
     }
 
@@ -5692,7 +6118,7 @@
               <div class="email-detail-sender-info">
                 <div class="email-detail-sender-name">${esc(data.from || email.from)}</div>
                 <div class="email-detail-sender-email">${esc(data.fromEmail || email.fromEmail || "")}</div>
-                ${data.to ? `<div style="font-size:11px;color:#52525b;margin-top:2px;">to ${esc(data.to)}${data.cc ? `, cc: ${esc(data.cc)}` : ""}</div>` : ""}
+                ${data.to ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">to ${esc(data.to)}${data.cc ? `, cc: ${esc(data.cc)}` : ""}</div>` : ""}
               </div>
               <div class="email-detail-date">${formatEmailDateFull(data.date || email.date)}</div>
             </div>
@@ -5721,7 +6147,7 @@
               <div class="email-task-card-actions">
                 <span id="etask-saved-${id}" style="display:none;font-size:12px;color:#34d399;">Task created ✓</span>
                 <button class="email-action-btn" onclick="document.getElementById('email-task-card-${id}').style.display='none'">Cancel</button>
-                <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${id}')" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">Create Task</button>
+                <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${id}')" style="background:var(--navy);color:var(--gold);border-color:var(--navy);">Create Task</button>
               </div>
             </div>
           </div>`;
@@ -5796,7 +6222,7 @@
         <div class="email-task-card-actions">
           <span id="etask-saved-${msgId}" style="display:none;font-size:12px;color:#34d399;">Task created ✓</span>
           <button class="email-action-btn" onclick="document.getElementById('email-task-card-thread').style.display='none'">Cancel</button>
-          <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${msgId}')" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">Create Task</button>
+          <button class="email-action-btn task-action" onclick="createTaskFromEmailDetail('${msgId}')" style="background:var(--navy);color:var(--gold);border-color:var(--navy);">Create Task</button>
         </div>`;
       card.style.display = "block";
     }
@@ -5908,13 +6334,13 @@
           </div>
           <div class="compose-body-area">
             <textarea id="compose-body" placeholder="Write your message...">${esc(composeState.body)}</textarea>
-            <div id="compose-sig-preview" style="border-top:1px solid #27272a;padding-top:8px;margin-top:8px;opacity:.6;"></div>
+            <div id="compose-sig-preview" style="border-top:1px solid var(--border-default);padding-top:8px;margin-top:8px;opacity:.6;"></div>
           </div>
           <div class="compose-footer">
             <button class="compose-send-btn" id="compose-send-btn" onclick="sendCompose()">Send</button>
             <div style="position:relative;">
               <button class="email-action-btn" onclick="toggleEmojiPicker()" title="Emoji" style="font-size:16px;padding:6px 10px;">😊</button>
-              <div id="emoji-picker" style="display:none;position:absolute;bottom:40px;left:0;background:#18181b;border:1px solid #27272a;border-radius:10px;padding:8px;width:280px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10;"></div>
+              <div id="emoji-picker" style="display:none;position:absolute;bottom:40px;left:0;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:8px;width:280px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10;"></div>
             </div>
             <button class="compose-discard-btn" onclick="closeCompose()" title="Discard">🗑</button>
           </div>
@@ -5944,7 +6370,7 @@
       if (!picker) return;
       if (picker.style.display === "none") {
         picker.innerHTML = EMOJI_LIST.map(e =>
-          `<span style="cursor:pointer;font-size:20px;padding:4px;display:inline-block;border-radius:4px;transition:background .1s;" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background=''" onclick="insertEmoji('${e}')">${e}</span>`
+          `<span style="cursor:pointer;font-size:20px;padding:4px;display:inline-block;border-radius:4px;transition:background .1s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''" onclick="insertEmoji('${e}')">${e}</span>`
         ).join("");
         picker.style.display = "block";
       } else {
@@ -5980,10 +6406,10 @@
       detailEl.innerHTML = `
         <div style="padding:24px 32px;max-width:700px;">
           <h2 style="color:#f4f4f5;font-size:18px;margin:0 0 16px;">Email Signature</h2>
-          <p style="color:#71717a;font-size:13px;margin-bottom:16px;">Paste your signature below — images, formatted text, anything. Just copy from Gmail and paste here.</p>
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">Paste your signature below — images, formatted text, anything. Just copy from Gmail and paste here.</p>
           <div style="margin-bottom:16px;">
-            <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px;">Your Signature</label>
-            <div id="sig-editor" contenteditable="true" style="width:100%;min-height:150px;background:#fff;border:1px solid #27272a;color:#000;border-radius:8px;padding:16px;font-family:Arial,sans-serif;font-size:14px;outline:none;overflow-y:auto;">${sigData.html || ""}</div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">Your Signature</label>
+            <div id="sig-editor" contenteditable="true" style="width:100%;min-height:150px;background:#fff;border:1px solid var(--border-default);color:#000;border-radius:8px;padding:16px;font-family:Arial,sans-serif;font-size:14px;outline:none;overflow-y:auto;">${sigData.html || ""}</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button class="compose-send-btn" onclick="saveSignature()">Save Signature</button>
@@ -6394,7 +6820,7 @@
       // Chat panel
       const panel = document.createElement("div");
       panel.id = "dan-panel";
-      panel.style.cssText = "display:none;position:fixed;bottom:90px;right:24px;width:400px;max-height:600px;background:#0f1419;border:1px solid #1B3A6B;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);z-index:9999;overflow:hidden;display:flex;flex-direction:column;";
+      panel.style.cssText = "display:none;position:fixed;bottom:90px;right:24px;width:400px;max-height:600px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:16px;box-shadow:var(--shadow-hover);z-index:9999;overflow:hidden;display:flex;flex-direction:column;";
       panel.innerHTML = `
         <div style="padding:16px 20px;background:linear-gradient(135deg,#1B3A6B,#2d7a9a);display:flex;align-items:center;justify-content:space-between;">
           <div style="display:flex;align-items:center;gap:10px;">
@@ -6407,7 +6833,7 @@
           <button onclick="toggleDan()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:18px;cursor:pointer;">✕</button>
         </div>
         <div id="dan-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;max-height:420px;">
-          <div style="padding:12px 16px;background:rgba(45,122,154,0.15);border-radius:12px 12px 12px 4px;font-size:13px;color:#93c5fd;line-height:1.5;">
+          <div style="padding:12px 16px;background:rgba(45,122,154,0.15);border-radius:12px 12px 12px 4px;font-size:13px;color:var(--blue);line-height:1.5;">
             Hi! I'm Anchor Dan. I can help with:<br><br>
             • Pipeline status and loan details<br>
             • Conditions and tasks for any borrower<br>
@@ -6417,8 +6843,8 @@
             Ask me anything!
           </div>
         </div>
-        <div style="padding:12px 16px;border-top:1px solid #27272a;display:flex;gap:8px;">
-          <input id="dan-input" type="text" placeholder="Ask Anchor Dan..." style="flex:1;padding:10px 14px;font-size:13px;background:#1a1a2e;border:1px solid #27272a;border-radius:10px;color:#e4e4e7;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')askDan()" />
+        <div style="padding:12px 16px;border-top:1px solid var(--border-default);display:flex;gap:8px;">
+          <input id="dan-input" type="text" placeholder="Ask Anchor Dan..." style="flex:1;padding:10px 14px;font-size:13px;background:var(--bg-active);border:1px solid var(--border-default);border-radius:10px;color:var(--text-primary);outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')askDan()" />
           <button onclick="askDan()" style="padding:10px 16px;font-size:13px;font-weight:700;border-radius:10px;border:none;background:#1B3A6B;color:#fff;cursor:pointer;">Send</button>
         </div>
       `;
@@ -6464,7 +6890,7 @@
 
         // Add response
         const answer = data.response || data.error || "No response";
-        msgsEl.innerHTML += `<div style="padding:12px 16px;background:rgba(45,122,154,0.15);border-radius:12px 12px 12px 4px;font-size:13px;color:#93c5fd;line-height:1.5;max-width:90%;white-space:pre-wrap;">${escapeHTML(answer)}</div>`;
+        msgsEl.innerHTML += `<div style="padding:12px 16px;background:rgba(45,122,154,0.15);border-radius:12px 12px 12px 4px;font-size:13px;color:var(--blue);line-height:1.5;max-width:90%;white-space:pre-wrap;">${escapeHTML(answer)}</div>`;
       } catch (e) {
         const loadEl = document.getElementById(loadingId);
         if (loadEl) loadEl.remove();
@@ -6584,22 +7010,22 @@
     function renderFinance() {
       const m = finData.monthly || {};
       const sumEl = document.getElementById("fin-summary");
-      const cardStyle = "background:#18181b;border:1px solid #27272a;border-radius:10px;padding:14px 16px;text-align:center;";
+      const cardStyle = "background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px 16px;text-align:center;";
       sumEl.innerHTML = `
-        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Income</div><div style="font-size:22px;font-weight:700;color:#4ade80;">$${(m.totalIncome||0).toLocaleString()}</div></div>
-        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Expenses</div><div style="font-size:22px;font-weight:700;color:#ef4444;">$${(m.totalExpenses||0).toLocaleString()}</div></div>
-        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Net</div><div style="font-size:22px;font-weight:700;color:${(m.net||0)>=0?'#4ade80':'#ef4444'};">$${(m.net||0).toLocaleString()}</div></div>
-        <div style="${cardStyle}"><div style="font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">Transactions</div><div style="font-size:22px;font-weight:700;color:#e4e4e7;">${m.transactionCount||0}</div></div>
+        <div style="${cardStyle}"><div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.08em;">Income</div><div style="font-size:22px;font-weight:700;color:#4ade80;">$${(m.totalIncome||0).toLocaleString()}</div></div>
+        <div style="${cardStyle}"><div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.08em;">Expenses</div><div style="font-size:22px;font-weight:700;color:#ef4444;">$${(m.totalExpenses||0).toLocaleString()}</div></div>
+        <div style="${cardStyle}"><div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.08em;">Net</div><div style="font-size:22px;font-weight:700;color:${(m.net||0)>=0?'#4ade80':'#ef4444'};">$${(m.net||0).toLocaleString()}</div></div>
+        <div style="${cardStyle}"><div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.08em;">Transactions</div><div style="font-size:22px;font-weight:700;color:var(--text-primary);">${m.transactionCount||0}</div></div>
       `;
 
       // Trends
       const trends = finData.trends?.trends || [];
       const trendsEl = document.getElementById("fin-trends");
       if (trends.length > 1) {
-        trendsEl.innerHTML = `<div style="font-size:13px;font-weight:600;color:#e4e4e7;margin-bottom:8px;">Monthly Trends</div>
+        trendsEl.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Monthly Trends</div>
           <div style="display:flex;gap:8px;overflow-x:auto;">${trends.map(t => `
             <div style="${cardStyle}min-width:120px;flex-shrink:0;">
-              <div style="font-size:11px;color:#71717a;">${new Date(t.month+"-15").toLocaleDateString("en-US",{month:"short"})}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">${new Date(t.month+"-15").toLocaleDateString("en-US",{month:"short"})}</div>
               <div style="font-size:13px;color:#4ade80;">+$${t.income.toLocaleString()}</div>
               <div style="font-size:13px;color:#ef4444;">-$${t.expenses.toLocaleString()}</div>
               <div style="font-size:11px;color:${t.net>=0?'#4ade80':'#ef4444'};font-weight:600;margin-top:4px;">$${t.net.toLocaleString()}</div>
@@ -6610,19 +7036,19 @@
       const budgets = finData.budgetStatus?.budgets || [];
       const budgetsEl = document.getElementById("fin-budgets");
       if (budgets.length) {
-        budgetsEl.innerHTML = `<div style="font-size:13px;font-weight:600;color:#e4e4e7;margin-bottom:8px;">Budget</div>
+        budgetsEl.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Budget</div>
           <div style="display:flex;flex-direction:column;gap:6px;">${budgets.map(b => `
-            <div style="background:#18181b;border:1px solid ${b.over?'#ef444444':'#27272a'};border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
+            <div style="background:var(--bg-card);border:1px solid ${b.over?'var(--red)':'var(--border-default)'};border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
               <span style="font-size:16px;">${b.icon}</span>
               <div style="flex:1;">
-                <div style="font-size:12px;color:#e4e4e7;font-weight:600;">${b.category}</div>
-                <div style="height:4px;background:#27272a;border-radius:2px;margin-top:4px;overflow:hidden;">
+                <div style="font-size:12px;color:var(--text-primary);font-weight:600;">${b.category}</div>
+                <div style="height:4px;background:var(--progress-bg);border-radius:2px;margin-top:4px;overflow:hidden;">
                   <div style="height:100%;width:${Math.min(b.percent,100)}%;background:${b.over?'#ef4444':b.percent>80?'#fbbf24':'#4ade80'};border-radius:2px;"></div>
                 </div>
               </div>
               <div style="text-align:right;">
-                <div style="font-size:12px;color:${b.over?'#ef4444':'#e4e4e7'};font-weight:600;">$${b.spent} / $${b.limit}</div>
-                <div style="font-size:10px;color:#71717a;">${b.percent}%</div>
+                <div style="font-size:12px;color:${b.over?'#ef4444':'var(--text-primary)'};font-weight:600;">$${b.spent} / $${b.limit}</div>
+                <div style="font-size:10px;color:var(--text-secondary);">${b.percent}%</div>
               </div>
             </div>`).join("")}</div>`;
       } else { budgetsEl.innerHTML = ""; }
@@ -6637,8 +7063,8 @@
       if (incomeEntries.length) {
         html += `<div style="font-size:13px;font-weight:600;color:#4ade80;margin:8px 0 4px;">Income</div>`;
         for (const [cat, data] of incomeEntries) {
-          html += `<div style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:13px;color:#e4e4e7;">${cat}</span>
+          html += `<div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;color:var(--text-primary);">${cat}</span>
             <span style="font-size:13px;color:#4ade80;font-weight:600;">+$${Math.abs(data.total).toLocaleString(undefined,{minimumFractionDigits:2})}</span>
           </div>`;
         }
@@ -6646,13 +7072,13 @@
       if (catEntries.length) {
         html += `<div style="font-size:13px;font-weight:600;color:#ef4444;margin:12px 0 4px;">Expenses by Category</div>`;
         for (const [cat, data] of catEntries) {
-          html += `<div style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:13px;color:#e4e4e7;">${cat} <span style="color:#52525b;font-size:11px;">(${data.count})</span></span>
+          html += `<div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;color:var(--text-primary);">${cat} <span style="color:var(--text-faint);font-size:11px;">(${data.count})</span></span>
             <span style="font-size:13px;color:#ef4444;font-weight:600;">-$${Math.abs(data.total).toLocaleString(undefined,{minimumFractionDigits:2})}</span>
           </div>`;
         }
       }
-      if (!html) html = '<div style="text-align:center;padding:40px;color:#71717a;">No transactions for this month. Import a CSV to get started.</div>';
+      if (!html) html = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No transactions for this month. Import a CSV to get started.</div>';
       txnEl.innerHTML = html;
     }
 
@@ -6759,7 +7185,7 @@
         if (data.ok) {
           const toast = document.createElement("div");
           toast.textContent = "Converted to task!";
-          toast.style.cssText = "position:fixed;bottom:20px;right:20px;background:#22c55e;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;";
+          toast.style.cssText = "position:fixed;bottom:20px;right:20px;background:var(--green);color:var(--text-on-accent);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;";
           document.body.appendChild(toast);
           setTimeout(() => toast.remove(), 2000);
           loadNotebook();
@@ -6794,7 +7220,7 @@
             border:1px solid ${isActive ? t.color + '55' : 'transparent'};">
             ${escapeHTML(t.name)} <span style="opacity:0.5;margin-left:4px;">${noteCount}</span>
           </button>
-          ${nbData.tabs.length > 1 ? `<button onclick="deleteNotebookTab('${t.id}')" style="font-size:10px;color:#71717a;background:none;border:none;cursor:pointer;padding:2px;" title="Delete tab">×</button>` : ''}
+          ${nbData.tabs.length > 1 ? `<button onclick="deleteNotebookTab('${t.id}')" style="font-size:10px;color:var(--text-secondary);background:none;border:none;cursor:pointer;padding:2px;" title="Delete tab">×</button>` : ''}
         </div>`;
       }).join("");
 
@@ -6814,7 +7240,7 @@
 
       const notesEl = document.getElementById("notebook-notes");
       if (!notes.length) {
-        notesEl.innerHTML = `<div style="text-align:center;padding:40px;color:#71717a;">${searchQ ? 'No notes match your search.' : 'No notes in this tab yet. Click "+ New Note" to start.'}</div>`;
+        notesEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);">${searchQ ? 'No notes match your search.' : 'No notes in this tab yet. Click "+ New Note" to start.'}</div>`;
         return;
       }
 
@@ -6822,12 +7248,12 @@
         const tab = nbData.tabs.find(t => t.id === n.tabId);
         const timeAgo = new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
         return `
-        <div style="background:#18181b;border:1px solid ${n.pinned ? '#c9a84c44' : '#27272a'};border-radius:10px;padding:16px 20px;${n.pinned ? 'border-left:3px solid #c9a84c;' : ''}">
-          <div style="font-size:14px;color:#e4e4e7;line-height:1.7;white-space:pre-wrap;">${escapeHTML(n.content)}</div>
+        <div style="background:var(--bg-card);border:1px solid ${n.pinned ? 'var(--gold)' : 'var(--border-default)'};border-radius:10px;padding:16px 20px;box-shadow:var(--shadow);${n.pinned ? 'border-left:3px solid var(--gold);' : ''}">
+          <div style="font-size:14px;color:var(--text-primary);line-height:1.7;white-space:pre-wrap;">${escapeHTML(n.content)}</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center;">
-            <span style="font-size:10px;color:#52525b;">${timeAgo}</span>
+            <span style="font-size:10px;color:var(--text-faint);">${timeAgo}</span>
             ${n.projectName ? `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(56,189,248,0.12);color:#38bdf8;">${escapeHTML(n.projectName)}</span>` : ''}
-            ${(n.tags || []).map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(148,163,184,0.1);color:#94a3b8;">#${escapeHTML(t)}</span>`).join("")}
+            ${(n.tags || []).map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(148,163,184,0.1);color:var(--text-secondary);">#${escapeHTML(t)}</span>`).join("")}
             ${n.followUp ? `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(251,191,36,0.15);color:#fbbf24;">Follow up${n.followUpDate ? ' ' + n.followUpDate : ''}</span>` : ''}
             ${n.convertedToTask ? `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(74,222,128,0.12);color:#4ade80;">→ Task</span>` : ''}
             ${searchQ && tab ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${tab.color}22;color:${tab.color};">${escapeHTML(tab.name)}</span>` : ''}
@@ -6891,18 +7317,18 @@
     function renderTaglines() {
       const list = document.getElementById("tagline-list");
       if (!taglines.length) {
-        list.innerHTML = '<div style="text-align:center;padding:40px;color:#71717a;">No taglines yet. Add your first one above.</div>';
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No taglines yet. Add your first one above.</div>';
         return;
       }
       list.innerHTML = taglines.map(t => {
         const tc = TAG_COLORS[t.category] || TAG_COLORS.general;
         return `
-        <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:16px 20px;display:flex;align-items:flex-start;gap:14px;">
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:16px 20px;display:flex;align-items:flex-start;gap:14px;">
           <div style="flex:1;">
             <div style="font-size:15px;color:#f4f4f5;line-height:1.6;font-style:italic;">"${escapeHTML(t.line)}"</div>
             <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;background:${tc.bg};color:${tc.color};">${t.category}</span>
-              <span style="font-size:11px;color:#71717a;">— ${escapeHTML(t.source || "John")}</span>
+              <span style="font-size:11px;color:var(--text-secondary);">— ${escapeHTML(t.source || "John")}</span>
               ${t.locked ? '<span style="font-size:10px;color:#c9a84c;">🔒 Locked</span>' : ''}
             </div>
           </div>
@@ -6926,9 +7352,9 @@
       reactorFilter = status;
       document.querySelectorAll(".reactor-filter").forEach(b => {
         const isActive = b.id === "reactor-filter-" + status;
-        b.style.border = isActive ? "1px solid #3b82f6" : "1px solid rgba(63,63,70,0.5)";
-        b.style.background = isActive ? "rgba(59,130,246,0.15)" : "transparent";
-        b.style.color = isActive ? "#3b82f6" : "#71717a";
+        b.style.border = isActive ? "1px solid var(--gold)" : "1px solid var(--border-strong)";
+        b.style.background = isActive ? "var(--gold-dim)" : "transparent";
+        b.style.color = isActive ? "var(--gold)" : "var(--text-secondary)";
       });
       loadReactorFeed();
     }
@@ -6950,7 +7376,7 @@
 
     async function pollReactorFeed() {
       const list = document.getElementById("reactor-feed-list");
-      list.innerHTML = '<div style="text-align:center;padding:20px;color:#71717a;font-size:13px;">Polling RSS feeds...</div>';
+      list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px;">Polling RSS feeds...</div>';
       try {
         await fetch("/api/content-feed/poll", { method: "POST", credentials: "include" });
         await loadReactorFeed();
@@ -6997,7 +7423,7 @@
     function renderReactorFeed() {
       const list = document.getElementById("reactor-feed-list");
       if (!reactorTriggers.length) {
-        list.innerHTML = `<div style="text-align:center;padding:30px;color:#71717a;background:rgba(30,30,36,0.6);border-radius:10px;border:1px solid rgba(63,63,70,0.3);">
+        list.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-secondary);background:var(--bg-card);border-radius:10px;border:1px solid var(--border-default);">
           <div style="font-size:24px;margin-bottom:6px;">&#9781;</div>
           <div style="font-size:13px;font-weight:600;">No ${reactorFilter === "all" ? "" : reactorFilter + " "}triggers</div>
           <div style="font-size:11px;margin-top:4px;">The content watcher polls 5 sources every 2 hours.</div>
@@ -7015,25 +7441,25 @@
           if (hrs < 24) return hrs + "h ago";
           return Math.floor(hrs / 24) + "d ago";
         })();
-        const statusBadge = t.status !== "new" ? `<span style="font-size:10px;font-weight:600;color:${t.status === "reacted" ? "#22c55e" : "#71717a"};text-transform:uppercase;margin-left:6px;">${t.status}</span>` : "";
+        const statusBadge = t.status !== "new" ? `<span style="font-size:10px;font-weight:600;color:${t.status === "reacted" ? "var(--green)" : "var(--text-secondary)"};text-transform:uppercase;margin-left:6px;">${t.status}</span>` : "";
 
-        return `<div style="background:rgba(30,30,36,0.6);border:${t.status === "new" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(63,63,70,0.3)"};border-radius:10px;padding:12px 14px;border-left:3px solid ${srcColor};">
+        return `<div style="background:var(--bg-card);border:${t.status === "new" ? "1px solid var(--gold)" : "1px solid var(--border-default)"};border-radius:10px;padding:12px 14px;border-left:3px solid ${srcColor};">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
             <div style="flex:1;min-width:0;">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
                 <span style="background:${srcColor}22;color:${srcColor};padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.05em;">${t.sourceIcon}</span>
-                <span style="font-size:11px;color:#a1a1aa;">${t.source}</span>
-                <span style="font-size:10px;color:#71717a;">${timeAgo}</span>
+                <span style="font-size:11px;color:var(--text-secondary);">${t.source}</span>
+                <span style="font-size:10px;color:var(--text-secondary);">${timeAgo}</span>
                 ${statusBadge}
               </div>
-              <div style="font-size:13px;font-weight:600;color:#e4e4e7;line-height:1.4;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">${t.title}</div>
-              <div style="display:none;font-size:12px;color:#a1a1aa;margin-top:5px;line-height:1.5;">${t.summary || ""}</div>
-              ${t.reactedContent ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-size:12px;color:#a1a1aa;line-height:1.5;white-space:pre-wrap;">${t.reactedContent.substring(0, 300)}${t.reactedContent.length > 300 ? "..." : ""}</div>` : ""}
+              <div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">${t.title}</div>
+              <div style="display:none;font-size:12px;color:var(--text-secondary);margin-top:5px;line-height:1.5;">${t.summary || ""}</div>
+              ${t.reactedContent ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap;">${t.reactedContent.substring(0, 300)}${t.reactedContent.length > 300 ? "..." : ""}</div>` : ""}
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0;">
-              ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid rgba(63,63,70,0.5);color:#a1a1aa;text-decoration:none;cursor:pointer;">Open</a>` : ""}
-              ${t.status === "new" ? `<button onclick="reactToTrigger(reactorTriggers.find(x=>x.id==='${t.id}'))" style="padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;cursor:pointer;">React</button>` : ""}
-              ${t.status === "new" ? `<button onclick="dismissTrigger('${t.id}')" style="padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid rgba(63,63,70,0.5);color:#71717a;cursor:pointer;" title="Dismiss">&#x2715;</button>` : ""}
+              ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-strong);color:var(--text-secondary);text-decoration:none;cursor:pointer;">Open</a>` : ""}
+              ${t.status === "new" ? `<button onclick="reactToTrigger(reactorTriggers.find(x=>x.id==='${t.id}'))" style="padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;background:var(--blue-bg);border:1px solid var(--blue);color:var(--blue);cursor:pointer;">React</button>` : ""}
+              ${t.status === "new" ? `<button onclick="dismissTrigger('${t.id}')" style="padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-strong);color:var(--text-secondary);cursor:pointer;" title="Dismiss">&#x2715;</button>` : ""}
             </div>
           </div>
         </div>`;
@@ -7110,7 +7536,7 @@
       navigator.clipboard.writeText(text).then(() => {
         const toast = document.createElement("div");
         toast.textContent = "Copied!";
-        toast.style.cssText = "position:fixed;bottom:20px;right:20px;background:#22c55e;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;";
+        toast.style.cssText = "position:fixed;bottom:20px;right:20px;background:var(--green);color:var(--text-on-accent);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;";
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2000);
       });
@@ -7130,7 +7556,7 @@
     function renderContentCalendar() {
       const grid = document.getElementById("content-calendar-grid");
       if (!contentPosts.length) {
-        grid.innerHTML = '<div style="text-align:center;padding:40px;color:#71717a;">No content scheduled. Click "Generate 2-Week Plan" to get started.</div>';
+        grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No content scheduled. Click "Generate 2-Week Plan" to get started.</div>';
         return;
       }
 
