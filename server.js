@@ -3457,8 +3457,8 @@ const server = http.createServer(async (req, res) => {
 
         // Normalize loan fields for the UI
         const normalized = allLoans.map(l => ({
-          id: l.loan_id || l.ariveLoanId || l.id || "",
-          displayId: l.display_loan_id || l.ariveLoanId || "",
+          id: String(l.loan_id || l.ariveLoanId || l.id || ""),
+          displayId: String(l.display_loan_id || l.ariveLoanId || ""),
           borrowerFirst: l.borrower_first_name || l.loanBorrower1_firstName || "",
           borrowerLast: l.borrower_last_name || l.loanBorrower1_lastName || "",
           borrowerName: `${l.borrower_first_name || l.loanBorrower1_firstName || ""} ${l.borrower_last_name || l.loanBorrower1_lastName || ""}`.trim(),
@@ -3470,8 +3470,9 @@ const server = http.createServer(async (req, res) => {
           propertyState: l.property_state || l.subjectProperty_state || "",
           loanProgram: l.loan_program || l.mortgageType || "",
           loanOfficer: l.loan_officer_name || l.loanOfficer_name || "",
-          lastStatusChange: l.last_status_change_date || "",
+          lastStatusChange: l.last_status_change_date || l.currentLoanStatus_date || "",
           closingDate: l.closing_date || l.keyDates_closingDate || "",
+          deepLinkURL: l.deepLinkURL || "",
         }));
 
         console.log(`[pipeline] Fetched ${normalized.length} loans from Arive`);

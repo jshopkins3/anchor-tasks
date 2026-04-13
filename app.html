@@ -7764,9 +7764,9 @@
       }
 
       // Quick actions
-      const commandUrl = "${location.origin}".replace("anchor-tasks", "anchorcommand").replace("localhost:8080", "anchorcommand.myanchormortgage.com");
+      const ariveLink = loan.deepLinkURL || "https://anchorcommand.myanchormortgage.com";
       html += `<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <a href="https://anchorcommand.myanchormortgage.com" target="_blank" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;">Open in Command</a>
+        <a href="${ariveLink}" target="_blank" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;">Open in Arive</a>
         <button onclick="quickAddLoanTask('${loanId}','${(loan.borrowerName||"").replace(/'/g,"")}')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);">+ Add Task</button>
         <button onclick="askDanAboutLoan('${(loan.borrowerName||"").replace(/'/g,"")}')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);">Ask Dan</button>
         <button onclick="document.getElementById('loan-detail-modal').style.display='none';switchToTab('pipeline')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-secondary);">Pipeline Review</button>
