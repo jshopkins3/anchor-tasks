@@ -3607,7 +3607,7 @@ const server = http.createServer(async (req, res) => {
           loanProgram: l.loan_program || l.mortgageType || "",
           loanOfficer: l.loan_officer_name || l.loanOfficer_name || "",
           lastStatusChange: l.last_status_change_date || l.currentLoanStatus_date || "",
-          closingDate: l.closing_date || l.keyDates_closingDate || "",
+          closingDate: l.closing_date || l.keyDates_closingDate || l.firmCloseDate || l.estClosing || l["Firm Closing Date"] || l["Estimated Closing Date"] || l.closingContingency || "",
           deepLinkURL: l.deepLinkURL || "",
         }));
 
