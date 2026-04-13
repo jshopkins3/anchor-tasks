@@ -2630,16 +2630,96 @@
       </div>
     </div>
 
-    <!-- ── Content Calendar section ────────────────────────────── -->
+    <!-- ── Content section (Marketing Command Center) ──────── -->
     <div class="section" id="sec-content">
-      <div style="max-width:900px;margin:0 auto;">
+      <div style="max-width:960px;margin:0 auto;">
 
-        <!-- ── Reactor Feed (Content Intelligence) ─────────────── -->
-        <div id="reactor-feed-section" style="margin-bottom:28px;">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <h2 style="font-size:20px;font-weight:700;color:var(--text-heading);margin:0;">Marketing Command Center</h2>
+            <p style="color:var(--text-secondary);font-size:13px;margin:4px 0 0;">Dan + Gary + Alex run your daily meeting. You review and approve.</p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="runMarketingMeeting()" id="meeting-run-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">&#9881; Run Meeting</button>
+          </div>
+        </div>
+
+        <!-- View tabs -->
+        <div style="display:flex;gap:2px;margin-bottom:16px;background:var(--input-bg);border-radius:8px;padding:3px;width:fit-content;">
+          <button class="content-view-btn active" onclick="switchContentView('briefing')" data-view="briefing" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:var(--navy);color:var(--gold);">Today's Briefing</button>
+          <button class="content-view-btn" onclick="switchContentView('calendar')" data-view="calendar" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Content Calendar</button>
+          <button class="content-view-btn" onclick="switchContentView('feed')" data-view="feed" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Intel Feed</button>
+        </div>
+
+        <!-- ═══ BRIEFING VIEW ═══ -->
+        <div id="content-briefing-view">
+
+          <!-- Personal Briefing -->
+          <div id="briefing-personal" style="background:linear-gradient(135deg, var(--navy) 0%, #1e3a5f 100%);border-radius:12px;padding:20px;margin-bottom:16px;color:#fff;">
+            <div style="font-size:11px;font-weight:600;letter-spacing:0.05em;color:var(--gold);margin-bottom:8px;">YOUR MORNING BRIEFING</div>
+            <div id="briefing-summary" style="font-size:15px;line-height:1.5;margin-bottom:12px;opacity:0.95;">No briefing yet. Click <strong>Run Meeting</strong> to generate today's briefing.</div>
+            <div id="briefing-market-context" style="font-size:13px;opacity:0.8;margin-bottom:12px;"></div>
+            <div id="briefing-key-insight" style="display:none;background:rgba(255,255,255,0.1);border-radius:8px;padding:12px;margin-bottom:10px;">
+              <div style="font-size:10px;font-weight:600;color:var(--gold);margin-bottom:4px;">KEY INSIGHT</div>
+              <div id="briefing-insight-text" style="font-size:13px;line-height:1.4;"></div>
+            </div>
+            <div id="briefing-study-recs" style="display:none;">
+              <div style="font-size:10px;font-weight:600;color:var(--gold);margin-bottom:6px;">WORTH YOUR TIME</div>
+              <div id="briefing-study-list"></div>
+            </div>
+          </div>
+
+          <!-- Content Recommendations -->
+          <div style="font-size:14px;font-weight:600;color:var(--text-heading);margin-bottom:10px;">Content Recommendations</div>
+          <div id="briefing-recommendations" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+            <div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:13px;background:var(--bg-card);border-radius:10px;border:1px solid var(--border-default);">
+              Run the daily meeting to get AI-powered content recommendations.
+            </div>
+          </div>
+
+          <!-- Newsletter & Video -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+            <div id="briefing-newsletter" style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;">
+              <div style="font-size:11px;font-weight:600;color:var(--text-secondary);letter-spacing:0.04em;margin-bottom:6px;">NEWSLETTER IDEAS</div>
+              <div id="briefing-newsletter-content" style="font-size:13px;color:var(--text-primary);">No newsletter ideas yet.</div>
+            </div>
+            <div id="briefing-video" style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;">
+              <div style="font-size:11px;font-weight:600;color:var(--text-secondary);letter-spacing:0.04em;margin-bottom:6px;">WEEKLY VIDEO UPDATE</div>
+              <div id="briefing-video-content" style="font-size:13px;color:var(--text-primary);">Video suggestions appear on Mondays.</div>
+            </div>
+          </div>
+
+          <!-- Persona Debate -->
+          <div id="briefing-debate" style="display:none;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;margin-bottom:20px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);letter-spacing:0.04em;margin-bottom:6px;">MEETING NOTES — WHERE GARY & ALEX DISAGREED</div>
+            <div id="briefing-debate-text" style="font-size:13px;color:var(--text-primary);font-style:italic;"></div>
+          </div>
+
+          <!-- Briefing history -->
+          <div style="margin-top:8px;">
+            <button onclick="document.getElementById('briefing-history-panel').style.display=document.getElementById('briefing-history-panel').style.display==='none'?'block':'none'" style="font-size:12px;color:var(--text-secondary);background:none;border:none;cursor:pointer;text-decoration:underline;">Past Briefings</button>
+            <div id="briefing-history-panel" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- ═══ CONTENT CALENDAR VIEW ═══ -->
+        <div id="content-calendar-view" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="font-size:16px;font-weight:600;color:var(--text-heading);margin:0;">Content Calendar</h3>
+            <button onclick="generateContentPlan()" id="content-gen-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Generate 2-Week Plan</button>
+          </div>
+          <div id="content-calendar-grid" style="display:flex;flex-direction:column;gap:10px;">
+            <div style="text-align:center;padding:40px;color:var(--text-secondary);">Click "Generate 2-Week Plan" to create your content calendar.</div>
+          </div>
+        </div>
+
+        <!-- ═══ INTEL FEED VIEW ═══ -->
+        <div id="content-feed-view" style="display:none;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div>
-              <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0;">Content Intelligence Feed</h2>
-              <p id="reactor-last-poll" style="font-size:11px;color:var(--text-secondary);margin:4px 0 0;">Polling RSS feeds every 2 hours</p>
+              <h3 style="font-size:16px;font-weight:600;color:var(--text-heading);margin:0;">Intelligence Feed</h3>
+              <p id="reactor-last-poll" style="font-size:11px;color:var(--text-secondary);margin:4px 0 0;">RSS sources polled every 2 hours</p>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               <button onclick="setReactorFilter('new')" id="reactor-filter-new" class="reactor-filter active" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--gold);background:var(--gold-dim);color:var(--gold);">New</button>
@@ -2650,31 +2730,10 @@
             </div>
           </div>
           <div id="reactor-feed-list" style="display:flex;flex-direction:column;gap:8px;">
-            <div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:13px;">Loading triggers...</div>
-          </div>
-          <div style="margin-top:12px;padding:10px 14px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border-default);">
-            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">RSS Sources</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <span style="font-size:10px;color:var(--text-secondary);background:rgba(26,115,232,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#1a73e8">HW</b> HousingWire</span>
-              <span style="font-size:10px;color:var(--text-secondary);background:rgba(230,81,0,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#e65100">SG</b> Scotsman Guide</span>
-              <span style="font-size:10px;color:var(--text-secondary);background:rgba(46,125,50,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#2e7d32">MBA</b> MBA</span>
-              <span style="font-size:10px;color:var(--text-secondary);background:rgba(123,31,162,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#7b1fa2">MPA</b> MPA</span>
-              <span style="font-size:10px;color:var(--text-secondary);background:rgba(198,40,40,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#c62828">GS</b> Greg Sher</span>
-              <span style="font-size:10px;color:var(--text-secondary);background:rgba(0,119,181,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#0077b5">LI</b> LinkedIn (Zapier)</span>
-            </div>
+            <div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:13px;">Loading...</div>
           </div>
         </div>
 
-        <!-- ── Content Calendar ────────────────────────────────── -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0;">Content Calendar</h2>
-          <div style="display:flex;gap:8px;">
-            <button onclick="generateContentPlan()" id="content-gen-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Generate 2-Week Plan</button>
-          </div>
-        </div>
-        <div id="content-calendar-grid" style="display:flex;flex-direction:column;gap:10px;">
-          <div style="text-align:center;padding:40px;color:var(--text-secondary);">Click "Generate 2-Week Plan" to create your content calendar.</div>
-        </div>
       </div>
     </div>
 
@@ -4004,8 +4063,7 @@
             renderCalendarView();
           }
           if (tab.dataset.tab === "content") {
-            loadReactorFeed();
-            loadContentCalendar();
+            loadBriefing();
           }
           if (tab.dataset.tab === "pipeline") {
             loadPipelineLoans();
@@ -7947,7 +8005,196 @@
       }).join("");
     }
 
-    /* ── Content Calendar ────────────────────────────────────── */
+    /* ── Marketing Command Center ─────────────────────────── */
+    let currentBriefing = null;
+
+    function switchContentView(view) {
+      document.querySelectorAll(".content-view-btn").forEach(b => {
+        b.style.background = "transparent";
+        b.style.color = "var(--text-secondary)";
+      });
+      const activeBtn = document.querySelector(`.content-view-btn[data-view="${view}"]`);
+      if (activeBtn) { activeBtn.style.background = "var(--navy)"; activeBtn.style.color = "var(--gold)"; }
+      document.getElementById("content-briefing-view").style.display = view === "briefing" ? "block" : "none";
+      document.getElementById("content-calendar-view").style.display = view === "calendar" ? "block" : "none";
+      document.getElementById("content-feed-view").style.display = view === "feed" ? "block" : "none";
+      if (view === "calendar") loadContentCalendar();
+      if (view === "feed") loadReactorFeed();
+    }
+
+    async function loadBriefing() {
+      try {
+        const resp = await fetch("/api/briefing");
+        const data = await resp.json();
+        if (data.briefing) {
+          currentBriefing = data.briefing;
+          renderBriefing(data.briefing);
+        }
+      } catch (e) { console.error("Briefing load error:", e); }
+    }
+
+    async function runMarketingMeeting() {
+      const btn = document.getElementById("meeting-run-btn");
+      btn.textContent = "Meeting in progress...";
+      btn.disabled = true;
+      btn.style.opacity = "0.6";
+
+      try {
+        const resp = await fetch("/api/briefing/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        currentBriefing = data.briefing;
+        renderBriefing(data.briefing);
+      } catch (e) {
+        alert("Meeting error: " + e.message);
+      } finally {
+        btn.textContent = "⚙ Run Meeting";
+        btn.disabled = false;
+        btn.style.opacity = "1";
+      }
+    }
+
+    function renderBriefing(b) {
+      // Summary
+      document.getElementById("briefing-summary").innerHTML = b.briefingSummary || "No summary available.";
+
+      // Personal briefing
+      if (b.personalBriefing) {
+        const pb = b.personalBriefing;
+        document.getElementById("briefing-market-context").innerHTML = pb.marketContext || "";
+
+        if (pb.keyInsight) {
+          document.getElementById("briefing-key-insight").style.display = "block";
+          document.getElementById("briefing-insight-text").innerHTML = pb.keyInsight;
+        }
+
+        if (pb.studyRecommendations && pb.studyRecommendations.length > 0) {
+          document.getElementById("briefing-study-recs").style.display = "block";
+          document.getElementById("briefing-study-list").innerHTML = pb.studyRecommendations.map(s =>
+            `<div style="display:flex;align-items:start;gap:8px;margin-bottom:6px;">
+              <span style="color:var(--gold);font-size:14px;">&#128218;</span>
+              <div>
+                <div style="font-size:13px;">${s.url ? `<a href="${s.url}" target="_blank" style="color:#fff;text-decoration:underline;">${s.title}</a>` : s.title}</div>
+                <div style="font-size:11px;opacity:0.7;">${s.why} ${s.timeToConsume ? '&bull; ' + s.timeToConsume : ''}</div>
+              </div>
+            </div>`
+          ).join("");
+        }
+
+        if (pb.pipelineImplications) {
+          document.getElementById("briefing-market-context").innerHTML += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.15);font-size:12px;opacity:0.75;">Pipeline: ${pb.pipelineImplications}</div>`;
+        }
+      }
+
+      // Content recommendations
+      const recsEl = document.getElementById("briefing-recommendations");
+      const recs = b.contentRecommendations || [];
+      if (recs.length === 0) {
+        recsEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px;background:var(--bg-card);border-radius:10px;">No recommendations today.</div>';
+      } else {
+        recsEl.innerHTML = recs.map(rec => {
+          const statusColors = { pending: "var(--text-secondary)", approved: "#22c55e", rejected: "#ef4444", published: "#3b82f6" };
+          const statusLabel = rec.status.charAt(0).toUpperCase() + rec.status.slice(1);
+          const platforms = rec.platforms || {};
+          const platformKeys = Object.keys(platforms);
+          const audienceLabel = rec.audience === "both" ? "Borrowers + Agents" : rec.audience === "agent" ? "Agents" : "Borrowers";
+          const audienceColor = rec.audience === "agent" ? "#8b5cf6" : rec.audience === "both" ? "#3b82f6" : "#10b981";
+
+          return `
+            <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:16px;${rec.status === 'approved' ? 'border-left:3px solid #22c55e' : rec.status === 'rejected' ? 'border-left:3px solid #ef4444;opacity:0.6' : ''}">
+              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--text-heading);">${rec.topic || 'Untitled'}</div>
+                  <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                    <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${audienceColor}20;color:${audienceColor};font-weight:600;">${audienceLabel}</span>
+                    ${platformKeys.map(p => `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--input-bg);color:var(--text-secondary);">${p}</span>`).join("")}
+                    ${rec.videoCandidate ? '<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#ef444420;color:#ef4444;font-weight:600;">VIDEO</span>' : ''}
+                    ${rec.visualNeeded ? '<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#f59e0b20;color:#f59e0b;font-weight:600;">VISUAL</span>' : ''}
+                  </div>
+                </div>
+                <span style="font-size:11px;font-weight:600;color:${statusColors[rec.status] || 'var(--text-secondary)'};">${statusLabel}</span>
+              </div>
+
+              <!-- Platform previews (collapsible) -->
+              <div style="margin-bottom:10px;">
+                ${platformKeys.map(p => {
+                  const plat = platforms[p];
+                  return `<div style="margin-bottom:6px;">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:3px;">${p.toUpperCase()} ${plat.scheduledTime ? '&bull; ' + plat.scheduledTime : ''}</div>
+                    <div style="font-size:13px;color:var(--text-primary);background:var(--input-bg);border-radius:6px;padding:10px;line-height:1.5;white-space:pre-wrap;">${plat.text || ''}</div>
+                  </div>`;
+                }).join("")}
+              </div>
+
+              <!-- Persona notes (collapsible) -->
+              <details style="margin-bottom:10px;">
+                <summary style="font-size:11px;color:var(--text-secondary);cursor:pointer;">Meeting notes</summary>
+                <div style="margin-top:6px;font-size:12px;color:var(--text-secondary);line-height:1.5;">
+                  ${rec.danNote ? `<div style="margin-bottom:4px;"><strong style="color:var(--navy);">Dan:</strong> ${rec.danNote}</div>` : ''}
+                  ${rec.garyNote ? `<div style="margin-bottom:4px;"><strong style="color:#f59e0b;">Gary:</strong> ${rec.garyNote}</div>` : ''}
+                  ${rec.alexNote ? `<div><strong style="color:#10b981;">Alex:</strong> ${rec.alexNote}</div>` : ''}
+                </div>
+              </details>
+
+              <!-- Actions -->
+              ${rec.status === 'pending' ? `
+                <div style="display:flex;gap:8px;">
+                  <button onclick="approveBriefingRec('${b.date}','${rec.id}')" style="background:#22c55e;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">Approve</button>
+                  <button onclick="rejectBriefingRec('${b.date}','${rec.id}')" style="background:var(--input-bg);color:var(--text-secondary);border:1px solid var(--input-border);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;">Reject</button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Newsletter ideas
+      if (b.newsletterIdeas) {
+        let nlHtml = '';
+        if (b.newsletterIdeas.borrowerNewsletter) nlHtml += `<div style="margin-bottom:6px;"><span style="font-size:10px;font-weight:600;color:#10b981;">BORROWERS:</span> <span style="font-size:12px;">${b.newsletterIdeas.borrowerNewsletter}</span></div>`;
+        if (b.newsletterIdeas.agentNewsletter) nlHtml += `<div><span style="font-size:10px;font-weight:600;color:#8b5cf6;">AGENTS:</span> <span style="font-size:12px;">${b.newsletterIdeas.agentNewsletter}</span></div>`;
+        document.getElementById("briefing-newsletter-content").innerHTML = nlHtml || "No newsletter ideas today.";
+      }
+
+      // Video
+      if (b.weeklyVideoUpdate && b.weeklyVideoUpdate.topicSuggestion) {
+        const v = b.weeklyVideoUpdate;
+        document.getElementById("briefing-video-content").innerHTML = `
+          <div style="font-size:13px;font-weight:600;color:var(--text-heading);margin-bottom:6px;">${v.topicSuggestion}</div>
+          ${v.talkingPoints ? `<ul style="font-size:12px;color:var(--text-secondary);margin:0;padding-left:18px;">${v.talkingPoints.map(p => `<li>${p}</li>`).join("")}</ul>` : ''}
+        `;
+      }
+
+      // Persona debate
+      if (b.personaDebate) {
+        document.getElementById("briefing-debate").style.display = "block";
+        document.getElementById("briefing-debate-text").textContent = b.personaDebate;
+      }
+    }
+
+    async function approveBriefingRec(date, recId) {
+      await fetch("/api/briefing/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, recId }),
+      });
+      await loadBriefing();
+    }
+
+    async function rejectBriefingRec(date, recId) {
+      await fetch("/api/briefing/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, recId }),
+      });
+      await loadBriefing();
+    }
+
+    /* ── Content Calendar (legacy) ────────────────────────────── */
     let contentPosts = [];
 
     /* ── Reactor Feed (Content Intelligence) ───────────────── */

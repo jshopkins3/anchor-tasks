@@ -3198,6 +3198,82 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 500, { error: e.message }); }
     }
 
+    /* ── MARKETING BRIEFING API ────────────────────────────────────── */
+
+    // Get today's briefing (or latest)
+    if (urlPath === "/api/briefing" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const me = require("./marketing-engine");
+      const date = url.searchParams.get("date");
+      const briefing = date ? me.loadBriefing(date) : me.getLatestBriefing();
+      if (!briefing) return json(res, 200, { briefing: null, message: "No briefing available. Click 'Run Meeting' to generate one." });
+      return json(res, 200, { briefing });
+    }
+
+    // List recent briefings
+    if (urlPath === "/api/briefings" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const me = require("./marketing-engine");
+      return json(res, 200, { briefings: me.listBriefings(14) });
+    }
+
+    // Manually trigger daily meeting
+    if (urlPath === "/api/briefing/generate" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const me = require("./marketing-engine");
+        const body = req.method === "POST" ? JSON.parse(await readBody(req)) : {};
+        const briefing = await me.runDailyMeeting({ customInstructions: body.instructions || "" });
+        return json(res, 200, { briefing });
+      } catch (e) {
+        console.error("[briefing] Generation error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // Approve a recommendation
+    if (urlPath === "/api/briefing/approve" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.date || !body.recId) return json(res, 400, { error: "date and recId required" });
+      const me = require("./marketing-engine");
+      const rec = me.approveRecommendation(body.date, body.recId);
+      if (!rec) return json(res, 404, { error: "Recommendation not found" });
+      return json(res, 200, { rec });
+    }
+
+    // Reject a recommendation
+    if (urlPath === "/api/briefing/reject" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.date || !body.recId) return json(res, 400, { error: "date and recId required" });
+      const me = require("./marketing-engine");
+      const rec = me.rejectRecommendation(body.date, body.recId, body.reason);
+      if (!rec) return json(res, 404, { error: "Recommendation not found" });
+      return json(res, 200, { rec });
+    }
+
+    // Get market data snapshot
+    if (urlPath === "/api/market-data" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const md = require("./market-data");
+        const data = await md.gatherMarketIntelligence();
+        return json(res, 200, data);
+      } catch (e) {
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // Dan API: briefing access
+    if (urlPath === "/api/dan/briefing" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const me = require("./marketing-engine");
+      const briefing = me.getLatestBriefing();
+      if (!briefing) return json(res, 200, { message: "No briefing available yet." });
+      return json(res, 200, { briefing });
+    }
+
     /* ── GCAL EVENT EDIT ────────────────────────────────────────────── */
     const gcalEventMatch = urlPath.match(/^\/api\/gcal-event\/([^/]+)$/);
     if (gcalEventMatch && (req.method === "PATCH" || req.method === "DELETE")) {
@@ -3641,4 +3717,40 @@ server.listen(PORT, () => {
     } catch (e) { console.error("[content-watcher] Poll error:", e.message); }
   }, 2 * 60 * 60 * 1000); // every 2 hours
   console.log(`[content-watcher] RSS polling: every 2 hours (initial in 30s)`);
+
+  // Daily marketing meeting scheduler — runs at 5:00 AM ET
+  function scheduleDailyMeeting() {
+    const now = new Date();
+    // Calculate next 5:00 AM ET
+    const etNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const target = new Date(etNow);
+    target.setHours(5, 0, 0, 0);
+    if (target <= etNow) target.setDate(target.getDate() + 1);
+
+    // Convert back to system time
+    const delayMs = target.getTime() - etNow.getTime();
+    const hoursUntil = (delayMs / 3600000).toFixed(1);
+    console.log(`[marketing-engine] Next daily meeting in ${hoursUntil}h (5:00 AM ET)`);
+
+    setTimeout(async () => {
+      async function runMeeting() {
+        try {
+          const me = require("./marketing-engine");
+          const briefing = await me.runDailyMeeting();
+          console.log(`[marketing-engine] Daily briefing generated: ${(briefing.contentRecommendations || []).length} recommendations`);
+        } catch (e) {
+          console.error("[marketing-engine] Daily meeting error:", e.message);
+        }
+      }
+      await runMeeting();
+      // Then every 24 hours
+      setInterval(runMeeting, 24 * 60 * 60 * 1000);
+    }, delayMs);
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    scheduleDailyMeeting();
+  } else {
+    console.log("[marketing-engine] ANTHROPIC_API_KEY not set — daily meeting disabled");
+  }
 });
