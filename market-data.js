@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 
 const DATA_DIR = path.join(__dirname, "data");
-const BM_API_URL = process.env.BROKER_MARKETPLACE_URL || "https://mortgagemarketplace.ai";
+const BM_API_URL = process.env.BROKER_MARKETPLACE_URL || "https://broker-marketplace.com";
 const BM_API_KEY = process.env.BM_API_KEY || "";
 
 // ─── RSS Intelligence (from content-watcher.js) ────────────────────
