@@ -72,6 +72,32 @@ function resolveAssigneeEmail(assigneeName) {
   return TEAM_MAP[key] || "";
 }
 
+// Sync a task to Anchor Command so the team can see it
+function syncTaskToCommand(task) {
+  const COMMAND_URL = process.env.COMMAND_API_URL || "";
+  const COMMAND_KEY = process.env.COMMAND_API_KEY || "";
+  if (!COMMAND_URL || !COMMAND_KEY) return;
+  const assigneeName = task.assignee || "";
+  // Only sync if assigned to a known team member
+  if (!resolveAssigneeEmail(assigneeName)) return;
+  const payload = {
+    text: task.title,
+    assignedTo: assigneeName,
+    dueDate: task.due || null,
+    project: task.project || "",
+    sourceTaskId: task.id,
+    source: "anchor-tasks",
+  };
+  fetch(`${COMMAND_URL}/api/tasks/create-general`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": COMMAND_KEY },
+    body: JSON.stringify(payload),
+  }).then(r => r.json()).then(d => {
+    if (d.ok) console.log(`[task-sync] Synced "${task.title}" → Command (${assigneeName})`);
+    else console.error(`[task-sync] Failed to sync: ${d.error || "unknown"}`);
+  }).catch(e => console.error(`[task-sync] Error: ${e.message}`));
+}
+
 // Shared file paths
 function sharedProjectsFile() { return path.join(SHARED_DIR, "projects.md"); }
 function sharedProjectDetailPath(id) { return path.join(SHARED_DIR, `project-${id}.json`); }
@@ -1599,6 +1625,7 @@ const server = http.createServer(async (req, res) => {
       if (!task.title) return json(res, 400, { error: "Title required" });
       tasks.push(task);
       writeTasks(tasks, targetEmail || undefined);
+      syncTaskToCommand(task);
       return json(res, 201, { task, writtenTo: targetEmail || "default" });
     }
 
@@ -2140,6 +2167,7 @@ const server = http.createServer(async (req, res) => {
       if (!task.title) return json(res, 400, { error: "Title required" });
       tasks.push(task);
       writeTasks(tasks, targetEmail);
+      syncTaskToCommand(task);
       return json(res, 201, { task, writtenTo: targetEmail });
     }
 
@@ -2166,7 +2194,14 @@ const server = http.createServer(async (req, res) => {
       if (body.scheduledStart !== undefined) tasks[idx].scheduledStart = String(body.scheduledStart).substring(0, 50);
       if (body.emailId !== undefined) tasks[idx].emailId = String(body.emailId).substring(0, 200);
       if (body.emailSubject !== undefined) tasks[idx].emailSubject = String(body.emailSubject).substring(0, 500);
+      // Resolve assignee email for file routing
+      if (body.assignee !== undefined) {
+        const newEmail = resolveAssigneeEmail(body.assignee);
+        if (newEmail) tasks[idx].assigneeEmail = newEmail;
+      }
       writeTasks(tasks, req.session.email);
+      // Sync to Command if assigned to a team member
+      if (body.assignee !== undefined) syncTaskToCommand(tasks[idx]);
       return json(res, 200, { task: tasks[idx] });
     }
 

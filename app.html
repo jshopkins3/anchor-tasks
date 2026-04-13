@@ -2300,7 +2300,13 @@
       <div class="card">
         <div class="add-row">
           <input class="inp-title" id="new-task-title" placeholder="New task..." />
-          <input class="inp-sm" id="new-task-assignee" placeholder="Assign to..." />
+          <select class="inp-sm" id="new-task-assignee">
+            <option value="">Assign to...</option>
+            <option value="John">John</option>
+            <option value="Corey">Corey</option>
+            <option value="Brenda">Brenda</option>
+            <option value="Kat">Kat</option>
+          </select>
           <input class="inp-sm" id="new-task-due" type="date" />
           <select class="inp-sm" id="new-task-priority">
             <option value="normal">Normal</option>
@@ -3025,7 +3031,13 @@
             </div>
             <div>
               <label>Assignee</label>
-              <input id="ed-assignee-${t.id}" value="${esc(t.assignee)}" placeholder="Name..." />
+              <select id="ed-assignee-${t.id}">
+                <option value="" ${!t.assignee?"selected":""}>Unassigned</option>
+                <option value="John" ${t.assignee==="John"?"selected":""}>John</option>
+                <option value="Corey" ${t.assignee==="Corey"?"selected":""}>Corey</option>
+                <option value="Brenda" ${t.assignee==="Brenda"?"selected":""}>Brenda</option>
+                <option value="Kat" ${t.assignee==="Kat"?"selected":""}>Kat</option>
+              </select>
             </div>
             <div>
               <label>Due Date</label>
@@ -3391,7 +3403,13 @@
             </div>
             <div>
               <label>Assignee</label>
-              <input id="ed-assignee-${t.id}" value="${esc(t.assignee)}" placeholder="Name..." />
+              <select id="ed-assignee-${t.id}">
+                <option value="" ${!t.assignee?"selected":""}>Unassigned</option>
+                <option value="John" ${t.assignee==="John"?"selected":""}>John</option>
+                <option value="Corey" ${t.assignee==="Corey"?"selected":""}>Corey</option>
+                <option value="Brenda" ${t.assignee==="Brenda"?"selected":""}>Brenda</option>
+                <option value="Kat" ${t.assignee==="Kat"?"selected":""}>Kat</option>
+              </select>
             </div>
             <div>
               <label>Due Date</label>
