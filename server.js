@@ -3894,6 +3894,122 @@ Be specific and actionable. Use borrower names everywhere. If a note mentions a 
       return json(res, 200, { ok: true });
     }
 
+    // Send application link email to a lead
+    const leadEmailMatch = urlPath.match(/^\/api\/pipeline\/leads\/([^/]+)\/send-application$/);
+    if (leadEmailMatch && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const leadId = leadEmailMatch[1];
+      const data = loadLeadsData();
+      const lead = data.leads.find(l => l.id === leadId);
+      if (!lead) return json(res, 404, { error: "Lead not found" });
+      if (!lead.email) return json(res, 400, { error: "Lead has no email address" });
+
+      const APPLICATION_LINK = "https://mycommunitymortgage.my1003app.com/2283684/register";
+      const firstName = (lead.name || "").split(" ")[0] || "there";
+      const loanType = (lead.loanType || "purchase").toLowerCase();
+
+      // Document checklist based on loan type
+      const baseDocsList = [
+        "Most recent 30 days of pay stubs",
+        "Most recent 2 years of W-2s",
+        "Most recent 2 months of bank statements (all pages)",
+        "Valid government-issued photo ID",
+      ];
+      const purchaseDocs = [
+        "Pre-approval letter request details (purchase price range, preferred area)",
+      ];
+      const refiDocs = [
+        "Current mortgage statement",
+        "Current homeowner's insurance declarations page",
+        "Most recent property tax bill",
+      ];
+      const vaDocs = [
+        "DD-214 (Member 4 copy) or Certificate of Eligibility (COE)",
+      ];
+      const fhaDocs = [];
+      const helocDocs = [
+        "Current mortgage statement",
+        "Recent property tax bill",
+      ];
+
+      let docs = [...baseDocsList];
+      if (loanType === "purchase") docs = docs.concat(purchaseDocs);
+      else if (loanType === "refinance") docs = docs.concat(refiDocs);
+      else if (loanType === "heloc") docs = docs.concat(helocDocs);
+      // Check notes for VA/FHA hints
+      const notesLower = (lead.notes || "").toLowerCase();
+      if (notesLower.includes("va") || notesLower.includes("veteran")) docs = docs.concat(vaDocs);
+      if (notesLower.includes("fha")) docs = docs.concat(fhaDocs);
+
+      const docsListHtml = docs.map(d => `<li style="margin-bottom:4px;">${d}</li>`).join("");
+      const docsListText = docs.map(d => `  - ${d}`).join("\n");
+
+      const subject = `Your Mortgage Application — Let's Get Started, ${firstName}!`;
+
+      const bodyText = `Hi ${firstName},
+
+Thank you for reaching out to Anchor Mortgage Group! I'm excited to help you with your ${loanType === "refinance" ? "refinance" : loanType === "heloc" ? "HELOC" : "home purchase"} journey.
+
+To get things rolling, here's your secure application link:
+${APPLICATION_LINK}
+
+Once you complete the application, we'll have a clear picture of where you stand and can move quickly.
+
+Here are some documents we may request based on your loan type — no rush, but having these ready will speed things up:
+
+${docsListText}
+
+I've also CC'd my assistant Kat Pazzaglia and our intake coordinator Corey McCullar on this email. Kat is also a licensed loan officer and is available to assist if you ever need anything and I'm not immediately available. You're in great hands with our team.
+
+Don't hesitate to reach out if you have any questions at all. We're here to make this as smooth as possible.
+
+Talk soon,
+John Hopkins III
+Anchor Mortgage Group
+NMLS #2283684`;
+
+      const bodyHtml = `
+<div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;line-height:1.6;">
+  <p>Hi ${firstName},</p>
+  <p>Thank you for reaching out to Anchor Mortgage Group! I'm excited to help you with your ${loanType === "refinance" ? "refinance" : loanType === "heloc" ? "HELOC" : "home purchase"} journey.</p>
+  <p>To get things rolling, here's your secure application link:</p>
+  <p style="margin:16px 0;">
+    <a href="${APPLICATION_LINK}" style="display:inline-block;padding:12px 24px;background:#1B3A6B;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">Start Your Application &rarr;</a>
+  </p>
+  <p>Once you complete the application, we'll have a clear picture of where you stand and can move quickly.</p>
+  <p>Here are some documents we may request based on your loan type — no rush, but having these ready will speed things up:</p>
+  <ul style="margin:8px 0 16px;padding-left:20px;color:#374151;">
+    ${docsListHtml}
+  </ul>
+  <p>I've also CC'd my assistant <strong>Kat Pazzaglia</strong> and our intake coordinator <strong>Corey McCullar</strong> on this email. Kat is also a licensed loan officer and is available to assist if you ever need anything and I'm not immediately available. You're in great hands with our team.</p>
+  <p>Don't hesitate to reach out if you have any questions at all. We're here to make this as smooth as possible.</p>
+  <p>Talk soon,<br><strong>John Hopkins III</strong><br>Anchor Mortgage Group<br>NMLS #2283684</p>
+</div>`;
+
+      try {
+        const result = await gmailSendEmail({
+          to: lead.email,
+          cc: "kat@myanchormortgage.com, corey@myanchormortgage.com",
+          subject,
+          body: bodyText,
+          bodyHtml,
+        });
+        if (!result || result.error) return json(res, 500, { error: result?.error || "Failed to send email" });
+
+        // Update lead status to application-sent
+        lead.status = "application-sent";
+        lead.updatedAt = new Date().toISOString();
+        if (!lead.notes) lead.notes = "";
+        lead.notes = (lead.notes ? lead.notes + "\n" : "") + `[${new Date().toLocaleDateString()}] Application link sent via email.`;
+        saveLeadsData(data);
+
+        console.log(`[leads] Application email sent to ${lead.email} (${lead.name})`);
+        return json(res, 200, { success: true, to: lead.email, messageId: result.id });
+      } catch (e) {
+        return json(res, 500, { error: `Email send failed: ${e.message}` });
+      }
+    }
+
     // Dan API: leads access
     if (urlPath === "/api/dan/pipeline-leads" && (req.method === "GET" || req.method === "POST")) {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });

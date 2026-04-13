@@ -8193,6 +8193,7 @@
                 <select onchange="updateLeadStatus('${lead.id}', this.value)" style="padding:4px 8px;font-size:11px;border-radius:4px;border:1px solid ${color};background:${color}15;color:${color};font-weight:600;cursor:pointer;">
                   ${Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}" ${k === lead.status ? 'selected' : ''}>${v}</option>`).join('')}
                 </select>
+                ${lead.email && lead.status !== "application-sent" && lead.status !== "submitted" && lead.status !== "converted" ? `<button onclick="sendApplicationEmail('${lead.id}')" style="background:#1B3A6B;border:none;font-size:11px;cursor:pointer;color:white;padding:4px 10px;border-radius:4px;font-weight:600;" title="Send application link email">&#9993; Send App Link</button>` : ''}
                 <button onclick="editLead('${lead.id}')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--text-secondary);" title="Edit">&#9998;</button>
                 <button onclick="deleteLead('${lead.id}')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--text-secondary);" title="Delete">&times;</button>
               </div>
@@ -8247,6 +8248,34 @@
       await fetch(`/api/pipeline/leads/${id}`, { method: "DELETE" });
       await fetchLeads();
       renderLeads();
+    }
+
+    async function sendApplicationEmail(id) {
+      const lead = pipelineLeads.find(l => l.id === id);
+      if (!lead) return;
+      if (!lead.email) { alert("This lead has no email address. Add one first."); return; }
+      if (!confirm(`Send application link email to ${lead.name} (${lead.email})?\n\nThis will CC Kat and Corey and auto-update the lead status to "Application Sent".`)) return;
+      const btn = event.target;
+      const origText = btn.innerHTML;
+      btn.innerHTML = "Sending...";
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/api/pipeline/leads/${id}/send-application`, { method: "POST" });
+        const data = await resp.json();
+        if (data.success) {
+          await fetchLeads();
+          renderLeads();
+          alert(`Application email sent to ${lead.name}!`);
+        } else {
+          alert("Failed to send: " + (data.error || "Unknown error"));
+          btn.innerHTML = origText;
+          btn.disabled = false;
+        }
+      } catch (e) {
+        alert("Error: " + e.message);
+        btn.innerHTML = origText;
+        btn.disabled = false;
+      }
     }
 
     // ── Pipeline View Switching ──
