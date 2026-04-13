@@ -1853,6 +1853,39 @@
     <!-- ── Content Calendar section ────────────────────────────── -->
     <div class="section" id="sec-content">
       <div style="max-width:900px;margin:0 auto;">
+
+        <!-- ── Reactor Feed (Content Intelligence) ─────────────── -->
+        <div id="reactor-feed-section" style="margin-bottom:28px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div>
+              <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Content Intelligence Feed</h2>
+              <p id="reactor-last-poll" style="font-size:11px;color:#71717a;margin:4px 0 0;">Polling RSS feeds every 2 hours</p>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button onclick="setReactorFilter('new')" id="reactor-filter-new" class="reactor-filter active" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #3b82f6;background:rgba(59,130,246,0.15);color:#3b82f6;">New</button>
+              <button onclick="setReactorFilter('reacted')" id="reactor-filter-reacted" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">Reacted</button>
+              <button onclick="setReactorFilter('dismissed')" id="reactor-filter-dismissed" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">Dismissed</button>
+              <button onclick="setReactorFilter('all')" id="reactor-filter-all" class="reactor-filter" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">All</button>
+              <button onclick="pollReactorFeed()" style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.5);background:transparent;color:#71717a;">Refresh</button>
+            </div>
+          </div>
+          <div id="reactor-feed-list" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="text-align:center;padding:30px;color:#71717a;font-size:13px;">Loading triggers...</div>
+          </div>
+          <div style="margin-top:12px;padding:10px 14px;background:rgba(30,30,36,0.6);border-radius:8px;border:1px solid rgba(63,63,70,0.3);">
+            <div style="font-size:11px;font-weight:600;color:#a1a1aa;margin-bottom:4px;">RSS Sources</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <span style="font-size:10px;color:#71717a;background:rgba(26,115,232,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#1a73e8">HW</b> HousingWire</span>
+              <span style="font-size:10px;color:#71717a;background:rgba(230,81,0,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#e65100">SG</b> Scotsman Guide</span>
+              <span style="font-size:10px;color:#71717a;background:rgba(46,125,50,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#2e7d32">MBA</b> MBA</span>
+              <span style="font-size:10px;color:#71717a;background:rgba(123,31,162,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#7b1fa2">MPA</b> MPA</span>
+              <span style="font-size:10px;color:#71717a;background:rgba(198,40,40,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#c62828">GS</b> Greg Sher</span>
+              <span style="font-size:10px;color:#71717a;background:rgba(0,119,181,0.1);padding:2px 8px;border-radius:4px;"><b style="color:#0077b5">LI</b> LinkedIn (Zapier)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Content Calendar ────────────────────────────────── -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
           <h2 style="font-size:18px;font-weight:700;color:#e4e4e7;margin:0;">Content Calendar</h2>
           <div style="display:flex;gap:8px;">
@@ -2186,6 +2219,38 @@
     function openEdit(id) {
       editingTaskId = editingTaskId === id ? null : id;
       renderTasks();
+      // Load task notes/attachments
+      if (editingTaskId) {
+        fetch(`/api/tasks/${id}/detail`).then(r => r.json()).then(detail => {
+          const notesEl = document.getElementById(`ed-notes-${id}`);
+          if (notesEl) notesEl.value = detail.notes || "";
+          const attEl = document.getElementById(`ed-attachments-${id}`);
+          if (attEl && detail.attachments?.length) {
+            attEl.innerHTML = detail.attachments.map(a =>
+              `<a href="/api/tasks/${id}/attachment/${encodeURIComponent(a.file)}" download="${esc(a.name)}" style="display:inline-flex;align-items:center;gap:4px;background:#18181b;border:1px solid #27272a;border-radius:6px;padding:4px 8px;font-size:11px;color:#93c5fd;text-decoration:none;">📎 ${esc(a.name)} <span style="color:#52525b;font-size:10px;">${a.size > 1048576 ? (a.size/1048576).toFixed(1) + "MB" : Math.round(a.size/1024) + "KB"}</span></a>`
+            ).join("");
+          }
+        }).catch(() => {});
+      }
+    }
+
+    async function uploadTaskAttachment(taskId, input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/attachment?name=${encodeURIComponent(file.name)}`, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        const data = await res.json();
+        if (data.ok) {
+          // Refresh attachments display
+          openEdit(taskId);
+          openEdit(taskId); // toggle off then on to reload
+        }
+      } catch (e) { alert("Upload failed: " + e.message); }
+      input.value = "";
     }
 
     function closeEdit() {
@@ -2213,6 +2278,15 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, assignee, due, priority, project, personal, linkedGoal })
       });
+      // Save notes
+      const notesEl = document.getElementById(`ed-notes-${id}`);
+      if (notesEl) {
+        await fetch(`/api/tasks/${id}/detail`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: notesEl.value })
+        });
+      }
 
       // Sync goal's linkedTasks if goal changed
       if (oldGoalId !== linkedGoal) {
@@ -2392,6 +2466,18 @@
                 <option value="">No goal</option>
                 ${goals.map(g => `<option value="${g.id}" ${t.linkedGoal===g.id?"selected":""}>${esc(g.title)}</option>`).join("")}
               </select>
+            </div>
+            <div class="full" style="grid-column:1/-1;">
+              <label>Notes</label>
+              <textarea id="ed-notes-${t.id}" rows="3" style="width:100%;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;border-radius:6px;padding:8px;font-size:12px;font-family:inherit;outline:none;resize:vertical;" placeholder="Add context, notes, details..."></textarea>
+            </div>
+            <div class="full" style="grid-column:1/-1;">
+              <label>Attachments</label>
+              <div id="ed-attachments-${t.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+              <label style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid #3f3f46;border-radius:6px;cursor:pointer;font-size:11px;color:#a1a1aa;">
+                📎 Add File
+                <input type="file" style="display:none;" onchange="uploadTaskAttachment('${t.id}', this)">
+              </label>
             </div>
             <div class="edit-actions">
               <button class="btn-cancel" onclick="closeEdit(); renderDetail()">Cancel</button>
@@ -3064,6 +3150,7 @@
             renderCalendarView();
           }
           if (tab.dataset.tab === "content") {
+            loadReactorFeed();
             loadContentCalendar();
           }
           if (tab.dataset.tab === "finance") {
@@ -6516,6 +6603,129 @@
 
     /* ── Content Calendar ────────────────────────────────────── */
     let contentPosts = [];
+
+    /* ── Reactor Feed (Content Intelligence) ───────────────── */
+    let reactorTriggers = [];
+    let reactorFilter = "new";
+    const REACTOR_SOURCE_COLORS = { HW: "#1a73e8", SG: "#e65100", MBA: "#2e7d32", MPA: "#7b1fa2", GS: "#c62828", LI: "#0077b5", ZAP: "#ff6d00" };
+
+    function setReactorFilter(status) {
+      reactorFilter = status;
+      document.querySelectorAll(".reactor-filter").forEach(b => {
+        const isActive = b.id === "reactor-filter-" + status;
+        b.style.border = isActive ? "1px solid #3b82f6" : "1px solid rgba(63,63,70,0.5)";
+        b.style.background = isActive ? "rgba(59,130,246,0.15)" : "transparent";
+        b.style.color = isActive ? "#3b82f6" : "#71717a";
+      });
+      loadReactorFeed();
+    }
+
+    async function loadReactorFeed() {
+      try {
+        const statusQ = reactorFilter === "all" ? "all" : reactorFilter;
+        const resp = await fetch(`/api/content-feed?status=${statusQ}&limit=30`, { credentials: "include" });
+        const data = await resp.json();
+        reactorTriggers = data.triggers || [];
+        const pollEl = document.getElementById("reactor-last-poll");
+        if (data.lastPoll) {
+          const ago = Math.floor((Date.now() - new Date(data.lastPoll).getTime()) / 60000);
+          pollEl.textContent = ago < 60 ? `Last polled ${ago}m ago` : `Last polled ${Math.floor(ago / 60)}h ago`;
+        }
+        renderReactorFeed();
+      } catch (e) { console.error("[reactor] Load error:", e); }
+    }
+
+    async function pollReactorFeed() {
+      const list = document.getElementById("reactor-feed-list");
+      list.innerHTML = '<div style="text-align:center;padding:20px;color:#71717a;font-size:13px;">Polling RSS feeds...</div>';
+      try {
+        await fetch("/api/content-feed/poll", { method: "POST", credentials: "include" });
+        await loadReactorFeed();
+      } catch (e) { console.error("[reactor] Poll error:", e); }
+    }
+
+    async function dismissTrigger(id) {
+      try {
+        await fetch("/api/content-feed/update", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status: "dismissed" }) });
+        reactorTriggers = reactorTriggers.filter(t => t.id !== id);
+        renderReactorFeed();
+      } catch (e) { console.error("[reactor] Dismiss error:", e); }
+    }
+
+    function reactToTrigger(trigger) {
+      // Switch to a draft generation flow using the trigger as context
+      const instructions = `React to this industry content and draft a social media post in my voice:\n\nHeadline: "${trigger.title}"\nSource: ${trigger.source}\n${trigger.summary ? "Summary: " + trigger.summary : ""}\n\nUse my content framework. Education-first, no em dashes. Short punchy paragraphs. End with engagement hook.`;
+      // Generate a single post with the trigger as instruction
+      generateReactPost(trigger, instructions);
+    }
+
+    async function generateReactPost(trigger, instructions) {
+      try {
+        const resp = await fetch("/api/content/generate-single", {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: new Date().toISOString().split("T")[0], dayName: "react", theme: "The Truth", instructions }),
+        });
+        const data = await resp.json();
+        if (data.ok && data.post) {
+          // Mark trigger as reacted
+          await fetch("/api/content-feed/update", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: trigger.id, status: "reacted", reactedContent: data.post.text }) });
+          reactorTriggers = reactorTriggers.map(t => t.id === trigger.id ? { ...t, status: "reacted", reactedContent: data.post.text } : t);
+          renderReactorFeed();
+          // Also refresh content calendar to show the new post
+          loadContentCalendar();
+          alert("Post drafted! Check the Content Calendar below.");
+        } else {
+          alert("Error generating post: " + (data.error || "Unknown"));
+        }
+      } catch (e) { alert("Error: " + e.message); }
+    }
+
+    function renderReactorFeed() {
+      const list = document.getElementById("reactor-feed-list");
+      if (!reactorTriggers.length) {
+        list.innerHTML = `<div style="text-align:center;padding:30px;color:#71717a;background:rgba(30,30,36,0.6);border-radius:10px;border:1px solid rgba(63,63,70,0.3);">
+          <div style="font-size:24px;margin-bottom:6px;">&#9781;</div>
+          <div style="font-size:13px;font-weight:600;">No ${reactorFilter === "all" ? "" : reactorFilter + " "}triggers</div>
+          <div style="font-size:11px;margin-top:4px;">The content watcher polls 5 sources every 2 hours.</div>
+        </div>`;
+        return;
+      }
+
+      list.innerHTML = reactorTriggers.map(t => {
+        const srcColor = REACTOR_SOURCE_COLORS[t.sourceIcon] || "#3b82f6";
+        const timeAgo = (() => {
+          if (!t.pubDate) return "";
+          const diff = Date.now() - new Date(t.pubDate).getTime();
+          const hrs = Math.floor(diff / 3600000);
+          if (hrs < 1) return Math.floor(diff / 60000) + "m ago";
+          if (hrs < 24) return hrs + "h ago";
+          return Math.floor(hrs / 24) + "d ago";
+        })();
+        const statusBadge = t.status !== "new" ? `<span style="font-size:10px;font-weight:600;color:${t.status === "reacted" ? "#22c55e" : "#71717a"};text-transform:uppercase;margin-left:6px;">${t.status}</span>` : "";
+
+        return `<div style="background:rgba(30,30,36,0.6);border:${t.status === "new" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(63,63,70,0.3)"};border-radius:10px;padding:12px 14px;border-left:3px solid ${srcColor};">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
+                <span style="background:${srcColor}22;color:${srcColor};padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.05em;">${t.sourceIcon}</span>
+                <span style="font-size:11px;color:#a1a1aa;">${t.source}</span>
+                <span style="font-size:10px;color:#71717a;">${timeAgo}</span>
+                ${statusBadge}
+              </div>
+              <div style="font-size:13px;font-weight:600;color:#e4e4e7;line-height:1.4;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">${t.title}</div>
+              <div style="display:none;font-size:12px;color:#a1a1aa;margin-top:5px;line-height:1.5;">${t.summary || ""}</div>
+              ${t.reactedContent ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-size:12px;color:#a1a1aa;line-height:1.5;white-space:pre-wrap;">${t.reactedContent.substring(0, 300)}${t.reactedContent.length > 300 ? "..." : ""}</div>` : ""}
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0;">
+              ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid rgba(63,63,70,0.5);color:#a1a1aa;text-decoration:none;cursor:pointer;">Open</a>` : ""}
+              ${t.status === "new" ? `<button onclick="reactToTrigger(reactorTriggers.find(x=>x.id==='${t.id}'))" style="padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;cursor:pointer;">React</button>` : ""}
+              ${t.status === "new" ? `<button onclick="dismissTrigger('${t.id}')" style="padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid rgba(63,63,70,0.5);color:#71717a;cursor:pointer;" title="Dismiss">&#x2715;</button>` : ""}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+    }
 
     async function loadContentCalendar() {
       try {

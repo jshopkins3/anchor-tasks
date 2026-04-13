@@ -1164,7 +1164,7 @@ function saveJournal(entries, email) {
 }
 
 /* ─── Auth bypass paths ──────────────────────────────────────────────── */
-const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico", "/api/gcal-callback", "/manifest.json", "/sw.js", "/icon.svg", "/icon-192.png", "/icon-512.png", "/dan-icon-180.png", "/dan-avatar.svg", "/api/signature-image-file"];
+const PUBLIC_PATHS = ["/login.html", "/api/auth", "/api/auth-config", "/api/health", "/favicon.ico", "/api/gcal-callback", "/manifest.json", "/sw.js", "/icon.svg", "/icon-192.png", "/icon-512.png", "/dan-icon-180.png", "/dan-avatar.svg", "/api/signature-image-file", "/api/content-trigger"];
 
 /* ─── HTTP server ────────────────────────────────────────────────────── */
 const server = http.createServer(async (req, res) => {
@@ -3111,6 +3111,75 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    // ── Content Intelligence Feed (Reactor Feed) ──────────────────────
+    // GET /api/content-feed — list triggers
+    if (urlPath === "/api/content-feed" && req.method === "GET") {
+      const cw = require("./content-watcher");
+      const status = url.searchParams.get("status") || "new";
+      const limit = parseInt(url.searchParams.get("limit") || "20");
+      const result = cw.getTriggers({ status, limit });
+      return json(res, 200, result);
+    }
+
+    // POST /api/content-feed/poll — manually trigger a poll
+    if (urlPath === "/api/content-feed/poll" && req.method === "POST") {
+      const cw = require("./content-watcher");
+      try {
+        const result = await cw.pollFeeds();
+        return json(res, 200, { ok: true, ...result });
+      } catch (e) {
+        console.error("[content-feed] Poll error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // POST /api/content-feed/update — update trigger status
+    if (urlPath === "/api/content-feed/update" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      if (!body.id || !body.status) return json(res, 400, { error: "id and status required" });
+      const cw = require("./content-watcher");
+      const trigger = cw.updateTrigger(body.id, { status: body.status, reactedContent: body.reactedContent });
+      if (!trigger) return json(res, 404, { error: "Trigger not found" });
+      return json(res, 200, { ok: true, trigger });
+    }
+
+    // POST /api/content-trigger — webhook receiver (Zapier LinkedIn alerts, etc.)
+    // Bypasses session auth — open endpoint for webhooks
+    if (urlPath === "/api/content-trigger" && req.method === "POST") {
+      try {
+        const body = JSON.parse(await readBody(req));
+        if (!body.title) return json(res, 400, { error: "title is required" });
+        const cw = require("./content-watcher");
+        const trigger = cw.addWebhookTrigger(body);
+        return json(res, 200, { ok: true, id: trigger.id });
+      } catch (e) {
+        console.error("[content-trigger] Webhook error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // Dan API: content feed access
+    if (urlPath === "/api/dan/content-triggers" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const cw = require("./content-watcher");
+      const body = req.method === "POST" ? JSON.parse(await readBody(req)) : {};
+      const result = cw.getTriggers({ status: body.status || "new", limit: 10 });
+      if (result.triggers.length === 0) return json(res, 200, { message: `No ${body.status || "new"} content triggers right now.`, triggers: [] });
+      const summary = result.triggers.map((t, i) => `${i + 1}. [${t.sourceIcon}] ${t.title} (${t.source}) — ID: ${t.id}`).join("\n");
+      return json(res, 200, { message: `Found ${result.triggers.length} trigger${result.triggers.length !== 1 ? "s" : ""}:\n${summary}`, triggers: result.triggers, lastPoll: result.lastPoll });
+    }
+
+    // Dan API: dismiss trigger
+    if (urlPath === "/api/dan/content-dismiss" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.trigger_id) return json(res, 400, { error: "trigger_id required" });
+      const cw = require("./content-watcher");
+      const trigger = cw.updateTrigger(body.trigger_id, { status: "dismissed" });
+      if (!trigger) return json(res, 404, { error: "Trigger not found" });
+      return json(res, 200, { message: `Dismissed: "${trigger.title}"`, ok: true });
+    }
+
     // Dan API: content access
     if (urlPath === "/api/dan/content-upcoming" && (req.method === "GET" || req.method === "POST")) {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
@@ -3257,4 +3326,20 @@ server.listen(PORT, () => {
     console.log(`[push] Starting email poll (${subs.length} subscription(s))`);
     startServerEmailPoll();
   }
+  // Content watcher: initial poll after 30s, then every 2 hours
+  setTimeout(async () => {
+    try {
+      const cw = require("./content-watcher");
+      const result = await cw.pollFeeds();
+      console.log(`[content-watcher] Initial poll: ${result.newCount} new triggers (${result.total} total)`);
+    } catch (e) { console.error("[content-watcher] Initial poll error:", e.message); }
+  }, 30000);
+  setInterval(async () => {
+    try {
+      const cw = require("./content-watcher");
+      const result = await cw.pollFeeds();
+      if (result.newCount > 0) console.log(`[content-watcher] Found ${result.newCount} new triggers`);
+    } catch (e) { console.error("[content-watcher] Poll error:", e.message); }
+  }, 2 * 60 * 60 * 1000); // every 2 hours
+  console.log(`[content-watcher] RSS polling: every 2 hours (initial in 30s)`);
 });
