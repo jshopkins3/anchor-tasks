@@ -2461,6 +2461,7 @@
         <!-- View toggle: Loans / Leads / History -->
         <div style="display:flex;gap:2px;margin-bottom:16px;background:var(--input-bg);border-radius:8px;padding:3px;width:fit-content;">
           <button class="pipe-view-btn active" onclick="switchPipelineView('loans')" data-view="loans" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:var(--navy);color:var(--gold);">Active Loans</button>
+          <button class="pipe-view-btn" onclick="switchPipelineView('recap')" data-view="recap" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Weekly Recap</button>
           <button class="pipe-view-btn" onclick="switchPipelineView('leads')" data-view="leads" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Leads</button>
           <button class="pipe-view-btn" onclick="switchPipelineView('history')" data-view="history" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Review History</button>
         </div>
@@ -2476,6 +2477,13 @@
               <div style="font-size:32px;margin-bottom:12px;">&#9875;</div>
               <p style="font-size:15px;">Click <strong>Refresh</strong> to pull your active loans from Arive.</p>
             </div>
+          </div>
+        </div>
+
+        <!-- Weekly Recap (guided walkthrough) -->
+        <div id="pipeline-recap-view" style="display:none;">
+          <div id="recap-container">
+            <div style="text-align:center;padding:40px;color:var(--text-secondary);">Loading recap...</div>
           </div>
         </div>
 
@@ -8253,11 +8261,234 @@
         activeBtn.style.color = "var(--gold)";
       }
       document.getElementById("pipeline-loans-view").style.display = view === "loans" ? "block" : "none";
+      document.getElementById("pipeline-recap-view").style.display = view === "recap" ? "block" : "none";
       document.getElementById("pipeline-leads-view").style.display = view === "leads" ? "block" : "none";
       document.getElementById("pipeline-history-view").style.display = view === "history" ? "block" : "none";
 
       if (view === "leads") { fetchLeads().then(() => renderLeads()); }
       if (view === "history") renderReviewHistory();
+      if (view === "recap") renderWeeklyRecap();
+    }
+
+    // ── Weekly Recap: Guided Walkthrough ──
+    let recapIndex = 0;
+    let recapLoans = [];
+    let recapNotes = {};
+    let recapDate = new Date().toISOString().split("T")[0];
+
+    async function renderWeeklyRecap() {
+      const container = document.getElementById("recap-container");
+      // Ensure pipeline data
+      if (!pipelineLoaded || pipelineLoans.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin 0.8s linear infinite;"></div>Loading pipeline...</div>';
+        await loadPipelineLoans(false);
+      }
+      // Sort: in-process first (closest to closing), then earlier stages
+      const inProcess = new Set(["CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED","APPROVED_WITH_CONDITION","DISCLOSURE_SENT"]);
+      recapLoans = pipelineLoans.filter(l => ACTIVE_STAGES.has(l.loanStatus))
+        .sort((a, b) => {
+          const ai = inProcess.has(a.loanStatus) ? 0 : 1;
+          const bi = inProcess.has(b.loanStatus) ? 0 : 1;
+          if (ai !== bi) return ai - bi;
+          // By closing date (soonest first), then by stage
+          if (a.closingDate && b.closingDate) return a.closingDate.localeCompare(b.closingDate);
+          if (a.closingDate) return -1;
+          if (b.closingDate) return 1;
+          return PIPELINE_STAGES_ORDER.indexOf(b.loanStatus) - PIPELINE_STAGES_ORDER.indexOf(a.loanStatus);
+        });
+
+      if (recapLoans.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-secondary);">No active loans to review.</div>';
+        return;
+      }
+
+      renderRecapLoan();
+    }
+
+    function renderRecapLoan() {
+      const container = document.getElementById("recap-container");
+      const loan = recapLoans[recapIndex];
+      if (!loan) return;
+
+      const color = STAGE_COLORS[loan.loanStatus] || "#6366f1";
+      const stageLabel = STAGE_LABELS[loan.loanStatus] || loan.loanStatus;
+      const initials = (loan.borrowerFirst?.[0] || "") + (loan.borrowerLast?.[0] || "");
+      const noteVal = recapNotes[loan.id] || "";
+      const now = new Date();
+
+      // Alerts for this loan
+      const alerts = [];
+      const inProcessStages = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+      if (inProcessStages.has(loan.loanStatus)) {
+        if (!loan.closingDate) alerts.push({ text: "No closing date set", level: "warn" });
+        else {
+          const cd = new Date(loan.closingDate);
+          const daysOut = Math.ceil((cd - now) / 86400000);
+          if (daysOut < 0) alerts.push({ text: `Closing date passed ${Math.abs(daysOut)}d ago`, level: "error" });
+          else if (daysOut <= 5) alerts.push({ text: `Closing in ${daysOut} day${daysOut !== 1 ? "s" : ""}`, level: "warn" });
+          else alerts.push({ text: `Closing in ${daysOut} days (${loan.closingDate})`, level: "info" });
+        }
+      }
+      if (loan.lastStatusChange) {
+        const daysSince = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000);
+        if (daysSince > 14) alerts.push({ text: `No status change in ${daysSince} days`, level: "warn" });
+      }
+
+      // Related tasks
+      const loanTasks = tasks.filter(t =>
+        t.project === "Active Loans" &&
+        (t.title.toLowerCase().includes(loan.borrowerLast?.toLowerCase() || "___") ||
+         t.title.toLowerCase().includes(loan.borrowerName?.toLowerCase() || "___"))
+      );
+      const openTasks = loanTasks.filter(t => !t.done);
+
+      // Related calendar events
+      const loanEvents = (typeof calEvents !== "undefined" ? calEvents : []).filter(ev =>
+        (ev.title || "").toLowerCase().includes(loan.borrowerLast?.toLowerCase() || "___")
+      );
+
+      let html = `
+        <!-- Progress bar -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);">Loan ${recapIndex + 1} of ${recapLoans.length}</div>
+          <div style="flex:1;height:4px;background:var(--border);border-radius:99px;overflow:hidden;">
+            <div style="width:${((recapIndex + 1) / recapLoans.length * 100).toFixed(0)}%;height:100%;background:var(--navy);border-radius:99px;transition:width 0.3s;"></div>
+          </div>
+          <div style="display:flex;gap:4px;">
+            ${recapLoans.map((l, i) => `<div onclick="recapGoTo(${i})" style="width:8px;height:8px;border-radius:50%;background:${i === recapIndex ? 'var(--navy)' : i < recapIndex ? (recapNotes[l.id]?.trim() ? '#10b981' : 'var(--text-faint)') : 'var(--border)'};cursor:pointer;transition:all 0.2s;" title="${l.borrowerName}"></div>`).join("")}
+          </div>
+        </div>
+
+        <!-- Loan card -->
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:12px;padding:20px;margin-bottom:16px;border-left:4px solid ${color};">
+          <!-- Header -->
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+            <div style="width:52px;height:52px;border-radius:50%;background:${color}15;color:${color};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;">${initials || "?"}</div>
+            <div style="flex:1;">
+              <div style="font-size:20px;font-weight:700;color:var(--text-heading);">${loan.borrowerName || "Unknown"}</div>
+              <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">
+                ${loan.loanPurpose || ""} &bull; $${(loan.loanAmount || 0).toLocaleString()} &bull; ${loan.loanProgram || ""}
+              </div>
+              ${loan.propertyAddress ? `<div style="font-size:12px;color:var(--text-faint);margin-top:2px;">${loan.propertyAddress}${loan.propertyCity ? ", " + loan.propertyCity : ""}${loan.propertyState ? " " + loan.propertyState : ""}</div>` : ""}
+            </div>
+            <div style="text-align:right;">
+              <div style="padding:5px 14px;border-radius:99px;font-size:12px;font-weight:700;background:${color}15;color:${color};">${stageLabel}</div>
+              ${loan.displayId ? `<div style="font-size:11px;color:var(--text-faint);margin-top:4px;">${loan.displayId}</div>` : ""}
+            </div>
+          </div>`;
+
+      // Alerts
+      if (alerts.length > 0) {
+        html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">`;
+        for (const a of alerts) {
+          const bg = a.level === "error" ? "rgba(239,68,68,0.08)" : a.level === "warn" ? "rgba(245,158,11,0.08)" : "rgba(59,130,246,0.06)";
+          const fg = a.level === "error" ? "#ef4444" : a.level === "warn" ? "#f59e0b" : "#3b82f6";
+          html += `<div style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:${bg};color:${fg};">${a.text}</div>`;
+        }
+        html += `</div>`;
+      }
+
+      // Context panels — tasks and upcoming events side by side
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">`;
+
+      // Open tasks
+      html += `<div style="background:var(--input-bg);border-radius:8px;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Open Tasks (${openTasks.length})</div>`;
+      if (openTasks.length === 0) {
+        html += `<div style="font-size:12px;color:var(--text-faint);">None</div>`;
+      } else {
+        for (const t of openTasks.slice(0, 5)) {
+          const isOverdue = t.due && t.due < now.toISOString().split("T")[0];
+          html += `<div style="font-size:12px;color:var(--text-primary);padding:2px 0;${isOverdue ? 'color:#ef4444;' : ''}">&bull; ${esc(t.title)}${t.due ? ' <span style="color:var(--text-faint);font-size:10px;">(' + t.due + ')</span>' : ''}</div>`;
+        }
+        if (openTasks.length > 5) html += `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">+${openTasks.length - 5} more</div>`;
+      }
+      html += `</div>`;
+
+      // Calendar events
+      html += `<div style="background:var(--input-bg);border-radius:8px;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Upcoming Events (${loanEvents.length})</div>`;
+      if (loanEvents.length === 0) {
+        html += `<div style="font-size:12px;color:var(--text-faint);">None scheduled</div>`;
+      } else {
+        for (const ev of loanEvents.slice(0, 4)) {
+          html += `<div style="font-size:12px;color:var(--text-primary);padding:2px 0;">&bull; ${esc(ev.title || "")} <span style="color:var(--text-faint);font-size:10px;">${ev.start ? new Date(ev.start).toLocaleDateString() : ""}</span></div>`;
+        }
+      }
+      html += `</div></div>`;
+
+      // Notes textarea
+      html += `
+          <div style="margin-top:4px;">
+            <label style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Notes</label>
+            <textarea
+              id="recap-note-input"
+              placeholder="What's happening with this loan? Anything to follow up on?"
+              rows="4"
+              style="width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--input-border);border-radius:8px;background:var(--input-bg);color:var(--text-primary);font-size:14px;resize:vertical;box-sizing:border-box;font-family:inherit;line-height:1.5;"
+              oninput="recapNotes['${loan.id}'] = this.value"
+            >${noteVal}</textarea>
+          </div>
+
+          <!-- Quick actions -->
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+            <a href="https://anchorcommand.myanchormortgage.com?loanId=${loan.id}" target="_blank" style="background:var(--navy);color:var(--gold);border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;">Open in Command</a>
+            ${loan.deepLinkURL ? `<a href="${loan.deepLinkURL}" target="_blank" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;color:var(--text-secondary);text-decoration:none;display:inline-block;">Open in Arive</a>` : ""}
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+          <button onclick="recapPrev()" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;color:var(--text-primary);font-weight:600;${recapIndex === 0 ? 'opacity:0.3;pointer-events:none;' : ''}">&larr; Previous</button>
+          <div style="text-align:center;">
+            <div style="font-size:12px;color:var(--text-faint);">${Object.values(recapNotes).filter(n => n.trim()).length} of ${recapLoans.length} loans reviewed</div>
+          </div>
+          ${recapIndex < recapLoans.length - 1
+            ? `<button onclick="recapNext()" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;font-weight:600;">Next &rarr;</button>`
+            : `<button onclick="recapFinish()" style="background:#10b981;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;font-weight:600;">Complete Recap &#10003;</button>`
+          }
+        </div>
+      `;
+
+      container.innerHTML = html;
+      // Focus the textarea
+      setTimeout(() => { const ta = document.getElementById("recap-note-input"); if (ta) ta.focus(); }, 100);
+    }
+
+    function recapNext() {
+      // Save current note
+      const ta = document.getElementById("recap-note-input");
+      if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
+      if (recapIndex < recapLoans.length - 1) { recapIndex++; renderRecapLoan(); }
+    }
+
+    function recapPrev() {
+      const ta = document.getElementById("recap-note-input");
+      if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
+      if (recapIndex > 0) { recapIndex--; renderRecapLoan(); }
+    }
+
+    function recapGoTo(idx) {
+      const ta = document.getElementById("recap-note-input");
+      if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
+      recapIndex = idx;
+      renderRecapLoan();
+    }
+
+    async function recapFinish() {
+      // Save last note
+      const ta = document.getElementById("recap-note-input");
+      if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
+
+      // Copy notes into pipelineNotes for the existing review flow
+      pipelineNotes = { ...recapNotes };
+
+      // Run the same complete review logic
+      await completePipelineReview();
+
+      // Reset recap state
+      recapNotes = {};
+      recapIndex = 0;
     }
 
     async function renderReviewHistory() {
