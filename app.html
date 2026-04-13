@@ -4193,7 +4193,8 @@
           : sorted.map(loan => {
               const color = stageColors[loan.loanStatus] || "#6366f1";
               const initials = (loan.borrowerFirst?.[0] || "") + (loan.borrowerLast?.[0] || "");
-              return `<div onclick="showLoanDetail('${loan.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+              const loanClick = loan.deepLinkURL ? "window.open('" + loan.deepLinkURL + "','_blank')" : "showLoanDetail('" + loan.id + "')";
+              return `<div onclick="${loanClick}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
                 <div style="width:32px;height:32px;border-radius:50%;background:${color}20;color:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${initials || "?"}</div>
                 <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${loan.borrowerName || "Unknown"}</div><div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">$${(loan.loanAmount || 0).toLocaleString()} &bull; ${loan.loanPurpose || ""}</div></div>
                 <div style="padding:3px 8px;border-radius:99px;font-size:10px;font-weight:600;background:${color}18;color:${color};white-space:nowrap;">${stageLabelsShort[loan.loanStatus] || loan.loanStatus}</div>
