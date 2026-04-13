@@ -2633,6 +2633,17 @@ const server = http.createServer(async (req, res) => {
         }
       } catch {}
       try { if (fs.existsSync(GCAL_TOKEN_FILE)) fs.unlinkSync(GCAL_TOKEN_FILE); } catch {}
+      // Also purge ALL user-specific token files so stale tokens don't shadow the fresh one
+      try {
+        const userDirs = fs.readdirSync(USERS_DIR);
+        for (const d of userDirs) {
+          const userTokenFile = path.join(USERS_DIR, d, "gcal-token.json");
+          if (fs.existsSync(userTokenFile)) {
+            fs.unlinkSync(userTokenFile);
+            console.log("[gcal-auth] Purged stale user token:", userTokenFile);
+          }
+        }
+      } catch {}
       // Stash refresh token in memory for the callback
       if (savedRefreshToken) global._savedRefreshToken = savedRefreshToken;
       const host = req.headers.host || "";
@@ -2684,11 +2695,17 @@ const server = http.createServer(async (req, res) => {
               scope: data.scope || "",
             };
             saveGCalToken(tokenObj); // legacy file
-            // Also save to user-specific file if logged in
-            if (req.session && req.session.email) {
-              saveGCalToken(tokenObj, req.session.email);
-              console.log("[gcal-callback] Token saved to both legacy and user file:", req.session.email);
-            }
+            // Also save to ALL user-specific token files so per-user lookups find the fresh token
+            try {
+              const userDirs = fs.readdirSync(USERS_DIR);
+              for (const d of userDirs) {
+                const userDir = path.join(USERS_DIR, d);
+                if (fs.statSync(userDir).isDirectory()) {
+                  saveGCalToken(tokenObj, d); // d is the email-based dirname
+                  console.log("[gcal-callback] Token synced to user:", d);
+                }
+              }
+            } catch (e) { console.error("[gcal-callback] User token sync error:", e.message); }
             const hasGmailSend = (data.scope || "").includes("gmail.send");
             console.log("[gcal] Connected successfully. Scopes:", data.scope || "(not returned)");
             console.log("[gcal] gmail.send scope:", hasGmailSend ? "YES" : "NO - re-auth needed with consent prompt");
