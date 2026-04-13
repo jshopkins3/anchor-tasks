@@ -682,19 +682,53 @@ function loadTriageRules() {
   catch {
     const defaults = {
       autoReadEnabled: true,
-      // Domains that are ALWAYS safe to auto-mark-read (newsletters, marketing, notifications)
+      // Senders/patterns that are ALWAYS safe to auto-mark-read
       blocklist: [
+        // Generic noreply / system addresses
         "noreply@", "no-reply@", "marketing@", "newsletter@", "notifications@",
-        "mailer-daemon@", "donotreply@", "info@bankrate.com", "notifications@github.com",
+        "mailer-daemon@", "donotreply@",
+        // Railway deployment crash notifications
+        "notify.railway.app",
+        // Wholesale lender rate sheets (specific reps/marketing, NOT loan ops)
+        "marsha.russo@elend.com",       // eLend daily rate blasts
+        "dsandusky@lsmortgage.com",     // LS Mortgage promos
+        "tpocomms@kindlending.com",     // Kind Lending rate sheets
+        "cwilliams@bluepointmtg.com",   // BluePoint rate sheets
+        "jbeard@orionlending.com",      // Orion Lending rate promos
+        "e.rocketprotpo.com",           // Rocket Pro TPO marketing
+        "t.rocketprotpo.com",           // Rocket Pro TPO rate blasts
+        "kimberwhite@jnba.com",         // JNBA forecasts
+        // Newsletters & digests
+        "newsletters@housingwire.com",  // HousingWire daily
+        "@substack.com",                // All Substack newsletters
+        "@beehiiv.com",                 // All Beehiiv newsletters
+        "thomsonreuters.com",           // Reuters daily briefing / Morning Bid
+        "ten31@",                       // Mortgage Scoop newsletter
+        // Marketing / promos / tools
+        "email.heygen.com",             // HeyGen AI video promos
+        "help@disputebeast.com",        // Dispute Beast promos
+        "aiautomationsociety.ai",       // AI course promos
+        "info@bankrate.com",
+        "notifications@github.com",
+        // Personal / shopping / apps
+        "help@bbwheels.com",            // BB Wheels
+        "email.rocketmoney.com",        // Rocket Money
+        "@flowkey.com",                 // Piano app
+        "@capitalone.com",              // Capital One alerts
+        // Social media auto-post notifications
+        "lenderhomepage.com",           // LenderHomepage social auto-posts
+        // Mortgage Marketplace AI automated alerts
+        "mortgagemarketplace.ai",
       ],
       // Domains that should NEVER be auto-touched — mortgage-critical
       allowlist: [
         "@myanchormortgage.com", "@mychomeloans.com",
-        // Major lenders
+        // Major lenders (loan ops / pipeline — NOT marketing addresses)
         "@uwm.com", "@newrez.com", "@flagstar.com", "@pennymac.com", "@wellsfargo.com",
         "@chase.com", "@loandepot.com", "@caliberhomeloans.com", "@freedommortgage.com",
         "@nationstar.com", "@mrcooper.com", "@loancare.net", "@bfrg.com",
-        "@mcmcompanies.com", "@arive.com",
+        "@mcmcompanies.com", "@arive.com", "@elend.com", "@kindlending.com",
+        "@rocketmortgage.com",
         // Agencies / title / compliance
         "@fanniemae.com", "@freddiemac.com", "@hud.gov", "@va.gov",
         "@firstam.com", "@stewart.com", "@fidelitynational.com",
@@ -706,6 +740,41 @@ function loadTriageRules() {
     return defaults;
   }
 }
+// Merge new default entries into existing rules file (runs once per deploy)
+let _triageRulesMigrated = false;
+function migrateTriageRules() {
+  if (_triageRulesMigrated) return;
+  _triageRulesMigrated = true;
+  try {
+    if (!fs.existsSync(TRIAGE_RULES_FILE)) return; // will create defaults on first load
+    const existing = JSON.parse(fs.readFileSync(TRIAGE_RULES_FILE, "utf8"));
+    const defaults = loadTriageRules.__defaults || [];
+    // Merge blocklist: add any new default entries not already present
+    const newBlocklist = [
+      "notify.railway.app", "marsha.russo@elend.com", "dsandusky@lsmortgage.com",
+      "tpocomms@kindlending.com", "cwilliams@bluepointmtg.com", "jbeard@orionlending.com",
+      "e.rocketprotpo.com", "t.rocketprotpo.com", "kimberwhite@jnba.com",
+      "newsletters@housingwire.com", "@substack.com", "@beehiiv.com",
+      "thomsonreuters.com", "ten31@", "email.heygen.com", "help@disputebeast.com",
+      "aiautomationsociety.ai", "help@bbwheels.com", "email.rocketmoney.com",
+      "@flowkey.com", "@capitalone.com", "lenderhomepage.com", "mortgagemarketplace.ai",
+    ];
+    const newAllowlist = ["@elend.com", "@kindlending.com", "@rocketmortgage.com"];
+    let changed = false;
+    for (const entry of newBlocklist) {
+      if (!existing.blocklist.includes(entry)) { existing.blocklist.push(entry); changed = true; }
+    }
+    for (const entry of newAllowlist) {
+      if (!existing.allowlist.includes(entry)) { existing.allowlist.push(entry); changed = true; }
+    }
+    if (changed) {
+      fs.writeFileSync(TRIAGE_RULES_FILE, JSON.stringify(existing, null, 2));
+      console.log("[triage] Migrated rules: added new blocklist/allowlist entries");
+    }
+  } catch (e) { console.error("[triage] Migration error:", e.message); }
+}
+migrateTriageRules();
+
 function saveTriageRules(rules) {
   fs.writeFileSync(TRIAGE_RULES_FILE, JSON.stringify(rules, null, 2));
 }
@@ -729,12 +798,7 @@ function shouldAutoRead(email, rules) {
   const snippet = (email.snippet || "");
   const combined = subject + " " + snippet;
 
-  // NEVER auto-read allowlisted senders
-  for (const pattern of (rules.allowlist || [])) {
-    if (from.includes(pattern.toLowerCase())) return { autoRead: false, reason: "allowlisted" };
-  }
-
-  // NEVER auto-read if email contains a loan number (lender correspondence)
+  // NEVER auto-read if email contains a loan number (highest priority safety rail)
   if (rules.loanNumberPattern) {
     const loanRegex = new RegExp(rules.loanNumberPattern);
     if (loanRegex.test(subject) || loanRegex.test(snippet)) {
@@ -742,9 +806,15 @@ function shouldAutoRead(email, rules) {
     }
   }
 
-  // Auto-read if sender matches blocklist
+  // Check blocklist FIRST — specific sender blocks beat domain-level allows
+  // (e.g., marsha.russo@elend.com rate sheets blocked even though @elend.com is allowlisted)
   for (const pattern of (rules.blocklist || [])) {
     if (from.includes(pattern.toLowerCase())) return { autoRead: true, reason: `blocklist: ${pattern}` };
+  }
+
+  // Allowlisted domains — protect everything NOT specifically blocklisted
+  for (const pattern of (rules.allowlist || [])) {
+    if (from.includes(pattern.toLowerCase())) return { autoRead: false, reason: "allowlisted" };
   }
 
   return { autoRead: false, reason: "no_rule_match" };
