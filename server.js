@@ -1843,52 +1843,64 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message }); }
     }
 
-    // Dan: search Drive content (search inside docs, not just by name)
+    // Dan: semantic knowledge search via Pinecone vector DB
     if (urlPath === "/api/dan/knowledge-search" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
       const query = body.query || "";
-      const accessToken = await getGCalAccessToken();
-      if (!accessToken) return json(res, 200, { error: "Drive not connected", results: [] });
+      const source = body.source || "all";
       try {
-        // Use Drive's fullText search to find docs containing the query
-        const searchQ = `fullText contains '${query.replace(/'/g, "\\'")}' and trashed=false`;
-        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(searchQ)}&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&fields=files(id,name,mimeType,webViewLink,modifiedTime)&orderBy=modifiedTime desc&pageSize=${body.maxResults || 10}`;
-        const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-        if (!resp.ok) return json(res, 200, { error: `Drive API: ${resp.status}`, results: [] });
-        const data = await resp.json();
-        const files = (data.files || []).map(f => ({ id: f.id, name: f.name, type: f.mimeType, url: f.webViewLink, modified: f.modifiedTime }));
+        const { Pinecone } = require("@pinecone-database/pinecone");
+        const PINECONE_INDEX_HOST = process.env.PINECONE_INDEX_HOST || "anchor-brain-7c50nhv.svc.aped-4627-b74a.pinecone.io";
+        const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+        const fields = ["chunk_text", "source", "fileName", "fileId", "driveUrl", "folderName",
+                        "agency", "chapter", "section", "sourceUrl", "chunkIndex", "totalChunks"];
+        const topK = body.maxResults || 7;
 
-        // For the top results, try to read a snippet of content
-        const results = [];
-        for (const file of files.slice(0, 5)) {
-          let snippet = "";
-          if (file.type === "application/vnd.google-apps.document" || file.type === "application/vnd.google-apps.spreadsheet") {
-            try {
-              const exportType = file.type.includes("spreadsheet") ? "text/csv" : "text/plain";
-              const expResp = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${exportType}`, {
-                headers: { Authorization: `Bearer ${accessToken}` },
-              });
-              if (expResp.ok) {
-                const full = await expResp.text();
-                // Find the section containing the query
-                const lower = full.toLowerCase();
-                const idx = lower.indexOf(query.toLowerCase());
-                if (idx >= 0) {
-                  const start = Math.max(0, idx - 200);
-                  const end = Math.min(full.length, idx + 500);
-                  snippet = (start > 0 ? "..." : "") + full.substring(start, end) + (end < full.length ? "..." : "");
-                } else {
-                  snippet = full.substring(0, 500) + (full.length > 500 ? "..." : "");
-                }
-              }
-            } catch (e) {}
-          }
-          results.push({ ...file, snippet });
+        let results = [];
+        if (source === "all") {
+          const [docRes, guideRes] = await Promise.all([
+            pc.index({ host: PINECONE_INDEX_HOST, namespace: "documents" }).searchRecords({ query: { inputs: { text: query }, topK }, fields }).catch(() => ({ result: { hits: [] } })),
+            pc.index({ host: PINECONE_INDEX_HOST, namespace: "guidelines" }).searchRecords({ query: { inputs: { text: query }, topK }, fields }).catch(() => ({ result: { hits: [] } })),
+          ]);
+          const allHits = [...(docRes.result?.hits || []), ...(guideRes.result?.hits || [])];
+          results = allHits.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, topK);
+        } else {
+          const namespace = source === "guidelines" ? "guidelines" : "documents";
+          const searchRes = await pc.index({ host: PINECONE_INDEX_HOST, namespace }).searchRecords({ query: { inputs: { text: query }, topK }, fields });
+          results = searchRes.result?.hits || [];
         }
 
-        return json(res, 200, { query, results });
-      } catch (e) { return json(res, 200, { error: e.message, results: [] }); }
+        return json(res, 200, {
+          query,
+          source,
+          found: results.length,
+          results: results.map(hit => ({
+            score: Math.round((hit.score || 0) * 100) / 100,
+            text: hit.fields?.chunk_text || "",
+            source: hit.fields?.source || "",
+            fileName: hit.fields?.fileName || "",
+            agency: hit.fields?.agency || "",
+            chapter: hit.fields?.chapter || "",
+            section: hit.fields?.section || "",
+            driveUrl: hit.fields?.driveUrl || "",
+            sourceUrl: hit.fields?.sourceUrl || "",
+          })),
+        });
+      } catch (e) {
+        console.error("[knowledge-search] Pinecone error:", e.message);
+        // Fallback to old Drive fullText search
+        const accessToken = await getGCalAccessToken();
+        if (!accessToken) return json(res, 200, { error: "Vector search failed and Drive not connected", results: [] });
+        try {
+          const searchQ = `fullText contains '${query.replace(/'/g, "\\'")}' and trashed=false`;
+          const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(searchQ)}&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&fields=files(id,name,mimeType,webViewLink,modifiedTime)&orderBy=modifiedTime desc&pageSize=5`;
+          const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (!resp.ok) return json(res, 200, { error: `Fallback Drive API: ${resp.status}`, results: [] });
+          const data = await resp.json();
+          return json(res, 200, { query, fallback: true, results: (data.files || []).map(f => ({ name: f.name, url: f.webViewLink })) });
+        } catch (e2) { return json(res, 200, { error: e2.message, results: [] }); }
+      }
     }
 
     // Dan: journal access

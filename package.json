@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@pinecone-database/pinecone": "^7.2.0",
     "web-push": "^3.6.7"
   }
 }
