@@ -2553,6 +2553,13 @@
       </div>
     </div>
 
+    <!-- Loan Detail Modal -->
+    <div id="loan-detail-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;" onclick="this.style.display='none'">
+      <div onclick="event.stopPropagation()" style="background:var(--bg-card);border-radius:14px;max-width:700px;width:95%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div id="loan-detail-content" style="padding:24px;">Loading...</div>
+      </div>
+    </div>
+
     <!-- ── Finance section ─────────────────────────────────────── -->
     <div class="section" id="sec-finance">
       <div style="max-width:900px;margin:0 auto;">
@@ -4107,21 +4114,29 @@
         if (mbsResp.ok) {
           const marketData = await mbsResp.json();
           const rates = marketData.rates || marketData;
+          console.log("[hub] MBS raw data:", JSON.stringify(rates).substring(0, 500));
           const mbsEl = document.getElementById("hub-mbs-change");
           const tyrEl = document.getElementById("hub-10yr");
           if (rates && mbsEl) {
-            // Try common field names from BM API
-            const change = rates.priceChange ?? rates.mbs_price_change ?? rates.bpsChange ?? rates.change ?? null;
-            const price = rates.currentPrice ?? rates.mbs_current_price ?? rates.price ?? null;
-            if (change != null) {
+            // Walk all keys to find MBS/treasury values
+            const allKeys = Object.keys(rates);
+            const changeKey = allKeys.find(k => /change|bps|delta/i.test(k));
+            const priceKey = allKeys.find(k => /price|mbs|coupon/i.test(k));
+            const treasuryKey = allKeys.find(k => /treas|10yr|ten.*year|yield/i.test(k));
+            const change = changeKey ? rates[changeKey] : null;
+            const price = priceKey ? rates[priceKey] : null;
+            if (change != null && !isNaN(parseFloat(change))) {
               const c = parseFloat(change);
               mbsEl.textContent = (c >= 0 ? "+" : "") + c.toFixed(2);
               mbsEl.style.color = c >= 0 ? "#22c55e" : "#ef4444";
             } else if (price != null) {
               mbsEl.textContent = price;
+            } else if (rates.note) {
+              mbsEl.textContent = "N/A";
+              mbsEl.style.color = "var(--text-faint)";
             }
-            const tyr = rates.treasury10yr ?? rates.treasury_10yr ?? rates.tenYearYield ?? rates.treasury ?? null;
-            if (tyrEl && tyr != null) tyrEl.textContent = tyr + (String(tyr).includes("%") ? "" : "%");
+            const tyr = treasuryKey ? rates[treasuryKey] : null;
+            if (tyrEl && tyr != null) tyrEl.textContent = String(tyr).includes("%") ? tyr : tyr + "%";
           }
         }
       } catch (e) { console.error("[hub] MBS fetch error:", e); }
@@ -4183,7 +4198,7 @@
           pipeList.innerHTML = sorted.map(loan => {
             const color = stageColors[loan.loanStatus] || "#6366f1";
             const initials = (loan.borrowerFirst?.[0] || "") + (loan.borrowerLast?.[0] || "");
-            return `<div onclick="switchToTab('pipeline')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+            return `<div onclick="showLoanDetail('${loan.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
               <div style="width:32px;height:32px;border-radius:50%;background:${color}20;color:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${initials || "?"}</div>
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${loan.borrowerName || "Unknown"}</div>
@@ -4198,20 +4213,60 @@
       // ── Today's Focus panel ──
       const focusList = document.getElementById("hub-focus-list");
       if (focusList) {
-        if (todayTasks.length === 0) {
-          focusList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">No focus tasks today. Add some from Tasks tab.</div>';
-        } else {
-          focusList.innerHTML = todayTasks.slice(0, 8).map(t => {
-            return `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);">
+        let focusHtml = '';
+
+        // Overdue tasks (red, top priority)
+        const overdue = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date(now.toDateString()) && !t.todayFocus) : [];
+        if (overdue.length > 0) {
+          focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.05em;background:rgba(239,68,68,0.04);">Overdue</div>`;
+          for (const t of overdue.slice(0, 3)) {
+            focusHtml += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);background:rgba(239,68,68,0.02);">
               <button class="task-check" onclick="toggleTask('${t.id}').then(()=>updateHubView())" style="flex-shrink:0;"></button>
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
+                <div style="font-size:10px;color:#ef4444;margin-top:2px;">Was due ${t.due}</div>
+              </div>
+              <span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">OVERDUE</span>
+            </div>`;
+          }
+        }
+
+        // Today's focus tasks
+        if (todayTasks.length > 0) {
+          focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;">Focus</div>`;
+          for (const t of todayTasks.slice(0, 6)) {
+            const projectBadge = t.project === "Active Loans" ? `<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(59,130,246,0.1);color:#3b82f6;margin-left:4px;">${t.project}</span>` : "";
+            focusHtml += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);">
+              <button class="task-check" onclick="toggleTask('${t.id}').then(()=>updateHubView())" style="flex-shrink:0;"></button>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}${projectBadge}</div>
                 ${t.due ? `<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Due ${t.due}</div>` : ""}
               </div>
-              ${t.priority === "high" ? '<span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">HIGH</span>' : ""}
+              ${t.priority === "high" || t.priority === "urgent" ? '<span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">' + t.priority.toUpperCase() + '</span>' : ""}
             </div>`;
-          }).join("");
+          }
         }
+
+        // Next up: upcoming calendar events for today
+        const todayStr = new Date().toISOString().substring(0, 10);
+        const upcomingEvents = (typeof calEvents !== "undefined" ? calEvents : [])
+          .filter(ev => (ev.start || "").substring(0, 10) === todayStr && !ev.allDay)
+          .sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+        if (upcomingEvents.length > 0) {
+          focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.05em;">Today's Meetings</div>`;
+          for (const ev of upcomingEvents.slice(0, 3)) {
+            const time = typeof formatEventTime === "function" ? formatEventTime(ev.start) : "";
+            focusHtml += `<div onclick="switchToTab('calendar')" style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+              <span style="font-size:11px;color:#0ea5e9;font-weight:600;min-width:55px;">${time}</span>
+              <div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ev.title || "")}</div>
+            </div>`;
+          }
+        }
+
+        if (!focusHtml) {
+          focusHtml = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">All clear! No tasks or meetings right now.</div>';
+        }
+        focusList.innerHTML = focusHtml;
       }
 
       // ── Email panel ──
@@ -7675,6 +7730,200 @@
       if (arrow) arrow.style.transform = pipelineCollapsed[stage] ? "rotate(0deg)" : "rotate(90deg)";
     }
 
+    async function showLoanDetail(loanId) {
+      const modal = document.getElementById("loan-detail-modal");
+      const content = document.getElementById("loan-detail-content");
+      modal.style.display = "flex";
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin 0.8s linear infinite;"></div>Loading loan details...</div>';
+
+      const loan = pipelineLoans.find(l => l.id === loanId);
+      if (!loan) {
+        content.innerHTML = '<div style="padding:20px;color:#ef4444;">Loan not found</div>';
+        return;
+      }
+
+      const color = STAGE_COLORS[loan.loanStatus] || "#6366f1";
+      const stageLabel = STAGE_LABELS[loan.loanStatus] || loan.loanStatus;
+      const initials = (loan.borrowerFirst?.[0] || "") + (loan.borrowerLast?.[0] || "");
+
+      // Find related tasks
+      const loanTasks = tasks.filter(t =>
+        t.project === "Active Loans" &&
+        (t.title.toLowerCase().includes(loan.borrowerLast?.toLowerCase() || "___") ||
+         t.title.toLowerCase().includes(loan.borrowerName?.toLowerCase() || "___"))
+      );
+      const openTasks = loanTasks.filter(t => !t.done);
+      const doneTasks = loanTasks.filter(t => t.done);
+
+      // Fetch loan file notes
+      let loanFileNotes = [];
+      try {
+        const lnResp = await fetch(`/api/dan/loan-notes?loanId=${loanId}`);
+        if (lnResp.ok) {
+          const lnData = await lnResp.json();
+          loanFileNotes = lnData.notes || [];
+        }
+      } catch (e) { console.error("[loan-detail] Loan notes fetch error:", e); }
+
+      // Find notes from past reviews
+      let pastNotes = [];
+      try {
+        const revResp = await fetch("/api/pipeline/reviews");
+        if (revResp.ok) {
+          const revData = await revResp.json();
+          for (const review of (revData.reviews || [])) {
+            const loanNote = review.notes?.[loanId];
+            if (loanNote) {
+              const note = typeof loanNote === "object" ? loanNote.note : loanNote;
+              if (note) pastNotes.push({ date: review.date, note, source: "review" });
+            }
+          }
+        }
+      } catch (e) { console.error("[loan-detail] Reviews fetch error:", e); }
+
+      // Merge all notes chronologically
+      const allNotes = [
+        ...loanFileNotes.map(n => ({ date: (n.date || "").substring(0, 10), note: n.note, source: n.source || "loan-note" })),
+        ...pastNotes,
+      ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+      // Compliance checks
+      const alerts = [];
+      const now = new Date();
+      const inProcess = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+      if (inProcess.has(loan.loanStatus)) {
+        if (!loan.closingDate) alerts.push("No closing date set");
+        else {
+          const cd = new Date(loan.closingDate);
+          const daysOut = Math.ceil((cd - now) / 86400000);
+          if (daysOut < 0) alerts.push(`Closing date passed ${Math.abs(daysOut)}d ago`);
+          else if (daysOut <= 5) alerts.push(`Closing in ${daysOut} day${daysOut !== 1 ? "s" : ""}`);
+        }
+      }
+      if (loan.lastStatusChange) {
+        const daysSince = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000);
+        if (daysSince > 14) alerts.push(`No status change in ${daysSince} days`);
+      }
+
+      // Calendar events mentioning borrower
+      const loanEvents = (typeof calEvents !== "undefined" ? calEvents : []).filter(ev =>
+        (ev.title || "").toLowerCase().includes(loan.borrowerLast?.toLowerCase() || "___")
+      );
+
+      let html = `
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:${color}20;color:${color};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;">${initials || "?"}</div>
+          <div style="flex:1;">
+            <div style="font-size:20px;font-weight:700;color:var(--text-heading);">${loan.borrowerName || "Unknown"}</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">
+              ${loan.loanPurpose || ""} &bull; $${(loan.loanAmount || 0).toLocaleString()} &bull; ${loan.loanProgram || ""}
+              ${loan.propertyAddress ? '<br>' + loan.propertyAddress + (loan.propertyCity ? ', ' + loan.propertyCity : '') + (loan.propertyState ? ' ' + loan.propertyState : '') : ''}
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;background:${color}18;color:${color};">${stageLabel}</div>
+            ${loan.displayId ? `<div style="font-size:11px;color:var(--text-faint);margin-top:4px;">${loan.displayId}</div>` : ""}
+            ${loan.closingDate ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Close: ${loan.closingDate}</div>` : ""}
+          </div>
+          <button onclick="document.getElementById('loan-detail-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:20px;color:var(--text-faint);cursor:pointer;">&times;</button>
+        </div>
+      `;
+
+      // Compliance alerts
+      if (alerts.length > 0) {
+        html += `<div style="padding:10px 14px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:16px;">
+          ${alerts.map(a => `<div style="font-size:12px;color:#ef4444;font-weight:600;">&bull; ${a}</div>`).join("")}
+        </div>`;
+      }
+
+      // Quick actions
+      html += `<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <button onclick="document.getElementById('loan-detail-modal').style.display='none';switchToTab('pipeline')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);">Open in Pipeline</button>
+        <button onclick="quickAddLoanTask('${loanId}','${(loan.borrowerName||"").replace(/'/g,"")}')" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);">+ Add Task</button>
+        <button onclick="askDanAboutLoan('${(loan.borrowerName||"").replace(/'/g,"")}')" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:600;">Ask Dan</button>
+      </div>`;
+
+      // Open tasks
+      html += `<div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Open Tasks (${openTasks.length})</div>`;
+      if (openTasks.length === 0) {
+        html += '<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">No open tasks for this loan</div>';
+      } else {
+        for (const t of openTasks) {
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+            <button class="task-check" onclick="toggleTask('${t.id}').then(()=>showLoanDetail('${loanId}'))" style="flex-shrink:0;"></button>
+            <div style="font-size:13px;color:var(--text-heading);flex:1;">${esc(t.title)}</div>
+            ${t.due ? `<span style="font-size:10px;color:var(--text-faint);">${t.due}</span>` : ""}
+            ${t.priority === "high" || t.priority === "urgent" ? '<span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">' + t.priority.toUpperCase() + '</span>' : ""}
+          </div>`;
+        }
+      }
+      html += '</div>';
+
+      // All notes (loan file + reviews)
+      if (allNotes.length > 0) {
+        html += `<div style="margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Notes & History (${allNotes.length})</div>`;
+        for (const pn of allNotes.slice(0, 8)) {
+          const sourceLabel = pn.source === "review" ? "Review" : pn.source === "pipeline-review" ? "Recap" : "Note";
+          const sourceColor = pn.source === "review" ? "#f59e0b" : "#3b82f6";
+          html += `<div style="padding:8px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+              <span style="font-size:10px;color:var(--text-faint);">${pn.date}</span>
+              <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:${sourceColor}15;color:${sourceColor};font-weight:600;">${sourceLabel}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-body);white-space:pre-wrap;">${esc(pn.note)}</div>
+          </div>`;
+        }
+        html += '</div>';
+      }
+
+      // Upcoming events
+      if (loanEvents.length > 0) {
+        html += `<div style="margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Calendar Events</div>`;
+        for (const ev of loanEvents.slice(0, 3)) {
+          const timeLabel = ev.allDay ? "All day" : (typeof formatEventTime === "function" ? formatEventTime(ev.start) : "");
+          html += `<div style="font-size:12px;color:var(--text-body);padding:4px 0;">&bull; ${(ev.start||"").substring(0,10)} ${timeLabel} — ${esc(ev.title)}</div>`;
+        }
+        html += '</div>';
+      }
+
+      // Completed tasks
+      if (doneTasks.length > 0) {
+        html += `<div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Completed (${doneTasks.length})</div>`;
+        for (const t of doneTasks.slice(0, 5)) {
+          html += `<div style="font-size:12px;color:var(--text-faint);padding:3px 0;text-decoration:line-through;">${esc(t.title)}</div>`;
+        }
+        html += '</div>';
+      }
+
+      content.innerHTML = html;
+    }
+
+    function quickAddLoanTask(loanId, borrowerName) {
+      const title = prompt("Task for " + borrowerName + ":");
+      if (!title) return;
+      fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `[${borrowerName}] ${title}`, project: "Active Loans", priority: "normal", todayFocus: true }),
+      }).then(() => { loadTasks().then(() => showLoanDetail(loanId)); });
+    }
+
+    function askDanAboutLoan(borrowerName) {
+      document.getElementById("loan-detail-modal").style.display = "none";
+      switchToTab("hub");
+      // Focus the Dan chat and pre-fill with borrower context
+      const chatInput = document.getElementById("chat-input");
+      if (chatInput) {
+        chatInput.value = `What's the status on the ${borrowerName} loan? Any action items?`;
+        chatInput.focus();
+      }
+    }
+
     function toggleAllPipelineStages() {
       const allCollapsed = Object.values(pipelineCollapsed).length > 0 && Object.values(pipelineCollapsed).every(v => v);
       const stages = document.querySelectorAll('[id^="pipe-stage-"]');
@@ -7740,40 +7989,91 @@
 
     function showReviewSummary(data) {
       const content = document.getElementById("review-summary-content");
-      const tasks = data.tasks || [];
+      const reviewTasks = data.tasks || [];
+      const loanNotes = data.loanNotes || [];
+      const calendarEvents = data.calendarEvents || [];
+      const communications = data.communications || [];
       let html = `<p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">${data.summary || 'Review processed.'}</p>`;
 
-      if (tasks.length > 0) {
-        html += '<div style="font-size:13px;font-weight:600;color:var(--text-heading);margin-bottom:8px;">Captured Items:</div>';
-        for (const task of tasks) {
+      // Tasks
+      if (reviewTasks.length > 0) {
+        html += `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Tasks (${reviewTasks.length})</div>`;
+        for (const task of reviewTasks) {
           const catIcon = task.category === "escalation" ? "&#9888;" : task.category === "followup" ? "&#128337;" : "&#9745;";
           const catColor = task.category === "escalation" ? "#ef4444" : task.category === "followup" ? "#f59e0b" : "var(--navy)";
-          html += `
-            <div style="display:flex;align-items:start;gap:8px;padding:8px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
-              <span style="color:${catColor};font-size:14px;">${catIcon}</span>
-              <div>
-                <div style="font-size:13px;color:var(--text-primary);">${task.title}</div>
-                <div style="font-size:11px;color:var(--text-secondary);">
-                  ${task.assignee || ''} ${task.due ? '&bull; Due: ' + task.due : ''} ${task.priority === 'urgent' ? '&bull; <span style="color:#ef4444;font-weight:600;">URGENT</span>' : ''}
-                </div>
-              </div>
+          html += `<div style="display:flex;align-items:start;gap:8px;padding:8px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
+            <span style="color:${catColor};font-size:14px;">${catIcon}</span>
+            <div>
+              <div style="font-size:13px;color:var(--text-primary);">${task.title}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">${task.assignee || ''} ${task.due ? '&bull; Due: ' + task.due : ''} ${task.priority === 'urgent' ? '&bull; <span style="color:#ef4444;font-weight:600;">URGENT</span>' : ''}</div>
             </div>
-          `;
+          </div>`;
         }
       }
 
+      // Loan notes to record
+      if (loanNotes.length > 0) {
+        html += `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin:12px 0 6px;">Loan File Notes (${loanNotes.length})</div>`;
+        for (const ln of loanNotes) {
+          html += `<div style="display:flex;align-items:start;gap:8px;padding:8px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
+            <span style="color:#3b82f6;font-size:14px;">&#128196;</span>
+            <div>
+              <div style="font-size:13px;color:var(--text-primary);font-weight:600;">${ln.borrowerName || 'Loan'}</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">${ln.note}</div>
+            </div>
+          </div>`;
+        }
+      }
+
+      // Calendar events
+      if (calendarEvents.length > 0) {
+        html += `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin:12px 0 6px;">Calendar Events (${calendarEvents.length})</div>`;
+        for (const ce of calendarEvents) {
+          html += `<div style="display:flex;align-items:start;gap:8px;padding:8px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
+            <span style="color:#0ea5e9;font-size:14px;">&#128197;</span>
+            <div>
+              <div style="font-size:13px;color:var(--text-primary);">${ce.title}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">${ce.date} ${ce.time || 'All day'} ${ce.description ? '&bull; ' + ce.description : ''}</div>
+            </div>
+          </div>`;
+        }
+      }
+
+      // Communications
+      if (communications.length > 0) {
+        html += `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin:12px 0 6px;">Draft Communications (${communications.length})</div>`;
+        for (const comm of communications) {
+          html += `<div style="padding:8px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <span style="color:#8b5cf6;font-size:14px;">&#9993;</span>
+              <span style="font-size:13px;font-weight:600;color:var(--text-primary);">${comm.subject || 'Draft'}</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">To: ${comm.to} (${comm.borrowerName || ''})</div>
+            <div style="font-size:12px;color:var(--text-body);white-space:pre-wrap;background:var(--bg-card);padding:8px;border-radius:4px;max-height:80px;overflow-y:auto;">${comm.body || ''}</div>
+          </div>`;
+        }
+      }
+
+      const totalActions = reviewTasks.length + loanNotes.length + calendarEvents.length + communications.length;
       content.innerHTML = html;
+
+      // Update button text
+      const btn = document.getElementById("review-create-tasks-btn");
+      if (btn) btn.textContent = totalActions > 0 ? `Execute All Actions (${totalActions})` : "Close";
+
       document.getElementById("pipeline-review-summary").style.display = "flex";
     }
 
     async function createTasksFromReview() {
-      if (!pipelineReviewData || !pipelineReviewData.tasks) return;
+      if (!pipelineReviewData) return;
       const btn = document.getElementById("review-create-tasks-btn");
-      btn.textContent = "Creating...";
+      btn.textContent = "Executing...";
       btn.disabled = true;
 
-      let created = 0;
-      for (const task of pipelineReviewData.tasks) {
+      const results = { tasks: 0, notes: 0, events: 0, comms: 0 };
+
+      // 1. Create tasks
+      for (const task of (pipelineReviewData.tasks || [])) {
         try {
           await fetch("/api/tasks", {
             method: "POST",
@@ -7788,21 +8088,73 @@
               important: task.category === "escalation",
             }),
           });
-          created++;
-        } catch (e) {
-          console.error("Failed to create task:", e);
-        }
+          results.tasks++;
+        } catch (e) { console.error("Failed to create task:", e); }
       }
 
-      btn.textContent = `Created ${created} task(s)!`;
-      // Clear notes after successful creation
+      // 2. Record loan notes (via Dan's endpoint)
+      for (const ln of (pipelineReviewData.loanNotes || [])) {
+        try {
+          await fetch("/api/dan/loan-note", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ariveId: ln.loanId, note: ln.note }),
+          });
+          results.notes++;
+        } catch (e) { console.error("Failed to record loan note:", e); }
+      }
+
+      // 3. Create calendar events
+      for (const ce of (pipelineReviewData.calendarEvents || [])) {
+        try {
+          await fetch("/api/dan/calendar-create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: ce.title,
+              date: ce.date,
+              time: ce.time || "",
+              duration: ce.duration || 30,
+              description: ce.description || "",
+            }),
+          });
+          results.events++;
+        } catch (e) { console.error("Failed to create calendar event:", e); }
+      }
+
+      // 4. Draft communications (save as email drafts)
+      for (const comm of (pipelineReviewData.communications || [])) {
+        try {
+          await fetch("/api/gmail-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject: comm.subject || "",
+              body: comm.body || "",
+              to: "", // Leave blank — user fills in actual address
+              note: `Draft for ${comm.to} re: ${comm.borrowerName || "loan"}`,
+            }),
+          });
+          results.comms++;
+        } catch (e) { console.error("Failed to create draft:", e); }
+      }
+
+      const parts = [];
+      if (results.tasks) parts.push(`${results.tasks} task(s)`);
+      if (results.notes) parts.push(`${results.notes} loan note(s)`);
+      if (results.events) parts.push(`${results.events} event(s)`);
+      if (results.comms) parts.push(`${results.comms} draft(s)`);
+      btn.textContent = parts.length > 0 ? `Done! ${parts.join(", ")}` : "Done!";
+
       pipelineNotes = {};
+      await loadTasks();
       setTimeout(() => {
         document.getElementById("pipeline-review-summary").style.display = "none";
-        btn.textContent = "Create Tasks";
+        btn.textContent = "Execute All Actions";
         btn.disabled = false;
         renderPipelineLoans();
-      }, 2000);
+        renderAll();
+      }, 3000);
     }
 
     // ── Leads Management ──

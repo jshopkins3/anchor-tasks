@@ -3556,13 +3556,13 @@ const server = http.createServer(async (req, res) => {
       }
 
       try {
-        const prompt = `You are Dan, John's mortgage business AI assistant. Parse these pipeline review notes into structured tasks and follow-ups.
+        const prompt = `You are Dan, John's mortgage business AI assistant at Anchor Mortgage Group. Parse these pipeline review notes into structured actions.
 
-For each note, extract:
-- Actionable tasks (things to do)
-- Follow-ups (things to check on later)
-- Status updates (changes to communicate)
-- Escalations (urgent items)
+For each note, extract ALL of the following that apply:
+1. **Tasks** — actionable items (things to do, follow-ups, escalations)
+2. **Loan Notes** — anything that should be recorded on the loan file for the record (status updates, decisions, key info)
+3. **Calendar Events** — any meetings, deadlines, or follow-up dates mentioned
+4. **Communications** — emails or calls that need to happen (draft the email if possible)
 
 Notes from pipeline review:
 ${notesText}
@@ -3570,12 +3570,21 @@ ${notesText}
 Return a JSON object with:
 {
   "tasks": [
-    { "title": "task description", "assignee": "John or team member name", "due": "YYYY-MM-DD or empty", "priority": "low|normal|high|urgent", "project": "Active Loans", "category": "task|followup|escalation", "loanId": "loan id if relevant" }
+    { "title": "task description", "assignee": "John", "due": "YYYY-MM-DD or empty", "priority": "low|normal|high|urgent", "project": "Active Loans", "category": "task|followup|escalation", "loanId": "loan id if relevant" }
+  ],
+  "loanNotes": [
+    { "loanId": "the loan id", "borrowerName": "name", "note": "what to record on the loan file" }
+  ],
+  "calendarEvents": [
+    { "title": "event title", "date": "YYYY-MM-DD", "time": "HH:MM or empty for all-day", "duration": 30, "loanId": "loan id if relevant", "description": "context" }
+  ],
+  "communications": [
+    { "type": "email", "to": "recipient description (e.g. 'borrower' or 'agent' or specific name)", "subject": "email subject", "body": "draft email body", "loanId": "loan id", "borrowerName": "name" }
   ],
   "summary": "Brief summary of what was captured from this review"
 }
 
-Be specific and actionable. Use borrower names in task titles. If a note mentions a date, calculate the due date. Today is ${new Date().toISOString().substring(0, 10)}.`;
+Be specific and actionable. Use borrower names everywhere. If a note mentions a date, calculate the actual date. Today is ${new Date().toISOString().substring(0, 10)}. Only include communications if the notes clearly indicate one is needed (e.g. "email the borrower about...", "call the agent", "let them know..."). Draft emails in John's voice — direct, professional, no fluff.`;
 
         const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
@@ -3625,6 +3634,37 @@ Be specific and actionable. Use borrower names in task titles. If a note mention
         }));
         return json(res, 200, { tasks: fallbackTasks, summary: `Created ${fallbackTasks.length} task(s) from pipeline notes.` });
       }
+    }
+
+    /* ── Loan Notes API ──────────────────────────────────────── */
+    const LOAN_NOTES_FILE = path.join(DATA_DIR, "loan-notes.json");
+    function loadLoanNotes() {
+      try { return JSON.parse(fs.readFileSync(LOAN_NOTES_FILE, "utf8")); }
+      catch { return {}; } // { loanId: [ { note, date, source } ] }
+    }
+    function saveLoanNotes(data) { fs.writeFileSync(LOAN_NOTES_FILE, JSON.stringify(data, null, 2)); }
+
+    if (urlPath === "/api/dan/loan-note" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.ariveId || !body.note) return json(res, 400, { error: "ariveId and note required" });
+      const notes = loadLoanNotes();
+      if (!notes[body.ariveId]) notes[body.ariveId] = [];
+      notes[body.ariveId].unshift({
+        note: String(body.note).substring(0, 2000),
+        date: new Date().toISOString(),
+        source: "pipeline-review",
+      });
+      saveLoanNotes(notes);
+      return json(res, 201, { ok: true });
+    }
+
+    if (urlPath === "/api/dan/loan-notes" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const loanId = url.searchParams.get("loanId");
+      if (!loanId) return json(res, 400, { error: "loanId required" });
+      const notes = loadLoanNotes();
+      return json(res, 200, { notes: notes[loanId] || [] });
     }
 
     /* ── Leads API ────────────────────────────────────────────── */
