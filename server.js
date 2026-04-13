@@ -3259,14 +3259,19 @@ const server = http.createServer(async (req, res) => {
         // Fetch metadata for each (batch in groups of 20 to avoid rate limits)
         const emails = (await Promise.all(messages.slice(0, 100).map(async m => {
           try {
-            const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`, {
+            const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Subject&metadataHeaders=Date`, {
               headers: { Authorization: `Bearer ${accessToken}` },
             });
             if (!r.ok) return null;
             const msg = await r.json();
             const h = msg.payload?.headers || [];
             const getH = n => (h.find(x => x.name.toLowerCase() === n.toLowerCase()) || {}).value || "";
-            return { id: msg.id, threadId: msg.threadId, from: getH("From"), to: getH("To"), subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "" };
+            const cc = getH("Cc");
+            const toField = getH("To");
+            // Detect if user is CC'd (not in To, but in Cc)
+            const userEmails = ["john@myanchormortgage.com", "john.hopkins@mychomeloans.com"];
+            const isCC = cc && userEmails.some(e => cc.toLowerCase().includes(e)) && !userEmails.some(e => toField.toLowerCase().includes(e));
+            return { id: msg.id, threadId: msg.threadId, from: getH("From"), to: toField, cc, isCC, subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "" };
           } catch { return null; }
         }))).filter(Boolean);
         if (!emails.length) {
@@ -3284,7 +3289,7 @@ const server = http.createServer(async (req, res) => {
         }
         // Send up to 50 emails to Claude for AI categorization (balances speed vs coverage)
         const aiEmails = emails.slice(0, 50);
-        const emailSummaries = aiEmails.map((e, i) => `${i + 1}. From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
+        const emailSummaries = aiEmails.map((e, i) => `${i + 1}. ${e.isCC ? "[CC] " : ""}From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
         const triageResp = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
@@ -3296,9 +3301,9 @@ const server = http.createServer(async (req, res) => {
               content: `You are an email triage assistant for a mortgage loan officer. Categorize each email into exactly ONE category. Return ONLY valid JSON, no markdown.
 
 Categories:
-- "urgent": Client deadlines, lender conditions due, compliance items, time-sensitive (red)
-- "needs_response": Team questions, partner emails, needs the user's input (yellow)
-- "fyi": Newsletters, automated notifications, CC'd threads, informational (green)
+- "urgent": Client deadlines, lender conditions due, compliance items, time-sensitive, anything needing immediate action (red)
+- "needs_response": Team questions, partner emails, needs the user's input but not time-critical (yellow)
+- "fyi": Newsletters, automated notifications, informational, CC'd threads where user doesn't need to act (green). Emails marked [CC] should almost always be "fyi" unless they explicitly @mention or ask for the user by name.
 - "archive": Marketing spam, old threads, no action needed (gray)
 
 Emails:
@@ -3410,6 +3415,23 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
           autoReadEmails: autoReadResults.map(e => ({ from: e.from, subject: e.subject, reason: e.reason })),
         };
         triageCache[ue || "_default"] = { result, time: Date.now() };
+
+        // Push notification for urgent emails (only on fresh triage, not cached)
+        if (categories.urgent.length > 0) {
+          const urgentCount = categories.urgent.length;
+          const topUrgent = categories.urgent[0];
+          const fromName = (topUrgent.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
+          const pushBody = urgentCount === 1
+            ? `${fromName}: ${topUrgent.subject}`
+            : `${urgentCount} urgent — ${fromName}: ${topUrgent.subject}`;
+          sendPushToAll({
+            title: `🔴 Urgent Email${urgentCount > 1 ? "s" : ""}`,
+            body: pushBody,
+            url: "/",
+            tag: "email-urgent", // replaces previous urgent notification
+          }).catch(e => console.error("[email-triage] Push error:", e.message));
+        }
+
         return json(res, 200, result);
       } catch (e) {
         console.error("[email-triage] Error:", e.message);
