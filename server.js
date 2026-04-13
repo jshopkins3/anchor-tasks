@@ -776,7 +776,7 @@ async function gmailGetInbox(userEmail) {
   try {
     // List unread messages
     const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
-      new URLSearchParams({ q: "is:unread in:inbox", maxResults: "30" }).toString();
+      new URLSearchParams({ q: "is:unread in:inbox", maxResults: "100" }).toString();
     const listResp = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!listResp.ok) {
       const errText = await listResp.text();
@@ -791,7 +791,7 @@ async function gmailGetInbox(userEmail) {
     if (!messages.length) return [];
 
     // Fetch metadata for each
-    const emails = await Promise.all(messages.slice(0, 30).map(async m => {
+    const emails = await Promise.all(messages.slice(0, 100).map(async m => {
       const msgUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`;
       const msgResp = await fetch(msgUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
       if (!msgResp.ok) return null;
@@ -1992,7 +1992,7 @@ const server = http.createServer(async (req, res) => {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
       const query = body.query || "is:unread in:inbox";
-      const maxResults = Math.min(body.maxResults || 30, 50);
+      const maxResults = Math.min(body.maxResults || 50, 100);
       const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
       try {
@@ -3143,8 +3143,8 @@ const server = http.createServer(async (req, res) => {
       const accessToken = await getGCalAccessToken(ue);
       if (!accessToken) return json(res, 200, { categories: [], error: "Gmail not connected" });
       try {
-        // Fetch up to 20 unread inbox emails
-        const listResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: "is:unread in:inbox", maxResults: "20" })}`, {
+        // Fetch up to 100 unread inbox emails
+        const listResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: "is:unread in:inbox", maxResults: "100" })}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!listResp.ok) return json(res, 200, { categories: [], error: "Gmail API error" });
@@ -3155,8 +3155,8 @@ const server = http.createServer(async (req, res) => {
           triageCache[ue || "_default"] = { result, time: Date.now() };
           return json(res, 200, result);
         }
-        // Fetch metadata for each
-        const emails = (await Promise.all(messages.slice(0, 20).map(async m => {
+        // Fetch metadata for each (batch in groups of 20 to avoid rate limits)
+        const emails = (await Promise.all(messages.slice(0, 100).map(async m => {
           try {
             const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`, {
               headers: { Authorization: `Bearer ${accessToken}` },
@@ -3181,13 +3181,15 @@ const server = http.createServer(async (req, res) => {
           triageCache[ue || "_default"] = { result, time: Date.now() };
           return json(res, 200, result);
         }
-        const emailSummaries = emails.map((e, i) => `${i + 1}. From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
+        // Send up to 50 emails to Claude for AI categorization (balances speed vs coverage)
+        const aiEmails = emails.slice(0, 50);
+        const emailSummaries = aiEmails.map((e, i) => `${i + 1}. From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
         const triageResp = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514",
-            max_tokens: 1024,
+            max_tokens: 2048,
             messages: [{
               role: "user",
               content: `You are an email triage assistant for a mortgage loan officer. Categorize each email into exactly ONE category. Return ONLY valid JSON, no markdown.
@@ -3206,6 +3208,7 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
           }),
         });
         let categories = { urgent: [], needs_response: [], fyi: [], archive: [] };
+        const aiCategorizedIds = new Set();
         if (triageResp.ok) {
           const triageData = await triageResp.json();
           const text = (triageData.content || []).find(c => c.type === "text")?.text || "{}";
@@ -3213,17 +3216,41 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
             const parsed = JSON.parse(text.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
             for (const item of (parsed.items || [])) {
               const idx = (item.index || 1) - 1;
-              if (idx >= 0 && idx < emails.length && categories[item.category]) {
-                categories[item.category].push({ ...emails[idx], summary: item.summary || "" });
+              if (idx >= 0 && idx < aiEmails.length && categories[item.category]) {
+                categories[item.category].push({ ...aiEmails[idx], summary: item.summary || "" });
+                aiCategorizedIds.add(aiEmails[idx].id);
               }
             }
           } catch (parseErr) {
             console.error("[email-triage] Parse error:", parseErr.message);
-            // Fallback: all as needs_response
-            categories.needs_response = emails;
+            categories.needs_response = [...aiEmails];
+            aiEmails.forEach(e => aiCategorizedIds.add(e.id));
           }
         } else {
-          categories.needs_response = emails;
+          categories.needs_response = [...aiEmails];
+          aiEmails.forEach(e => aiCategorizedIds.add(e.id));
+        }
+        // Categorize overflow emails (not sent to Claude) using rule-based heuristics
+        const overflowEmails = emails.filter(e => !aiCategorizedIds.has(e.id));
+        if (overflowEmails.length > 0) {
+          console.log(`[email-triage] Rule-categorizing ${overflowEmails.length} overflow emails`);
+          const rules = loadTriageRules();
+          for (const e of overflowEmails) {
+            const from = (e.from || "").toLowerCase();
+            const text = ((e.subject || "") + " " + (e.snippet || "")).toLowerCase();
+            // Allowlisted senders → needs_response
+            const isAllowlisted = (rules.allowlist || []).some(p => from.includes(p.toLowerCase()));
+            // Blocklisted senders → archive
+            const isBlocklisted = (rules.blocklist || []).some(p => from.includes(p.toLowerCase()));
+            // Keyword-based urgency detection
+            const isUrgent = /urgent|asap|immediately|critical|time.sensitive|expir|deadline|past.due|final.notice/i.test(text);
+            const isMortgage = /closing|conditions|ctc|clear.to.close|funding|appraisal|title|uwm|loancare|underwriting/i.test(text);
+            if (isBlocklisted) { categories.archive.push({ ...e, summary: "auto: blocklisted sender" }); }
+            else if (isUrgent) { categories.urgent.push({ ...e, summary: "auto: urgent keywords" }); }
+            else if (isAllowlisted || isMortgage) { categories.needs_response.push({ ...e, summary: "auto: work email" }); }
+            else if (/noreply|no-reply|newsletter|unsubscribe|marketing|notification/i.test(from + " " + text)) { categories.fyi.push({ ...e, summary: "auto: notification" }); }
+            else { categories.needs_response.push({ ...e, summary: "auto: uncategorized" }); }
+          }
         }
         // Auto-read: check blocklist rules BEFORE building result
         const rules = loadTriageRules();
