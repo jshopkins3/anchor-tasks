@@ -891,7 +891,10 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     if (to) rawLines.push(`To: ${to}`);
     if (cc) rawLines.push(`Cc: ${cc}`);
     if (bcc) rawLines.push(`Bcc: ${bcc}`);
-    rawLines.push(`Subject: ${subject || ""}`);
+    // RFC 2047 encode subject if it contains non-ASCII characters
+    const subjectStr = subject || "";
+    const hasNonAscii = /[^\x00-\x7F]/.test(subjectStr);
+    rawLines.push(hasNonAscii ? `Subject: =?UTF-8?B?${Buffer.from(subjectStr, "utf8").toString("base64")}?=` : `Subject: ${subjectStr}`);
     if (inReplyTo) rawLines.push(`In-Reply-To: ${inReplyTo}`);
     if (references) rawLines.push(`References: ${references}`);
     rawLines.push(`MIME-Version: 1.0`);
@@ -4040,7 +4043,7 @@ Be specific and actionable. Use borrower names everywhere. If a note mentions a 
       const docsListHtml = docs.map(d => `<li style="margin-bottom:4px;">${d}</li>`).join("");
       const docsListText = docs.map(d => `  - ${d}`).join("\n");
 
-      const subject = `Your Mortgage Application — Let's Get Started, ${firstName}!`;
+      const subject = `Your Mortgage Application - Let's Get Started, ${firstName}!`;
 
       const bodyText = `Hi ${firstName},
 
