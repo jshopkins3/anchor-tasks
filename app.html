@@ -7986,29 +7986,103 @@
         const data = await resp.json();
         const reviews = data.reviews || [];
         if (reviews.length === 0) {
-          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No reviews yet.</div>';
+          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No reviews yet. Complete your first pipeline review to see history.</div>';
           return;
         }
+
+        // Group by week
         let html = '';
+        let currentWeek = null;
         for (const review of reviews) {
+          const d = new Date(review.date + "T12:00:00");
+          const weekStart = new Date(d); weekStart.setDate(d.getDate() - d.getDay());
+          const weekLabel = `Week of ${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+          if (weekLabel !== currentWeek) {
+            if (currentWeek) html += '</div>';
+            currentWeek = weekLabel;
+            html += `<div style="margin-bottom:16px;">
+              <div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">${weekLabel}</div>`;
+          }
+
           const noteCount = Object.keys(review.notes || {}).length;
           const taskCount = (review.tasksCreated || []).length;
+          const dayLabel = d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+
+          // Loan notes detail
+          let loanNotesHtml = '';
+          for (const [loanId, info] of Object.entries(review.notes || {})) {
+            const name = typeof info === 'object' ? info.borrowerName : loanId;
+            const note = typeof info === 'object' ? info.note : info;
+            const status = typeof info === 'object' ? info.loanStatus : '';
+            const amount = typeof info === 'object' && info.loanAmount ? `$${info.loanAmount.toLocaleString()}` : '';
+            loanNotesHtml += `<div style="padding:6px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
+              <div style="font-size:12px;font-weight:600;color:var(--text-heading);">${name || 'Unknown'} ${amount ? '&bull; ' + amount : ''} ${status ? '<span style="font-size:10px;color:var(--text-faint);">' + status + '</span>' : ''}</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:pre-wrap;">${note || ''}</div>
+            </div>`;
+          }
+
+          // Tasks created
+          let tasksHtml = '';
+          if ((review.tasksCreated || []).length > 0) {
+            tasksHtml = review.tasksCreated.map(t => `<div style="font-size:12px;color:var(--text-secondary);padding:2px 0;">&bull; ${t}</div>`).join('');
+          }
+
           html += `
-            <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;margin-bottom:8px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:var(--text-heading);">${review.date}</div>
-                  <div style="font-size:12px;color:var(--text-secondary);">${noteCount} loan(s) reviewed &bull; ${taskCount} task(s) created</div>
+            <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;margin-bottom:8px;overflow:hidden;">
+              <div onclick="toggleReviewDetail('${review.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:14px;cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="font-size:11px;color:var(--text-secondary);transition:transform 0.2s;transform:rotate(0deg);display:inline-block;" id="review-arrow-${review.id}">&#9654;</span>
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:var(--text-heading);">${dayLabel}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);">${noteCount} loan(s) &bull; ${taskCount} task(s) created</div>
+                  </div>
                 </div>
-                <div style="font-size:12px;color:var(--text-faint);">${review.summary ? review.summary.substring(0, 80) + '...' : ''}</div>
+                <div style="font-size:12px;color:var(--text-faint);max-width:40%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${review.summary || ''}</div>
+              </div>
+              <div id="review-detail-${review.id}" style="display:none;padding:0 14px 14px;border-top:1px solid var(--border);">
+                ${review.summary ? `<div style="font-size:13px;color:var(--text-body);padding:12px 0 8px;line-height:1.5;">${review.summary}</div>` : ''}
+                ${loanNotesHtml ? `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Loan Notes</div>${loanNotesHtml}</div>` : ''}
+                ${tasksHtml ? `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Tasks Created</div>${tasksHtml}</div>` : ''}
+                <div style="margin-top:8px;">
+                  <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Call Notes</div>
+                  <textarea
+                    id="review-callnotes-${review.id}"
+                    placeholder="Add notes from your call here..."
+                    rows="3"
+                    style="width:100%;padding:8px 10px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;"
+                    oninput="debounceSaveCallNotes('${review.id}', this.value)"
+                  >${review.callNotes || ''}</textarea>
+                </div>
               </div>
             </div>
           `;
         }
+        if (currentWeek) html += '</div>';
         container.innerHTML = html;
       } catch (e) {
         container.innerHTML = `<div style="color:#ef4444;padding:20px;">Error loading reviews: ${e.message}</div>`;
       }
+    }
+
+    function toggleReviewDetail(reviewId) {
+      const el = document.getElementById(`review-detail-${reviewId}`);
+      const arrow = document.getElementById(`review-arrow-${reviewId}`);
+      if (!el) return;
+      const show = el.style.display === "none";
+      el.style.display = show ? "block" : "none";
+      if (arrow) arrow.style.transform = show ? "rotate(90deg)" : "rotate(0deg)";
+    }
+
+    let _callNotesTimers = {};
+    function debounceSaveCallNotes(reviewId, value) {
+      clearTimeout(_callNotesTimers[reviewId]);
+      _callNotesTimers[reviewId] = setTimeout(() => {
+        fetch(`/api/pipeline/reviews/${reviewId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ callNotes: value }),
+        }).catch(e => console.error("[reviews] Save call notes error:", e));
+      }, 800);
     }
 
     /* ── Notebook ──────────────────────────────────────────── */

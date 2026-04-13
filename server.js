@@ -3489,12 +3489,27 @@ const server = http.createServer(async (req, res) => {
         notes: body.notes || {}, // { loanId: "free-form text", ... }
         summary: body.summary || null,
         tasksCreated: body.tasksCreated || [],
+        callNotes: "", // editable notes added during/after calls
       };
       data.reviews.unshift(review);
       // Keep last 52 reviews (one year of weeklies)
       if (data.reviews.length > 52) data.reviews = data.reviews.slice(0, 52);
       savePipelineReviews(data);
       return json(res, 201, { review });
+    }
+
+    // Update a pipeline review (add call notes)
+    const reviewPatchMatch = urlPath.match(/^\/api\/pipeline\/reviews\/([^/]+)$/);
+    if (reviewPatchMatch && req.method === "PATCH") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const reviewId = reviewPatchMatch[1];
+      const body = JSON.parse(await readBody(req));
+      const data = loadPipelineReviews();
+      const review = data.reviews.find(r => r.id === reviewId);
+      if (!review) return json(res, 404, { error: "Review not found" });
+      if (body.callNotes !== undefined) review.callNotes = String(body.callNotes).substring(0, 5000);
+      savePipelineReviews(data);
+      return json(res, 200, { review });
     }
 
     // Parse review notes into tasks (AI-powered via Anthropic API)
