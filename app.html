@@ -2452,6 +2452,7 @@
             <p style="color:var(--text-secondary);font-size:13px;margin:4px 0 0;">Review active loans, track leads, type notes — Dan handles the rest.</p>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="toggleAllPipelineStages()" id="pipeline-collapse-btn" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;color:var(--text-secondary);">Collapse All</button>
             <button onclick="loadPipelineLoans(true)" id="pipeline-refresh-btn" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text-primary);">&#8635; Refresh</button>
             <button onclick="completePipelineReview()" id="pipeline-complete-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:none;">Complete Review &#10003;</button>
           </div>
@@ -4104,17 +4105,24 @@
       try {
         const mbsResp = await fetch("/api/market-data");
         if (mbsResp.ok) {
-          const mbs = await mbsResp.json();
+          const marketData = await mbsResp.json();
+          const rates = marketData.rates || marketData;
           const mbsEl = document.getElementById("hub-mbs-change");
           const tyrEl = document.getElementById("hub-10yr");
-          if (mbsEl && mbs.mbs_price_change != null) {
-            const change = parseFloat(mbs.mbs_price_change);
-            mbsEl.textContent = (change >= 0 ? "+" : "") + change.toFixed(2);
-            mbsEl.style.color = change >= 0 ? "#22c55e" : "#ef4444";
-          } else if (mbsEl && mbs.mbs_current_price) {
-            mbsEl.textContent = mbs.mbs_current_price;
+          if (rates && mbsEl) {
+            // Try common field names from BM API
+            const change = rates.priceChange ?? rates.mbs_price_change ?? rates.bpsChange ?? rates.change ?? null;
+            const price = rates.currentPrice ?? rates.mbs_current_price ?? rates.price ?? null;
+            if (change != null) {
+              const c = parseFloat(change);
+              mbsEl.textContent = (c >= 0 ? "+" : "") + c.toFixed(2);
+              mbsEl.style.color = c >= 0 ? "#22c55e" : "#ef4444";
+            } else if (price != null) {
+              mbsEl.textContent = price;
+            }
+            const tyr = rates.treasury10yr ?? rates.treasury_10yr ?? rates.tenYearYield ?? rates.treasury ?? null;
+            if (tyrEl && tyr != null) tyrEl.textContent = tyr + (String(tyr).includes("%") ? "" : "%");
           }
-          if (tyrEl && mbs.treasury_10yr) tyrEl.textContent = mbs.treasury_10yr + "%";
         }
       } catch (e) { console.error("[hub] MBS fetch error:", e); }
 
@@ -7490,6 +7498,7 @@
     /* ── Pipeline Review ──────────────────────────────────── */
     let pipelineLoans = [];
     let pipelineNotes = {}; // { loanId: "note text" }
+    let pipelineCollapsed = {}; // { stage: true/false }
     let pipelineLeads = []; // stored in localStorage
     let pipelineReviewData = null; // parsed review result
     let pipelineLoaded = false;
@@ -7597,14 +7606,18 @@
       let html = '';
       for (const [stage, loans] of Object.entries(grouped)) {
         const color = STAGE_COLORS[stage] || "#6366f1";
+        const stageId = `pipe-stage-${stage}`;
+        const isCollapsed = pipelineCollapsed[stage] || false;
         html += `
           <div style="margin-bottom:8px;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div onclick="togglePipelineStage('${stage}')" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;user-select:none;padding:6px 8px;border-radius:8px;transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+              <span style="font-size:11px;color:var(--text-secondary);transition:transform 0.2s;transform:rotate(${isCollapsed ? '0' : '90'}deg);display:inline-block;" id="pipe-arrow-${stage}">&#9654;</span>
               <div style="width:10px;height:10px;border-radius:50%;background:${color};"></div>
               <h3 style="font-size:14px;font-weight:600;color:var(--text-heading);margin:0;">${STAGE_LABELS[stage] || stage}</h3>
               <span style="font-size:12px;color:var(--text-secondary);">(${loans.length})</span>
+              <span style="font-size:11px;color:var(--text-faint);margin-left:auto;">$${loans.reduce((s,l) => s + (l.loanAmount||0), 0).toLocaleString()}</span>
             </div>
-            <div style="display:flex;flex-direction:column;gap:8px;margin-left:18px;">
+            <div id="${stageId}" style="display:${isCollapsed ? 'none' : 'flex'};flex-direction:column;gap:8px;margin-left:18px;">
         `;
 
         for (const loan of loans) {
@@ -7652,6 +7665,28 @@
       pipelineNotes[loanId] = value;
       document.getElementById("pipeline-complete-btn").style.display =
         Object.values(pipelineNotes).some(n => n.trim()) ? "block" : "none";
+    }
+
+    function togglePipelineStage(stage) {
+      pipelineCollapsed[stage] = !pipelineCollapsed[stage];
+      const el = document.getElementById(`pipe-stage-${stage}`);
+      const arrow = document.getElementById(`pipe-arrow-${stage}`);
+      if (el) el.style.display = pipelineCollapsed[stage] ? "none" : "flex";
+      if (arrow) arrow.style.transform = pipelineCollapsed[stage] ? "rotate(0deg)" : "rotate(90deg)";
+    }
+
+    function toggleAllPipelineStages() {
+      const allCollapsed = Object.values(pipelineCollapsed).length > 0 && Object.values(pipelineCollapsed).every(v => v);
+      const stages = document.querySelectorAll('[id^="pipe-stage-"]');
+      stages.forEach(el => {
+        const stage = el.id.replace("pipe-stage-", "");
+        pipelineCollapsed[stage] = !allCollapsed;
+        el.style.display = allCollapsed ? "flex" : "none";
+        const arrow = document.getElementById(`pipe-arrow-${stage}`);
+        if (arrow) arrow.style.transform = allCollapsed ? "rotate(90deg)" : "rotate(0deg)";
+      });
+      const btn = document.getElementById("pipeline-collapse-btn");
+      if (btn) btn.textContent = allCollapsed ? "Collapse All" : "Expand All";
     }
 
     async function completePipelineReview() {
