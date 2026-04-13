@@ -4085,7 +4085,7 @@ NMLS #2283684`;
       try {
         const result = await gmailSendEmail({
           to: lead.email,
-          cc: "kat@myanchormortgage.com, corey@myanchormortgage.com",
+          cc: "john@myanchormortgage.com, kat@myanchormortgage.com, corey@myanchormortgage.com",
           subject,
           body: bodyText,
           bodyHtml,
