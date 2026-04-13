@@ -3243,6 +3243,305 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    /* ── PIPELINE REVIEW API ───────────────────────────────────────── */
+    const PIPELINE_REVIEWS_FILE = path.join(DATA_DIR, "pipeline-reviews.json");
+
+    function loadPipelineReviews() {
+      try { return JSON.parse(fs.readFileSync(PIPELINE_REVIEWS_FILE, "utf8")); }
+      catch { return { reviews: [] }; }
+    }
+    function savePipelineReviews(data) {
+      fs.writeFileSync(PIPELINE_REVIEWS_FILE, JSON.stringify(data, null, 2));
+    }
+
+    // Fetch loans from Arive via MCP (reuses same Zapier MCP as mortgage app)
+    if (urlPath === "/api/pipeline/loans" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        // Lazy-load MCP SDK
+        let Client, StreamableHTTPClientTransport;
+        try {
+          Client = require("@modelcontextprotocol/sdk/client/index.js").Client;
+          StreamableHTTPClientTransport = require("@modelcontextprotocol/sdk/client/streamableHttp.js").StreamableHTTPClientTransport;
+        } catch (sdkErr) {
+          return json(res, 500, { error: "MCP SDK not available: " + sdkErr.message });
+        }
+
+        const mcpToken = process.env.ZAPIER_MCP_TOKEN || "";
+        const mcpUrl = process.env.ZAPIER_MCP_URL || "https://mcp.zapier.com/api/v1/connect";
+        if (!mcpToken) return json(res, 500, { error: "ZAPIER_MCP_TOKEN not configured" });
+
+        const fullUrl = mcpUrl.includes("token=") ? mcpUrl : `${mcpUrl}?token=${mcpToken}`;
+        const transport = new StreamableHTTPClientTransport(new URL(fullUrl));
+        const client = new Client({ name: "anchor-tasks-pipeline", version: "1.0.0" });
+        await client.connect(transport);
+
+        // Fetch all loans (paginate in blocks of 100)
+        let allLoans = [];
+        for (let page = 0; page < 10; page++) {
+          const result = await client.callTool({
+            name: "arive_api_1_0_23_get_loan_list",
+            arguments: {
+              instructions: "Get the loan list with all fields.",
+              output_hint: "Return every row with original API field names exactly as-is.",
+              limit: "100",
+              offset: String(page * 100),
+            },
+          });
+
+          let parsed = null;
+          if (result.content && Array.isArray(result.content)) {
+            const text = result.content.filter(c => c.type === "text").map(c => c.text).join("\n");
+            try { parsed = JSON.parse(text); } catch { parsed = null; }
+          }
+
+          let loans = [];
+          if (Array.isArray(parsed)) loans = parsed;
+          else if (parsed && Array.isArray(parsed.loans)) loans = parsed.loans;
+          else if (parsed && Array.isArray(parsed.data)) loans = parsed.data;
+          else if (parsed && parsed.results && Array.isArray(parsed.results)) loans = parsed.results;
+          else if (parsed && parsed.results && Array.isArray(parsed.results.rows)) loans = parsed.results.rows;
+
+          allLoans = allLoans.concat(loans);
+          if (loans.length < 100) break;
+        }
+
+        await client.close().catch(() => {});
+
+        // Normalize loan fields for the UI
+        const normalized = allLoans.map(l => ({
+          id: l.loan_id || l.ariveLoanId || l.id || "",
+          displayId: l.display_loan_id || l.ariveLoanId || "",
+          borrowerFirst: l.borrower_first_name || l.loanBorrower1_firstName || "",
+          borrowerLast: l.borrower_last_name || l.loanBorrower1_lastName || "",
+          borrowerName: `${l.borrower_first_name || l.loanBorrower1_firstName || ""} ${l.borrower_last_name || l.loanBorrower1_lastName || ""}`.trim(),
+          loanAmount: parseFloat(l.loan_amount || l.baseLoanAmount || 0),
+          loanPurpose: l.loan_purpose || l.loanPurpose || "",
+          loanStatus: l.loan_status || l.currentLoanStatus_status || "",
+          propertyAddress: l.property_address || l.subjectProperty_streetAddress || "",
+          propertyCity: l.property_city || l.subjectProperty_city || "",
+          propertyState: l.property_state || l.subjectProperty_state || "",
+          loanProgram: l.loan_program || l.mortgageType || "",
+          loanOfficer: l.loan_officer_name || l.loanOfficer_name || "",
+          lastStatusChange: l.last_status_change_date || "",
+          closingDate: l.closing_date || l.keyDates_closingDate || "",
+        }));
+
+        console.log(`[pipeline] Fetched ${normalized.length} loans from Arive`);
+        return json(res, 200, { loans: normalized });
+      } catch (e) {
+        console.error("[pipeline] Error fetching loans:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // Get previous pipeline reviews
+    if (urlPath === "/api/pipeline/reviews" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const data = loadPipelineReviews();
+      return json(res, 200, data);
+    }
+
+    // Save a pipeline review
+    if (urlPath === "/api/pipeline/reviews" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const data = loadPipelineReviews();
+      const review = {
+        id: generateId(),
+        date: new Date().toISOString().substring(0, 10),
+        createdAt: new Date().toISOString(),
+        notes: body.notes || {}, // { loanId: "free-form text", ... }
+        summary: body.summary || null,
+        tasksCreated: body.tasksCreated || [],
+      };
+      data.reviews.unshift(review);
+      // Keep last 52 reviews (one year of weeklies)
+      if (data.reviews.length > 52) data.reviews = data.reviews.slice(0, 52);
+      savePipelineReviews(data);
+      return json(res, 201, { review });
+    }
+
+    // Parse review notes into tasks (AI-powered via Anthropic API)
+    if (urlPath === "/api/pipeline/parse-notes" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const notes = body.notes || {}; // { loanId: { borrowerName, note, loanStatus, loanAmount } }
+
+      // Build prompt for Claude to parse notes into structured tasks
+      const noteEntries = Object.entries(notes).filter(([, v]) => v.note && v.note.trim());
+      if (noteEntries.length === 0) return json(res, 200, { tasks: [], summary: "No notes to process." });
+
+      const notesText = noteEntries.map(([loanId, info]) =>
+        `Loan: ${info.borrowerName} (${info.loanStatus}, $${(info.loanAmount || 0).toLocaleString()})\nNotes: ${info.note}`
+      ).join("\n\n");
+
+      const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
+      if (!ANTHROPIC_KEY) {
+        // Fallback: create one task per note without AI parsing
+        const fallbackTasks = noteEntries.map(([loanId, info]) => ({
+          title: `[Pipeline] ${info.borrowerName}: ${info.note.substring(0, 100)}`,
+          assignee: "John",
+          due: "",
+          priority: "normal",
+          project: "Pipeline",
+          loanId,
+        }));
+        return json(res, 200, { tasks: fallbackTasks, summary: `Created ${fallbackTasks.length} task(s) from pipeline notes.` });
+      }
+
+      try {
+        const prompt = `You are Dan, John's mortgage business AI assistant. Parse these pipeline review notes into structured tasks and follow-ups.
+
+For each note, extract:
+- Actionable tasks (things to do)
+- Follow-ups (things to check on later)
+- Status updates (changes to communicate)
+- Escalations (urgent items)
+
+Notes from pipeline review:
+${notesText}
+
+Return a JSON object with:
+{
+  "tasks": [
+    { "title": "task description", "assignee": "John or team member name", "due": "YYYY-MM-DD or empty", "priority": "low|normal|high|urgent", "project": "Pipeline", "category": "task|followup|escalation", "loanId": "loan id if relevant" }
+  ],
+  "summary": "Brief summary of what was captured from this review"
+}
+
+Be specific and actionable. Use borrower names in task titles. If a note mentions a date, calculate the due date. Today is ${new Date().toISOString().substring(0, 10)}.`;
+
+        const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_KEY,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 2000,
+            messages: [{ role: "user", content: prompt }],
+          }),
+        });
+
+        if (!aiResp.ok) {
+          const errText = await aiResp.text();
+          console.error("[pipeline] AI parse error:", errText);
+          // Fallback to simple tasks
+          const fallbackTasks = noteEntries.map(([loanId, info]) => ({
+            title: `[Pipeline] ${info.borrowerName}: ${info.note.substring(0, 100)}`,
+            assignee: "John",
+            due: "",
+            priority: "normal",
+            project: "Pipeline",
+            loanId,
+          }));
+          return json(res, 200, { tasks: fallbackTasks, summary: `Created ${fallbackTasks.length} task(s) from pipeline notes (AI unavailable).` });
+        }
+
+        const aiData = await aiResp.json();
+        const aiText = aiData.content?.[0]?.text || "{}";
+        // Extract JSON from response (may be wrapped in markdown code blocks)
+        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+        const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { tasks: [], summary: "Could not parse AI response." };
+
+        return json(res, 200, parsed);
+      } catch (e) {
+        console.error("[pipeline] AI parse error:", e.message);
+        const fallbackTasks = noteEntries.map(([loanId, info]) => ({
+          title: `[Pipeline] ${info.borrowerName}: ${info.note.substring(0, 100)}`,
+          assignee: "John",
+          due: "",
+          priority: "normal",
+          project: "Pipeline",
+          loanId,
+        }));
+        return json(res, 200, { tasks: fallbackTasks, summary: `Created ${fallbackTasks.length} task(s) from pipeline notes.` });
+      }
+    }
+
+    /* ── Leads API ────────────────────────────────────────────── */
+    const LEADS_FILE = path.join(DATA_DIR, "pipeline-leads.json");
+
+    function loadLeadsData() {
+      try { return JSON.parse(fs.readFileSync(LEADS_FILE, "utf8")); }
+      catch { return { leads: [] }; }
+    }
+    function saveLeadsData(data) {
+      fs.writeFileSync(LEADS_FILE, JSON.stringify(data, null, 2));
+    }
+
+    if (urlPath === "/api/pipeline/leads" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      return json(res, 200, loadLeadsData());
+    }
+
+    if (urlPath === "/api/pipeline/leads" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const data = loadLeadsData();
+      const lead = {
+        id: body.id || "lead-" + generateId(),
+        name: String(body.name || "").substring(0, 200),
+        phone: String(body.phone || "").substring(0, 30),
+        email: String(body.email || "").substring(0, 200),
+        source: String(body.source || "").substring(0, 50),
+        status: String(body.status || "new").substring(0, 30),
+        loanType: String(body.loanType || "").substring(0, 30),
+        notes: String(body.notes || "").substring(0, 2000),
+        createdAt: body.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      if (!lead.name) return json(res, 400, { error: "Name required" });
+
+      // Upsert: if id exists, update; otherwise add
+      const existingIdx = data.leads.findIndex(l => l.id === lead.id);
+      if (existingIdx !== -1) {
+        lead.createdAt = data.leads[existingIdx].createdAt;
+        data.leads[existingIdx] = lead;
+      } else {
+        data.leads.unshift(lead);
+      }
+      saveLeadsData(data);
+      return json(res, existingIdx !== -1 ? 200 : 201, { lead });
+    }
+
+    const leadDeleteMatch = urlPath.match(/^\/api\/pipeline\/leads\/([^/]+)$/);
+    if (leadDeleteMatch && req.method === "DELETE") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const id = leadDeleteMatch[1];
+      const data = loadLeadsData();
+      data.leads = data.leads.filter(l => l.id !== id);
+      saveLeadsData(data);
+      return json(res, 200, { ok: true });
+    }
+
+    // Dan API: leads access
+    if (urlPath === "/api/dan/pipeline-leads" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const data = loadLeadsData();
+      const active = data.leads.filter(l => l.status !== "converted" && l.status !== "dead");
+      return json(res, 200, {
+        totalLeads: data.leads.length,
+        activeLeads: active.length,
+        leads: active,
+      });
+    }
+
+    // Dan API: pipeline review access
+    if (urlPath === "/api/dan/pipeline-reviews" && (req.method === "GET" || req.method === "POST")) {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const data = loadPipelineReviews();
+      const latest = data.reviews[0] || null;
+      return json(res, 200, {
+        totalReviews: data.reviews.length,
+        latestReview: latest,
+        recentReviews: data.reviews.slice(0, 5),
+      });
+    }
+
     /* ── JOURNAL API ────────────────────────────────────────────────── */
     if (urlPath === "/api/journal" && req.method === "GET") {
       const entries = loadJournal(req.session.email);

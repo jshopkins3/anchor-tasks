@@ -2019,6 +2019,7 @@
       <div class="tab" data-tab="journal">Journal</div>
       <div class="tab" data-tab="email">Email <span id="email-tab-badge" style="display:none;background:var(--navy);color:var(--gold);font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:16px;text-align:center;margin-left:4px;"></span></div>
       <div class="tab" data-tab="notebook">Notebook</div>
+      <div class="tab" data-tab="pipeline">Pipeline</div>
       <div class="tab" data-tab="finance">Finance</div>
       <div class="tab" data-tab="content">Content</div>
       <div class="tab" data-tab="taglines">Taglines</div>
@@ -2102,6 +2103,10 @@
         <div class="hub-card" onclick="switchToTab('journal')">
           <div class="hub-ico">&#128214;</div>
           <div><div class="hub-name">Journal</div><div class="hub-desc">Daily reflections, notes</div></div>
+        </div>
+        <div class="hub-card" onclick="switchToTab('pipeline')">
+          <div class="hub-ico">&#9875;</div>
+          <div><div class="hub-name">Pipeline Review</div><div class="hub-desc">Weekly loan review, leads, follow-ups</div></div>
         </div>
         <div class="hub-card" onclick="switchToTab('finance')">
           <div class="hub-ico">&#128176;</div>
@@ -2406,6 +2411,116 @@
       </div>
     </div>
     <div id="compose-container"></div>
+
+    <!-- ── Pipeline section ────────────────────────────────────── -->
+    <div class="section" id="sec-pipeline">
+      <div style="max-width:1100px;margin:0 auto;">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <h2 style="font-size:20px;font-weight:700;color:var(--text-heading);margin:0;">Pipeline Review</h2>
+            <p style="color:var(--text-secondary);font-size:13px;margin:4px 0 0;">Review active loans, track leads, type notes — Dan handles the rest.</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="loadPipelineLoans(true)" id="pipeline-refresh-btn" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text-primary);">&#8635; Refresh</button>
+            <button onclick="completePipelineReview()" id="pipeline-complete-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:none;">Complete Review &#10003;</button>
+          </div>
+        </div>
+
+        <!-- View toggle: Loans / Leads / History -->
+        <div style="display:flex;gap:2px;margin-bottom:16px;background:var(--input-bg);border-radius:8px;padding:3px;width:fit-content;">
+          <button class="pipe-view-btn active" onclick="switchPipelineView('loans')" data-view="loans" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:var(--navy);color:var(--gold);">Active Loans</button>
+          <button class="pipe-view-btn" onclick="switchPipelineView('leads')" data-view="leads" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Leads</button>
+          <button class="pipe-view-btn" onclick="switchPipelineView('history')" data-view="history" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Review History</button>
+        </div>
+
+        <!-- Pipeline stats bar -->
+        <div id="pipeline-stats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;">
+        </div>
+
+        <!-- Active Loans view -->
+        <div id="pipeline-loans-view">
+          <div id="pipeline-loans-container" style="display:flex;flex-direction:column;gap:20px;">
+            <div style="text-align:center;padding:60px 20px;color:var(--text-secondary);">
+              <div style="font-size:32px;margin-bottom:12px;">&#9875;</div>
+              <p style="font-size:15px;">Click <strong>Refresh</strong> to pull your active loans from Arive.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Leads view -->
+        <div id="pipeline-leads-view" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="font-size:15px;font-weight:600;color:var(--text-heading);margin:0;">Pending Leads</h3>
+            <button onclick="showAddLeadForm()" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;">+ Add Lead</button>
+          </div>
+          <!-- Add lead form (hidden by default) -->
+          <div id="lead-add-form" style="display:none;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:16px;margin-bottom:16px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+              <input id="lead-name" placeholder="Full name" style="padding:8px 12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;">
+              <input id="lead-phone" placeholder="Phone" style="padding:8px 12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;">
+              <input id="lead-email" placeholder="Email" style="padding:8px 12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;">
+              <select id="lead-source" style="padding:8px 12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;">
+                <option value="">Source...</option>
+                <option value="referral">Referral</option>
+                <option value="zillow">Zillow</option>
+                <option value="realtor">Realtor Partner</option>
+                <option value="website">Website</option>
+                <option value="social">Social Media</option>
+                <option value="past-client">Past Client</option>
+                <option value="other">Other</option>
+              </select>
+              <select id="lead-status" style="padding:8px 12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;">
+                <option value="new">New — Needs Contact</option>
+                <option value="contacted">Contacted</option>
+                <option value="in-progress">In Progress — Gathering Docs</option>
+                <option value="application-sent">Application Sent</option>
+                <option value="submitted">Submitted to Arive</option>
+              </select>
+              <select id="lead-loan-type" style="padding:8px 12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;">
+                <option value="">Loan type...</option>
+                <option value="purchase">Purchase</option>
+                <option value="refinance">Refinance</option>
+                <option value="heloc">HELOC</option>
+                <option value="reverse">Reverse</option>
+                <option value="unknown">TBD</option>
+              </select>
+            </div>
+            <textarea id="lead-notes" placeholder="Notes — referral source, property details, timeline, etc." rows="2" style="width:100%;padding:8px 12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;resize:vertical;box-sizing:border-box;"></textarea>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button onclick="saveLead()" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;">Save Lead</button>
+              <button onclick="document.getElementById('lead-add-form').style.display='none'" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text-secondary);">Cancel</button>
+            </div>
+          </div>
+          <div id="leads-container">
+            <div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">
+              <p>No leads yet. Click <strong>+ Add Lead</strong> to start tracking.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Review History view -->
+        <div id="pipeline-history-view" style="display:none;">
+          <div id="review-history-container">
+            <div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">
+              <p>No reviews yet. Complete your first pipeline review to see history.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Review summary modal -->
+        <div id="pipeline-review-summary" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:none;align-items:center;justify-content:center;">
+          <div style="background:var(--bg-card);border-radius:14px;padding:28px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0 0 16px;">Review Complete</h3>
+            <div id="review-summary-content"></div>
+            <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end;">
+              <button onclick="createTasksFromReview()" id="review-create-tasks-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;">Create Tasks</button>
+              <button onclick="document.getElementById('pipeline-review-summary').style.display='none'" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:10px 16px;font-size:13px;cursor:pointer;color:var(--text-secondary);">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ── Finance section ─────────────────────────────────────── -->
     <div class="section" id="sec-finance">
@@ -3891,6 +4006,9 @@
           if (tab.dataset.tab === "content") {
             loadReactorFeed();
             loadContentCalendar();
+          }
+          if (tab.dataset.tab === "pipeline") {
+            loadPipelineLoans();
           }
           if (tab.dataset.tab === "finance") {
             loadFinanceData();
@@ -7080,6 +7198,495 @@
       }
       if (!html) html = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No transactions for this month. Import a CSV to get started.</div>';
       txnEl.innerHTML = html;
+    }
+
+    /* ── Pipeline Review ──────────────────────────────────── */
+    let pipelineLoans = [];
+    let pipelineNotes = {}; // { loanId: "note text" }
+    let pipelineLeads = []; // stored in localStorage
+    let pipelineReviewData = null; // parsed review result
+    let pipelineLoaded = false;
+
+    const PIPELINE_STAGES_ORDER = [
+      "APPLICATION_INTAKE", "QUALIFICATION", "PREAPPROVED",
+      "DISCLOSURE_SENT", "APPROVED_WITH_CONDITION",
+      "CLEAR_TO_CLOSE", "DOCS_OUT", "DOCS_SIGNED",
+      "LOAN_FUNDED", "BROKER_CHECK_RECEIVED", "COMMISSION_PAID"
+    ];
+    const ACTIVE_STAGES = new Set([
+      "APPLICATION_INTAKE", "QUALIFICATION", "PREAPPROVED",
+      "DISCLOSURE_SENT", "APPROVED_WITH_CONDITION",
+      "CLEAR_TO_CLOSE", "DOCS_OUT", "DOCS_SIGNED"
+    ]);
+    const STAGE_LABELS = {
+      APPLICATION_INTAKE: "Application Intake",
+      QUALIFICATION: "Qualification",
+      PREAPPROVED: "Pre-Approved",
+      DISCLOSURE_SENT: "Disclosure Sent",
+      APPROVED_WITH_CONDITION: "Approved w/ Conditions",
+      CLEAR_TO_CLOSE: "Clear to Close",
+      DOCS_OUT: "Docs Out",
+      DOCS_SIGNED: "Docs Signed",
+      LOAN_FUNDED: "Funded",
+      BROKER_CHECK_RECEIVED: "Check Received",
+      COMMISSION_PAID: "Commission Paid",
+      ADVERSE: "Adverse"
+    };
+    const STAGE_COLORS = {
+      APPLICATION_INTAKE: "#6366f1",
+      QUALIFICATION: "#8b5cf6",
+      PREAPPROVED: "#3b82f6",
+      DISCLOSURE_SENT: "#0ea5e9",
+      APPROVED_WITH_CONDITION: "#f59e0b",
+      CLEAR_TO_CLOSE: "#10b981",
+      DOCS_OUT: "#14b8a6",
+      DOCS_SIGNED: "#06b6d4",
+      LOAN_FUNDED: "#22c55e",
+      BROKER_CHECK_RECEIVED: "#84cc16",
+      COMMISSION_PAID: "#4ade80",
+      ADVERSE: "#ef4444"
+    };
+
+    async function loadPipelineLoans(forceRefresh) {
+      if (!forceRefresh && pipelineLoaded && pipelineLoans.length > 0) {
+        renderPipelineLoans();
+        return;
+      }
+      const container = document.getElementById("pipeline-loans-container");
+      container.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px;width:24px;height:24px;border:3px solid var(--border-default);border-top-color:var(--navy);border-radius:50%;animation:spin 0.8s linear infinite;"></div>Pulling loans from Arive...</div>';
+
+      try {
+        const [resp, _] = await Promise.all([fetch("/api/pipeline/loans"), fetchLeads()]);
+        if (!resp.ok) throw new Error("Failed to fetch loans");
+        const data = await resp.json();
+        pipelineLoans = data.loans || [];
+        pipelineLoaded = true;
+        renderPipelineLoans();
+      } catch (e) {
+        container.innerHTML = `<div style="text-align:center;padding:60px;color:#ef4444;"><p>Error loading loans: ${e.message}</p><p style="font-size:12px;color:var(--text-secondary);margin-top:8px;">Make sure ZAPIER_MCP_TOKEN is configured.</p></div>`;
+      }
+    }
+
+    function renderPipelineLoans() {
+      const container = document.getElementById("pipeline-loans-container");
+      const active = pipelineLoans.filter(l => ACTIVE_STAGES.has(l.loanStatus));
+      const funded = pipelineLoans.filter(l => ["LOAN_FUNDED", "BROKER_CHECK_RECEIVED", "COMMISSION_PAID"].includes(l.loanStatus));
+      const adverse = pipelineLoans.filter(l => l.loanStatus === "ADVERSE");
+
+      // Stats
+      const totalActive = active.reduce((s, l) => s + (l.loanAmount || 0), 0);
+      const statsEl = document.getElementById("pipeline-stats");
+      const leadCount = loadLeads().length;
+      statsEl.innerHTML = `
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:var(--navy);">${active.length}</div>
+          <div style="font-size:11px;color:var(--text-secondary);">Active Loans</div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:var(--text-heading);">$${(totalActive / 1000000).toFixed(1)}M</div>
+          <div style="font-size:11px;color:var(--text-secondary);">Pipeline Volume</div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#22c55e;">${funded.length}</div>
+          <div style="font-size:11px;color:var(--text-secondary);">Funded</div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#f59e0b;">${leadCount}</div>
+          <div style="font-size:11px;color:var(--text-secondary);">Pending Leads</div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#ef4444;">${adverse.length}</div>
+          <div style="font-size:11px;color:var(--text-secondary);">Adverse</div>
+        </div>
+      `;
+
+      // Group active loans by stage
+      const grouped = {};
+      for (const stage of PIPELINE_STAGES_ORDER) {
+        const loans = active.filter(l => l.loanStatus === stage);
+        if (loans.length > 0) grouped[stage] = loans;
+      }
+
+      let html = '';
+      for (const [stage, loans] of Object.entries(grouped)) {
+        const color = STAGE_COLORS[stage] || "#6366f1";
+        html += `
+          <div style="margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <div style="width:10px;height:10px;border-radius:50%;background:${color};"></div>
+              <h3 style="font-size:14px;font-weight:600;color:var(--text-heading);margin:0;">${STAGE_LABELS[stage] || stage}</h3>
+              <span style="font-size:12px;color:var(--text-secondary);">(${loans.length})</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-left:18px;">
+        `;
+
+        for (const loan of loans) {
+          const noteVal = pipelineNotes[loan.id] || "";
+          const hasNote = noteVal.trim().length > 0;
+          html += `
+            <div style="background:var(--bg-card);border:1px solid ${hasNote ? color + '40' : 'var(--border-default)'};border-radius:10px;padding:14px;${hasNote ? 'border-left:3px solid ' + color : ''}">
+              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--text-heading);">${loan.borrowerName || 'Unknown'}</div>
+                  <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">
+                    ${loan.loanPurpose || ''} &bull; $${(loan.loanAmount || 0).toLocaleString()} &bull; ${loan.loanProgram || ''}
+                  </div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:11px;color:var(--text-faint);">${loan.displayId || ''}</div>
+                  ${loan.propertyAddress ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${loan.propertyAddress}</div>` : ''}
+                </div>
+              </div>
+              <textarea
+                placeholder="What's on your mind about this loan?"
+                rows="2"
+                style="width:100%;padding:8px 10px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;"
+                oninput="updatePipelineNote('${loan.id}', this.value)"
+              >${noteVal}</textarea>
+            </div>
+          `;
+        }
+
+        html += '</div></div>';
+      }
+
+      // Show/hide complete button
+      document.getElementById("pipeline-complete-btn").style.display =
+        Object.values(pipelineNotes).some(n => n.trim()) ? "block" : "none";
+
+      if (!html) {
+        html = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No active loans found.</div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    function updatePipelineNote(loanId, value) {
+      pipelineNotes[loanId] = value;
+      document.getElementById("pipeline-complete-btn").style.display =
+        Object.values(pipelineNotes).some(n => n.trim()) ? "block" : "none";
+    }
+
+    async function completePipelineReview() {
+      const btn = document.getElementById("pipeline-complete-btn");
+      btn.textContent = "Processing...";
+      btn.disabled = true;
+
+      // Build notes payload with loan context
+      const notesPayload = {};
+      for (const [loanId, note] of Object.entries(pipelineNotes)) {
+        if (!note.trim()) continue;
+        const loan = pipelineLoans.find(l => l.id === loanId);
+        notesPayload[loanId] = {
+          borrowerName: loan?.borrowerName || "Unknown",
+          note: note,
+          loanStatus: loan?.loanStatus || "",
+          loanAmount: loan?.loanAmount || 0,
+        };
+      }
+
+      try {
+        // Parse notes into tasks via AI
+        const resp = await fetch("/api/pipeline/parse-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: notesPayload }),
+        });
+        const data = await resp.json();
+        pipelineReviewData = data;
+
+        // Save the review
+        await fetch("/api/pipeline/reviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notes: notesPayload,
+            summary: data.summary,
+            tasksCreated: (data.tasks || []).map(t => t.title),
+          }),
+        });
+
+        // Show summary modal
+        showReviewSummary(data);
+      } catch (e) {
+        alert("Error completing review: " + e.message);
+      } finally {
+        btn.textContent = "Complete Review ✓";
+        btn.disabled = false;
+      }
+    }
+
+    function showReviewSummary(data) {
+      const content = document.getElementById("review-summary-content");
+      const tasks = data.tasks || [];
+      let html = `<p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">${data.summary || 'Review processed.'}</p>`;
+
+      if (tasks.length > 0) {
+        html += '<div style="font-size:13px;font-weight:600;color:var(--text-heading);margin-bottom:8px;">Captured Items:</div>';
+        for (const task of tasks) {
+          const catIcon = task.category === "escalation" ? "&#9888;" : task.category === "followup" ? "&#128337;" : "&#9745;";
+          const catColor = task.category === "escalation" ? "#ef4444" : task.category === "followup" ? "#f59e0b" : "var(--navy)";
+          html += `
+            <div style="display:flex;align-items:start;gap:8px;padding:8px 10px;background:var(--input-bg);border-radius:6px;margin-bottom:4px;">
+              <span style="color:${catColor};font-size:14px;">${catIcon}</span>
+              <div>
+                <div style="font-size:13px;color:var(--text-primary);">${task.title}</div>
+                <div style="font-size:11px;color:var(--text-secondary);">
+                  ${task.assignee || ''} ${task.due ? '&bull; Due: ' + task.due : ''} ${task.priority === 'urgent' ? '&bull; <span style="color:#ef4444;font-weight:600;">URGENT</span>' : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      content.innerHTML = html;
+      document.getElementById("pipeline-review-summary").style.display = "flex";
+    }
+
+    async function createTasksFromReview() {
+      if (!pipelineReviewData || !pipelineReviewData.tasks) return;
+      const btn = document.getElementById("review-create-tasks-btn");
+      btn.textContent = "Creating...";
+      btn.disabled = true;
+
+      let created = 0;
+      for (const task of pipelineReviewData.tasks) {
+        try {
+          await fetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: task.title,
+              assignee: task.assignee || "John",
+              due: task.due || "",
+              priority: task.priority || "normal",
+              project: task.project || "Pipeline",
+              urgent: task.priority === "urgent",
+              important: task.category === "escalation",
+            }),
+          });
+          created++;
+        } catch (e) {
+          console.error("Failed to create task:", e);
+        }
+      }
+
+      btn.textContent = `Created ${created} task(s)!`;
+      // Clear notes after successful creation
+      pipelineNotes = {};
+      setTimeout(() => {
+        document.getElementById("pipeline-review-summary").style.display = "none";
+        btn.textContent = "Create Tasks";
+        btn.disabled = false;
+        renderPipelineLoans();
+      }, 2000);
+    }
+
+    // ── Leads Management ──
+    function loadLeads() {
+      return pipelineLeads; // cached from server
+    }
+
+    async function fetchLeads() {
+      try {
+        const resp = await fetch("/api/pipeline/leads");
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        pipelineLeads = data.leads || [];
+        return pipelineLeads;
+      } catch { return []; }
+    }
+
+    function showAddLeadForm() {
+      const form = document.getElementById("lead-add-form");
+      form.style.display = form.style.display === "none" ? "block" : "none";
+      if (form.style.display === "block") document.getElementById("lead-name").focus();
+      // Reset save button to create mode
+      const saveBtn = document.querySelector("#lead-add-form button[onclick^='saveLead']");
+      if (saveBtn) saveBtn.setAttribute("onclick", "saveLead()");
+    }
+
+    async function saveLead(editId) {
+      const lead = {
+        name: document.getElementById("lead-name").value.trim(),
+        phone: document.getElementById("lead-phone").value.trim(),
+        email: document.getElementById("lead-email").value.trim(),
+        source: document.getElementById("lead-source").value,
+        status: document.getElementById("lead-status").value || "new",
+        loanType: document.getElementById("lead-loan-type").value,
+        notes: document.getElementById("lead-notes").value.trim(),
+      };
+      if (editId) lead.id = editId;
+      if (!lead.name) { alert("Name is required"); return; }
+
+      await fetch("/api/pipeline/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lead),
+      });
+
+      document.getElementById("lead-add-form").style.display = "none";
+      ["lead-name", "lead-phone", "lead-email", "lead-notes"].forEach(id => document.getElementById(id).value = "");
+      ["lead-source", "lead-loan-type"].forEach(id => document.getElementById(id).selectedIndex = 0);
+      document.getElementById("lead-status").value = "new";
+      await fetchLeads();
+      renderLeads();
+    }
+
+    function renderLeads() {
+      const leads = loadLeads();
+      pipelineLeads = leads;
+      const container = document.getElementById("leads-container");
+      if (leads.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No leads yet. Click <strong>+ Add Lead</strong> to start tracking.</div>';
+        return;
+      }
+
+      const STATUS_LABELS = {
+        "new": "New — Needs Contact",
+        "contacted": "Contacted",
+        "in-progress": "In Progress",
+        "application-sent": "Application Sent",
+        "submitted": "Submitted to Arive",
+        "converted": "Converted to Loan",
+        "dead": "Dead / Lost",
+      };
+      const STATUS_COLORS = {
+        "new": "#ef4444",
+        "contacted": "#f59e0b",
+        "in-progress": "#3b82f6",
+        "application-sent": "#8b5cf6",
+        "submitted": "#10b981",
+        "converted": "#22c55e",
+        "dead": "#71717a",
+      };
+
+      let html = '';
+      for (const lead of leads) {
+        if (lead.status === "converted" || lead.status === "dead") continue; // hide closed leads by default
+        const color = STATUS_COLORS[lead.status] || "#6366f1";
+        const daysSince = Math.floor((Date.now() - new Date(lead.createdAt).getTime()) / 86400000);
+        html += `
+          <div style="background:var(--bg-card);border:1px solid var(--border-default);border-left:3px solid ${color};border-radius:10px;padding:14px;margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:start;">
+              <div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-heading);">${lead.name}</div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">
+                  ${lead.loanType ? lead.loanType.charAt(0).toUpperCase() + lead.loanType.slice(1) : 'TBD'} &bull;
+                  ${lead.source ? lead.source.charAt(0).toUpperCase() + lead.source.slice(1) : 'Unknown source'} &bull;
+                  ${daysSince}d ago
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <select onchange="updateLeadStatus('${lead.id}', this.value)" style="padding:4px 8px;font-size:11px;border-radius:4px;border:1px solid ${color};background:${color}15;color:${color};font-weight:600;cursor:pointer;">
+                  ${Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}" ${k === lead.status ? 'selected' : ''}>${v}</option>`).join('')}
+                </select>
+                <button onclick="editLead('${lead.id}')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--text-secondary);" title="Edit">&#9998;</button>
+                <button onclick="deleteLead('${lead.id}')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--text-secondary);" title="Delete">&times;</button>
+              </div>
+            </div>
+            ${lead.phone || lead.email ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">${lead.phone ? '&#128222; ' + lead.phone : ''} ${lead.email ? '&bull; ' + lead.email : ''}</div>` : ''}
+            ${lead.notes ? `<div style="font-size:12px;color:var(--text-primary);margin-top:6px;padding:6px 8px;background:var(--input-bg);border-radius:4px;">${lead.notes}</div>` : ''}
+          </div>
+        `;
+      }
+
+      // Show converted/dead leads collapsed
+      const closed = leads.filter(l => l.status === "converted" || l.status === "dead");
+      if (closed.length > 0) {
+        html += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border-default);">
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">${closed.length} closed lead(s)</div>
+        </div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    async function updateLeadStatus(id, status) {
+      const lead = pipelineLeads.find(l => l.id === id);
+      if (!lead) return;
+      lead.status = status;
+      await fetch("/api/pipeline/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lead),
+      });
+      await fetchLeads();
+      renderLeads();
+    }
+
+    function editLead(id) {
+      const lead = pipelineLeads.find(l => l.id === id);
+      if (!lead) return;
+      document.getElementById("lead-name").value = lead.name || "";
+      document.getElementById("lead-phone").value = lead.phone || "";
+      document.getElementById("lead-email").value = lead.email || "";
+      document.getElementById("lead-source").value = lead.source || "";
+      document.getElementById("lead-status").value = lead.status || "new";
+      document.getElementById("lead-loan-type").value = lead.loanType || "";
+      document.getElementById("lead-notes").value = lead.notes || "";
+      document.getElementById("lead-add-form").style.display = "block";
+      const saveBtn = document.querySelector("#lead-add-form button[onclick^='saveLead']");
+      if (saveBtn) saveBtn.setAttribute("onclick", `saveLead('${id}')`);
+    }
+
+    async function deleteLead(id) {
+      if (!confirm("Delete this lead?")) return;
+      await fetch(`/api/pipeline/leads/${id}`, { method: "DELETE" });
+      await fetchLeads();
+      renderLeads();
+    }
+
+    // ── Pipeline View Switching ──
+    function switchPipelineView(view) {
+      document.querySelectorAll(".pipe-view-btn").forEach(b => {
+        b.style.background = "transparent";
+        b.style.color = "var(--text-secondary)";
+      });
+      const activeBtn = document.querySelector(`.pipe-view-btn[data-view="${view}"]`);
+      if (activeBtn) {
+        activeBtn.style.background = "var(--navy)";
+        activeBtn.style.color = "var(--gold)";
+      }
+      document.getElementById("pipeline-loans-view").style.display = view === "loans" ? "block" : "none";
+      document.getElementById("pipeline-leads-view").style.display = view === "leads" ? "block" : "none";
+      document.getElementById("pipeline-history-view").style.display = view === "history" ? "block" : "none";
+
+      if (view === "leads") { fetchLeads().then(() => renderLeads()); }
+      if (view === "history") renderReviewHistory();
+    }
+
+    async function renderReviewHistory() {
+      const container = document.getElementById("review-history-container");
+      try {
+        const resp = await fetch("/api/pipeline/reviews");
+        const data = await resp.json();
+        const reviews = data.reviews || [];
+        if (reviews.length === 0) {
+          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">No reviews yet.</div>';
+          return;
+        }
+        let html = '';
+        for (const review of reviews) {
+          const noteCount = Object.keys(review.notes || {}).length;
+          const taskCount = (review.tasksCreated || []).length;
+          html += `
+            <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--text-heading);">${review.date}</div>
+                  <div style="font-size:12px;color:var(--text-secondary);">${noteCount} loan(s) reviewed &bull; ${taskCount} task(s) created</div>
+                </div>
+                <div style="font-size:12px;color:var(--text-faint);">${review.summary ? review.summary.substring(0, 80) + '...' : ''}</div>
+              </div>
+            </div>
+          `;
+        }
+        container.innerHTML = html;
+      } catch (e) {
+        container.innerHTML = `<div style="color:#ef4444;padding:20px;">Error loading reviews: ${e.message}</div>`;
+      }
     }
 
     /* ── Notebook ──────────────────────────────────────────── */
