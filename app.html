@@ -8142,9 +8142,19 @@
 
               <!-- Actions -->
               ${rec.status === 'pending' ? `
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button onclick="approveBriefingRec('${b.date}','${rec.id}',true)" style="background:#22c55e;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">Approve & Publish</button>
+                  <button onclick="approveBriefingRec('${b.date}','${rec.id}',false)" style="background:var(--input-bg);color:var(--text-secondary);border:1px solid var(--input-border);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;">Approve Only</button>
+                  <button onclick="rejectBriefingRec('${b.date}','${rec.id}')" style="background:var(--input-bg);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;">Reject</button>
+                </div>
+              ` : rec.status === 'approved' && !(rec.publishedPlatforms && rec.publishedPlatforms.length) ? `
                 <div style="display:flex;gap:8px;">
-                  <button onclick="approveBriefingRec('${b.date}','${rec.id}')" style="background:#22c55e;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">Approve</button>
-                  <button onclick="rejectBriefingRec('${b.date}','${rec.id}')" style="background:var(--input-bg);color:var(--text-secondary);border:1px solid var(--input-border);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;">Reject</button>
+                  <button onclick="publishBriefingRec('${b.date}','${rec.id}')" style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">Publish Now</button>
+                </div>
+              ` : ''}
+              ${rec.publishedPlatforms && rec.publishedPlatforms.length ? `
+                <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;">
+                  ${rec.publishedPlatforms.map(p => `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#22c55e20;color:#22c55e;font-weight:600;">${p} posted</span>`).join("")}
                 </div>
               ` : ''}
             </div>
@@ -8176,12 +8186,29 @@
       }
     }
 
-    async function approveBriefingRec(date, recId) {
-      await fetch("/api/briefing/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, recId }),
-      });
+    async function approveBriefingRec(date, recId, publish = true) {
+      const btn = event?.target;
+      if (btn) { btn.disabled = true; btn.textContent = publish ? "Publishing..." : "Approving..."; }
+      try {
+        const resp = await fetch("/api/briefing/approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date, recId, publish }),
+        });
+        const data = await resp.json();
+        if (publish && data.publishResults) {
+          const published = data.publishResults.filter(r => r.status === "published");
+          const errors = data.publishResults.filter(r => r.status === "error");
+          const skipped = data.publishResults.filter(r => r.status === "skipped");
+          let msg = "";
+          if (published.length) msg += `Published to: ${published.map(r => r.platform + (r.account ? ' (' + r.account + ')' : '')).join(", ")}`;
+          if (skipped.length) msg += `${msg ? "\n" : ""}Skipped: ${skipped.map(r => r.platform + ' — ' + r.reason).join(", ")}`;
+          if (errors.length) msg += `${msg ? "\n" : ""}Errors: ${errors.map(r => r.platform + ' — ' + r.error).join(", ")}`;
+          if (msg) alert(msg);
+        }
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
       await loadBriefing();
     }
 
@@ -8191,6 +8218,29 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date, recId }),
       });
+      await loadBriefing();
+    }
+
+    async function publishBriefingRec(date, recId) {
+      const btn = event?.target;
+      if (btn) { btn.disabled = true; btn.textContent = "Publishing..."; }
+      try {
+        const resp = await fetch("/api/briefing/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date, recId }),
+        });
+        const data = await resp.json();
+        if (data.results) {
+          const published = data.results.filter(r => r.status === "published");
+          const errors = data.results.filter(r => r.status === "error");
+          let msg = published.length ? `Published to: ${published.map(r => r.platform).join(", ")}` : "";
+          if (errors.length) msg += `${msg ? "\n" : ""}Errors: ${errors.map(r => r.platform + ' — ' + r.error).join(", ")}`;
+          if (msg) alert(msg);
+        }
+      } catch (e) {
+        alert("Publish error: " + e.message);
+      }
       await loadBriefing();
     }
 

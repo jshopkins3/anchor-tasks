@@ -3231,7 +3231,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // Approve a recommendation
+    // Approve a recommendation (and optionally publish)
     if (urlPath === "/api/briefing/approve" && req.method === "POST") {
       if (!req.session) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
@@ -3239,7 +3239,66 @@ const server = http.createServer(async (req, res) => {
       const me = require("./marketing-engine");
       const rec = me.approveRecommendation(body.date, body.recId);
       if (!rec) return json(res, 404, { error: "Recommendation not found" });
-      return json(res, 200, { rec });
+
+      // Auto-publish if requested (or publish by default)
+      let publishResults = null;
+      if (body.publish !== false && process.env.ZERNIO_API_KEY) {
+        try {
+          const publisher = require("./social-publisher");
+          publishResults = await publisher.publishRecommendation(rec, {
+            scheduleTime: body.scheduleTime || null,
+          });
+          // Mark published platforms on the recommendation
+          for (const r of publishResults) {
+            if (r.status === "published") {
+              me.markPublished(body.date, body.recId, r.platform);
+            }
+          }
+        } catch (e) {
+          console.error("[briefing] Publish error:", e.message);
+          publishResults = [{ status: "error", error: e.message }];
+        }
+      }
+
+      return json(res, 200, { rec, publishResults });
+    }
+
+    // Publish a specific recommendation to specific platforms
+    if (urlPath === "/api/briefing/publish" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.date || !body.recId) return json(res, 400, { error: "date and recId required" });
+      try {
+        const me = require("./marketing-engine");
+        const briefing = me.loadBriefing(body.date);
+        if (!briefing) return json(res, 404, { error: "Briefing not found" });
+        const rec = (briefing.contentRecommendations || []).find(r => r.id === body.recId);
+        if (!rec) return json(res, 404, { error: "Recommendation not found" });
+
+        const publisher = require("./social-publisher");
+        const results = await publisher.publishRecommendation(rec, {
+          scheduleTime: body.scheduleTime || null,
+          profileFilter: body.profileFilter || null,
+        });
+        for (const r of results) {
+          if (r.status === "published") me.markPublished(body.date, body.recId, r.platform);
+        }
+        return json(res, 200, { results });
+      } catch (e) {
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // List connected social accounts
+    if (urlPath === "/api/social/accounts" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const publisher = require("./social-publisher");
+        const accounts = await publisher.listAccounts();
+        return json(res, 200, { accounts });
+      } catch (e) {
+        return json(res, 200, { accounts: [], error: e.message });
+      }
     }
 
     // Reject a recommendation
