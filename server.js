@@ -1407,7 +1407,7 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message, emails: [] }); }
     }
 
-    // Gmail: read full message
+    // Gmail: read full message (rich: HTML body, attachments, CC/BCC, threading headers)
     if (urlPath === "/api/dan/gmail-read" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
@@ -1420,40 +1420,112 @@ const server = http.createServer(async (req, res) => {
         if (!msgResp.ok) return json(res, 200, { error: `Gmail API: ${msgResp.status}` });
         const msg = await msgResp.json();
         const h = msg.payload?.headers || [];
-        const bodyContent = decodeEmailBody(msg.payload);
+        const bodyContent = gmailExtractBody(msg.payload);
+        // Extract attachments
+        const attachments = [];
+        function findAtts(p) {
+          if (!p) return;
+          if (p.filename && p.body?.attachmentId) {
+            const contentDisp = (p.headers || []).find(h => h.name.toLowerCase() === "content-disposition");
+            const contentId = (p.headers || []).find(h => h.name.toLowerCase() === "content-id");
+            const isInline = (contentDisp && /^\s*inline/i.test(contentDisp.value)) || (contentId && /^image\//i.test(p.mimeType));
+            attachments.push({
+              name: p.filename, attachmentId: p.body.attachmentId,
+              mimeType: p.mimeType, size: p.body.size || 0,
+              inline: isInline, contentId: contentId ? contentId.value.replace(/[<>]/g, "") : null,
+            });
+          }
+          if (p.parts) p.parts.forEach(findAtts);
+        }
+        findAtts(msg.payload);
+        const from = parseEmailHeader(h, "From");
+        const fromMatch = from.match(/^"?([^"<]+)"?\s*<?([^>]*)>?$/);
         return json(res, 200, {
           id: msg.id, threadId: msg.threadId,
-          from: parseEmailHeader(h, "From"), to: parseEmailHeader(h, "To"),
-          subject: parseEmailHeader(h, "Subject"), date: parseEmailHeader(h, "Date"),
+          from: fromMatch ? fromMatch[1].trim() : from,
+          fromEmail: fromMatch ? fromMatch[2].trim() : from,
+          to: parseEmailHeader(h, "To"),
+          cc: parseEmailHeader(h, "Cc"),
+          bcc: parseEmailHeader(h, "Bcc"),
+          replyTo: parseEmailHeader(h, "Reply-To"),
+          subject: parseEmailHeader(h, "Subject") || "(No subject)",
+          date: parseEmailHeader(h, "Date"),
+          messageId: parseEmailHeader(h, "Message-ID"),
+          inReplyTo: parseEmailHeader(h, "In-Reply-To"),
+          references: parseEmailHeader(h, "References"),
           body: bodyContent, snippet: msg.snippet,
+          attachments,
+          unread: (msg.labelIds || []).includes("UNREAD"),
+          labelIds: msg.labelIds || [],
         });
       } catch (e) { return json(res, 200, { error: e.message }); }
     }
 
-    // Gmail: send email
+    // Gmail: send email (full: CC/BCC, threading, signature, attachments)
     if (urlPath === "/api/dan/gmail-send" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      try {
+        // Fetch forwarded attachments if any (re-attach from existing messages)
+        const attachments = [];
+        if (body.forwardedAttachments && Array.isArray(body.forwardedAttachments)) {
+          const accessToken = await getGCalAccessToken();
+          for (const fwd of body.forwardedAttachments) {
+            try {
+              const attResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${fwd.messageId}/attachments/${fwd.attachmentId}`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              if (attResp.ok) {
+                const attData = await attResp.json();
+                attachments.push({ filename: fwd.filename || "attachment", mimeType: fwd.mimeType || "application/octet-stream", data: attData.data.replace(/-/g, "+").replace(/_/g, "/") });
+              }
+            } catch (e) { console.error("[gmail] Forwarded attachment fetch error:", e.message); }
+          }
+        }
+        // Add uploaded attachments (already base64)
+        if (body.attachments && Array.isArray(body.attachments)) {
+          attachments.push(...body.attachments);
+        }
+        const result = await gmailSendEmail({
+          to: body.to, cc: body.cc, bcc: body.bcc,
+          subject: body.subject, body: body.body,
+          inReplyTo: body.inReplyTo, references: body.references, threadId: body.threadId,
+          attachments: attachments.length > 0 ? attachments : undefined,
+        });
+        if (!result || result.error) return json(res, 200, { error: result?.error || "Send failed" });
+        console.log(`[dan-gmail] Sent email to ${body.to}: "${body.subject}"`);
+        return json(res, 200, { success: true, messageId: result.id, to: body.to, subject: body.subject });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    // Gmail: download attachment
+    if (urlPath === "/api/dan/gmail-attachment" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
       const accessToken = await getGCalAccessToken();
       if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
       try {
-        const rawEmail = [
-          `To: ${body.to}`,
-          `Subject: ${body.subject}`,
-          `Content-Type: text/plain; charset=utf-8`,
-          ``,
-          body.body,
-        ].join("\r\n");
-        const encoded = Buffer.from(rawEmail).toString("base64url");
-        const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ raw: encoded }),
+        const attResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}/attachments/${body.attachmentId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
         });
-        if (!resp.ok) return json(res, 200, { error: `Send failed: ${resp.status}` });
-        const sent = await resp.json();
-        console.log(`[dan-gmail] Sent email to ${body.to}: "${body.subject}"`);
-        return json(res, 200, { success: true, messageId: sent.id, to: body.to, subject: body.subject });
+        if (!attResp.ok) return json(res, attResp.status, { error: "Failed to fetch attachment" });
+        const attData = await attResp.json();
+        const buf = Buffer.from(attData.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+        const name = (body.name || "attachment").replace(/"/g, "");
+        const mime = body.mimeType || "application/octet-stream";
+        res.writeHead(200, { "Content-Type": mime, "Content-Disposition": `attachment; filename="${name}"`, "Content-Length": buf.length });
+        return res.end(buf);
+      } catch (e) { return json(res, 500, { error: e.message }); }
+    }
+
+    // Gmail: get full thread
+    if (urlPath === "/api/dan/gmail-thread" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      try {
+        const thread = await gmailGetThread(body.threadId);
+        if (!thread) return json(res, 200, { error: "Thread not found" });
+        return json(res, 200, thread);
       } catch (e) { return json(res, 200, { error: e.message }); }
     }
 
