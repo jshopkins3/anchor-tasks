@@ -8274,7 +8274,17 @@
     let recapIndex = 0;
     let recapLoans = [];
     let recapNotes = {};
+    let recapSkipped = {};
     let recapDate = new Date().toISOString().split("T")[0];
+
+    // Stage grouping (matches Anchor Command)
+    const RECAP_STAGE_MAP = {
+      APPLICATION_INTAKE: 1, QUALIFICATION: 1, PREAPPROVED: 1,
+      LOAN_SETUP: 2, DISCLOSURE_SENT: 2, UNDERWRITING_SUBMITTED: 2, SUBMITTED_TO_UW: 2, APPROVED_WITH_CONDITION: 2, RE_SUBMITTAL: 2,
+      CLEAR_TO_CLOSE: 3, DOCS_OUT: 3, DOCS_SIGNED: 3,
+    };
+    const RECAP_STAGE_NAMES = { 3: "Stage 3 — Safe Harbor (Closing)", 2: "Stage 2 — Open Water (Processing)", 1: "Stage 1 — Harbor Entry (Pre-Approval)" };
+    const RECAP_STAGE_COLORS = { 3: "#10b981", 2: "#f59e0b", 1: "#6366f1" };
 
     async function renderWeeklyRecap() {
       const container = document.getElementById("recap-container");
@@ -8283,18 +8293,17 @@
         container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin 0.8s linear infinite;"></div>Loading pipeline...</div>';
         await loadPipelineLoans(false);
       }
-      // Sort: in-process first (closest to closing), then earlier stages
-      const inProcess = new Set(["CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED","APPROVED_WITH_CONDITION","DISCLOSURE_SENT"]);
+      // Group by stage bucket (3 first, then 2, then 1) and sort within each
       recapLoans = pipelineLoans.filter(l => ACTIVE_STAGES.has(l.loanStatus))
         .sort((a, b) => {
-          const ai = inProcess.has(a.loanStatus) ? 0 : 1;
-          const bi = inProcess.has(b.loanStatus) ? 0 : 1;
-          if (ai !== bi) return ai - bi;
-          // By closing date (soonest first), then by stage
+          const sa = RECAP_STAGE_MAP[a.loanStatus] || 0;
+          const sb = RECAP_STAGE_MAP[b.loanStatus] || 0;
+          if (sa !== sb) return sb - sa; // Stage 3 first
+          // Within same stage: by closing date (soonest first), then amount
           if (a.closingDate && b.closingDate) return a.closingDate.localeCompare(b.closingDate);
           if (a.closingDate) return -1;
           if (b.closingDate) return 1;
-          return PIPELINE_STAGES_ORDER.indexOf(b.loanStatus) - PIPELINE_STAGES_ORDER.indexOf(a.loanStatus);
+          return (b.loanAmount || 0) - (a.loanAmount || 0);
         });
 
       if (recapLoans.length === 0) {
@@ -8347,20 +8356,43 @@
         (ev.title || "").toLowerCase().includes(loan.borrowerLast?.toLowerCase() || "___")
       );
 
+      // Stage bucket info
+      const stageBucket = RECAP_STAGE_MAP[loan.loanStatus] || 0;
+      const stageBucketName = RECAP_STAGE_NAMES[stageBucket] || "Other";
+      const stageBucketColor = RECAP_STAGE_COLORS[stageBucket] || "#6366f1";
+      const loansInBucket = recapLoans.filter(l => (RECAP_STAGE_MAP[l.loanStatus] || 0) === stageBucket);
+      const bucketIdx = loansInBucket.indexOf(loan);
+      // Check if this is first loan of a new stage bucket
+      const prevLoan = recapIndex > 0 ? recapLoans[recapIndex - 1] : null;
+      const isNewBucket = !prevLoan || (RECAP_STAGE_MAP[prevLoan.loanStatus] || 0) !== stageBucket;
+      const skippedCount = Object.keys(recapSkipped).length;
+      const reviewedCount = Object.values(recapNotes).filter(n => n.trim()).length;
+
       let html = `
         <!-- Progress bar -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
           <div style="font-size:12px;font-weight:600;color:var(--text-secondary);">Loan ${recapIndex + 1} of ${recapLoans.length}</div>
           <div style="flex:1;height:4px;background:var(--border);border-radius:99px;overflow:hidden;">
             <div style="width:${((recapIndex + 1) / recapLoans.length * 100).toFixed(0)}%;height:100%;background:var(--navy);border-radius:99px;transition:width 0.3s;"></div>
           </div>
           <div style="display:flex;gap:4px;">
-            ${recapLoans.map((l, i) => `<div onclick="recapGoTo(${i})" style="width:8px;height:8px;border-radius:50%;background:${i === recapIndex ? 'var(--navy)' : i < recapIndex ? (recapNotes[l.id]?.trim() ? '#10b981' : 'var(--text-faint)') : 'var(--border)'};cursor:pointer;transition:all 0.2s;" title="${l.borrowerName}"></div>`).join("")}
+            ${recapLoans.map((l, i) => {
+              const dotColor = i === recapIndex ? 'var(--navy)' : recapSkipped[l.id] ? 'var(--border)' : recapNotes[l.id]?.trim() ? '#10b981' : i < recapIndex ? 'var(--text-faint)' : 'var(--border)';
+              return `<div onclick="recapGoTo(${i})" style="width:8px;height:8px;border-radius:50%;background:${dotColor};cursor:pointer;transition:all 0.2s;${recapSkipped[l.id] ? 'opacity:0.4;' : ''}" title="${l.borrowerName}${recapSkipped[l.id] ? ' (skipped)' : ''}"></div>`;
+            }).join("")}
           </div>
         </div>
 
+        <!-- Stage bucket header -->
+        ${isNewBucket ? `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:${stageBucketColor}10;border:1px solid ${stageBucketColor}25;border-radius:10px;">
+          <div style="width:10px;height:10px;border-radius:50%;background:${stageBucketColor};"></div>
+          <div style="font-size:14px;font-weight:700;color:${stageBucketColor};">${stageBucketName}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-left:auto;">${loansInBucket.length} loan${loansInBucket.length !== 1 ? 's' : ''}</div>
+        </div>` : ''}
+
         <!-- Loan card -->
-        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:12px;padding:20px;margin-bottom:16px;border-left:4px solid ${color};">
+        <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:12px;padding:20px;margin-bottom:16px;border-left:4px solid ${color};">${recapSkipped[loan.id] ? `<div style="position:absolute;top:10px;right:10px;font-size:10px;color:var(--text-faint);background:var(--input-bg);padding:2px 8px;border-radius:99px;">SKIPPED</div>` : ''}
           <!-- Header -->
           <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
             <div style="width:52px;height:52px;border-radius:50%;background:${color}15;color:${color};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;">${initials || "?"}</div>
@@ -8440,8 +8472,11 @@
         <!-- Navigation -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
           <button onclick="recapPrev()" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;color:var(--text-primary);font-weight:600;${recapIndex === 0 ? 'opacity:0.3;pointer-events:none;' : ''}">&larr; Previous</button>
-          <div style="text-align:center;">
-            <div style="font-size:12px;color:var(--text-faint);">${Object.values(recapNotes).filter(n => n.trim()).length} of ${recapLoans.length} loans reviewed</div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button onclick="recapSkip()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;color:var(--text-faint);font-weight:500;">Skip</button>
+            <div style="text-align:center;">
+              <div style="font-size:12px;color:var(--text-faint);">${reviewedCount} reviewed${skippedCount > 0 ? ` &bull; ${skippedCount} skipped` : ''}</div>
+            </div>
           </div>
           ${recapIndex < recapLoans.length - 1
             ? `<button onclick="recapNext()" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;font-weight:600;">Next &rarr;</button>`
@@ -8456,9 +8491,10 @@
     }
 
     function recapNext() {
-      // Save current note
       const ta = document.getElementById("recap-note-input");
       if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
+      // Remove skip if user added a note
+      if (recapNotes[recapLoans[recapIndex].id]?.trim()) delete recapSkipped[recapLoans[recapIndex].id];
       if (recapIndex < recapLoans.length - 1) { recapIndex++; renderRecapLoan(); }
     }
 
@@ -8466,6 +8502,17 @@
       const ta = document.getElementById("recap-note-input");
       if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
       if (recapIndex > 0) { recapIndex--; renderRecapLoan(); }
+    }
+
+    function recapSkip() {
+      const ta = document.getElementById("recap-note-input");
+      if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
+      // Only mark as skipped if no note
+      if (!recapNotes[recapLoans[recapIndex].id]?.trim()) {
+        recapSkipped[recapLoans[recapIndex].id] = true;
+      }
+      if (recapIndex < recapLoans.length - 1) { recapIndex++; renderRecapLoan(); }
+      else renderRecapLoan(); // re-render to show skip state on last loan
     }
 
     function recapGoTo(idx) {
@@ -8476,18 +8523,26 @@
     }
 
     async function recapFinish() {
-      // Save last note
       const ta = document.getElementById("recap-note-input");
       if (ta) recapNotes[recapLoans[recapIndex].id] = ta.value;
 
-      // Copy notes into pipelineNotes for the existing review flow
-      pipelineNotes = { ...recapNotes };
+      // Copy only non-skipped notes into pipelineNotes
+      pipelineNotes = {};
+      for (const [id, note] of Object.entries(recapNotes)) {
+        if (note.trim() && !recapSkipped[id]) pipelineNotes[id] = note;
+      }
+
+      if (Object.keys(pipelineNotes).length === 0) {
+        alert("No notes to process. Add notes to at least one loan or go back.");
+        return;
+      }
 
       // Run the same complete review logic
       await completePipelineReview();
 
       // Reset recap state
       recapNotes = {};
+      recapSkipped = {};
       recapIndex = 0;
     }
 
