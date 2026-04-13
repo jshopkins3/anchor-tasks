@@ -148,8 +148,8 @@ async function gatherMarketIntelligence() {
       title: t.title,
       source: t.source,
       summary: t.summary || "",
-      url: t.url || "",
-      publishedAt: t.publishedAt || t.createdAt,
+      url: t.link || t.url || "",
+      publishedAt: t.pubDate || t.fetchedAt || t.createdAt || "",
     })),
 
     // Pipeline

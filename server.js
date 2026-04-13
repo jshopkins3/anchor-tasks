@@ -553,7 +553,11 @@ async function getGCalAccessToken(email) {
     if (data.access_token) {
       token.access_token = data.access_token;
       token.expires_at = Date.now() + (data.expires_in || 3600) * 1000;
+      // If Google rotated the refresh token, update it
+      if (data.refresh_token) token.refresh_token = data.refresh_token;
+      // Always save to both user-specific AND legacy file to keep them in sync
       saveGCalToken(token, email);
+      if (email) saveGCalToken(token); // sync back to legacy file
       return data.access_token;
     }
     console.error("[gcal] Token refresh failed:", data);
@@ -957,6 +961,7 @@ async function gmailGetThread(threadId, userEmail) {
 
 /* ─── Gmail: send email (full RFC 2822) ────────────────────────────────── */
 /* ─── Gmail: fetch user's email signature ──────────────────────────── */
+const triageCache = {};  // per-user triage cache: { email: { result, time } }
 const signatureCache = {};  // per-user signature cache: { email: { sig, time } }
 async function gmailGetSignature(userEmail) {
   const cacheKey = userEmail || "_default";
@@ -2672,12 +2677,18 @@ const server = http.createServer(async (req, res) => {
           console.log("[gcal-callback] refresh_token sources: google=", !!data.refresh_token, "existing=", !!(existing?.refresh_token), "stashed=", !!global._savedRefreshToken, "final=", !!refresh_token);
           if (global._savedRefreshToken) delete global._savedRefreshToken;
           if (refresh_token) {
-            saveGCalToken({
+            const tokenObj = {
               refresh_token,
               access_token: data.access_token,
               expires_at: Date.now() + (data.expires_in || 3600) * 1000,
               scope: data.scope || "",
-            });
+            };
+            saveGCalToken(tokenObj); // legacy file
+            // Also save to user-specific file if logged in
+            if (req.session && req.session.email) {
+              saveGCalToken(tokenObj, req.session.email);
+              console.log("[gcal-callback] Token saved to both legacy and user file:", req.session.email);
+            }
             const hasGmailSend = (data.scope || "").includes("gmail.send");
             console.log("[gcal] Connected successfully. Scopes:", data.scope || "(not returned)");
             console.log("[gcal] gmail.send scope:", hasGmailSend ? "YES" : "NO - re-auth needed with consent prompt");
@@ -3101,7 +3112,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     /* ── GMAIL: AI Email Triage (Dan-powered dashboard widget) ──── */
-    const triageCache = {};  // per-user: { email: { result, time } }
     if (urlPath === "/api/email-triage" && req.method === "GET") {
       const ue = req.session && req.session.email;
       // Check cache (10 min)
@@ -3831,9 +3841,50 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
     if (urlPath === "/api/content-feed" && req.method === "GET") {
       const cw = require("./content-watcher");
       const status = url.searchParams.get("status") || "new";
-      const limit = parseInt(url.searchParams.get("limit") || "20");
+      const limit = parseInt(url.searchParams.get("limit") || "30");
+      const grouped = url.searchParams.get("grouped") === "1";
       const result = cw.getTriggers({ status, limit });
-      return json(res, 200, result);
+      if (!grouped) return json(res, 200, result);
+
+      // Group by source + extract themes via Claude
+      const triggers = result.triggers || [];
+      const bySource = {};
+      for (const t of triggers) {
+        const src = t.source || "Unknown";
+        if (!bySource[src]) bySource[src] = { source: src, sourceIcon: t.sourceIcon, items: [] };
+        bySource[src].items.push(t);
+      }
+      const sources = Object.values(bySource).sort((a, b) => b.items.length - a.items.length);
+
+      // Extract themes with Claude (cached per hour)
+      let themes = [];
+      const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
+      if (ANTHROPIC_KEY && triggers.length >= 3) {
+        try {
+          const headlines = triggers.slice(0, 25).map(t => `[${t.source}] ${t.title}`).join("\n");
+          const themeResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514", max_tokens: 512,
+              messages: [{ role: "user", content: `You are analyzing mortgage industry news headlines for a loan officer. Identify 2-4 emerging THEMES from these headlines. Each theme should be a short phrase (3-6 words) with a 1-sentence explanation of why it matters to a mortgage broker. Return ONLY valid JSON, no markdown.
+
+Headlines:
+${headlines}
+
+Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","count":N,"emoji":"relevant emoji"}]}` }],
+            }),
+          });
+          if (themeResp.ok) {
+            const td = await themeResp.json();
+            const text = (td.content || []).find(c => c.type === "text")?.text || "{}";
+            const parsed = JSON.parse(text.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
+            themes = parsed.themes || [];
+          }
+        } catch (e) { console.error("[content-feed] Theme extraction error:", e.message); }
+      }
+
+      return json(res, 200, { sources, themes, total: triggers.length, lastPoll: result.lastPoll });
     }
 
     // POST /api/content-feed/poll — manually trigger a poll
