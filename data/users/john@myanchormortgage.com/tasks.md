@@ -17,6 +17,7 @@
 - [ ] 6414d25d | Guideline Updates Scraper (Playwright + Broker Marketplace) | John | | normal | Anchor Command — AI Brain & Platform | To Do | false | false | true | aed98ca4 | false | 0 | | | | |
 - [ ] 3d42e89e | Searchable Lender Directory (78 lenders from CSV) | John | | normal | Anchor Command — AI Brain & Platform | To Do | false | false | true | aed98ca4 | false | 0 | | | | |
 - [ ] e98e60a1 | Fee Worksheet — Test with Real Arive PDF | John | | normal | Anchor Command — AI Brain & Platform | To Do | false | false | false | aed98ca4 | false | 0 | | | | |
+- [ ] ee054192 | Build Internal Marketing Dept (Hormozi Offers + GaryVee Distribution + John Voice) | John | | urgent | Anchor Command — AI Brain & Platform | To Do | false | true | true | aed98ca4 | true | 1 | | | | |
 
 ## Completed
 - [x] 6030551d | Phase 1: Build Pinecone MCP Server | John | 2026-04-12 | high | Anchor Command — AI Brain & Platform | Done | false | false | true | aed98ca4 | false | 0 | | | | |
