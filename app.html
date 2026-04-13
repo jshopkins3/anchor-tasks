@@ -8086,7 +8086,7 @@
         }
 
         if (pb.pipelineImplications) {
-          document.getElementById("briefing-market-context").innerHTML += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.15);font-size:12px;opacity:0.75;">Pipeline: ${pb.pipelineImplications}</div>`;
+          document.getElementById("briefing-market-context").innerHTML += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.2);font-size:12px;opacity:0.8;">Pipeline: ${pb.pipelineImplications}</div>`;
         }
       }
 
@@ -8438,7 +8438,7 @@
           const statusColor = STATUS_COLORS[post.status] || "#6b7280";
 
           html += `
-          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.15);border-radius:6px;overflow:hidden;">
+          <div style="background:var(--bg-card);border:1px solid rgba(201,168,76,0.15);border-radius:6px;overflow:hidden;">
             <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${tc.bg};">
               <div style="width:10px;height:10px;border-radius:50%;background:${tc.dot};flex-shrink:0;"></div>
               <div style="font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;flex:1;">${dayLabel} - ${dateLabel}</div>
@@ -8446,13 +8446,13 @@
               <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,0.3);color:${statusColor};font-weight:600;">${STATUS_LABELS[post.status] || post.status}</span>
             </div>
             <div style="padding:12px 14px;">
-              <div id="content-text-${post.id}" style="font-size:14px;line-height:1.7;color:#f5f0e8;white-space:pre-wrap;">${escapeHTML(post.text)}</div>
-              ${post.notes ? `<div style="margin-top:8px;font-size:11px;color:#8a8a8a;font-style:italic;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">${escapeHTML(post.notes)}</div>` : ""}
+              <div id="content-text-${post.id}" style="font-size:14px;line-height:1.7;color:var(--text-body);white-space:pre-wrap;">${escapeHTML(post.text)}</div>
+              ${post.notes ? `<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);font-style:italic;padding-top:8px;border-top:1px solid var(--border);">${escapeHTML(post.notes)}</div>` : ""}
               ${post.substackCandidate ? `
                 <div style="margin-top:10px;padding:10px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:6px;">
                   <div style="font-size:11px;font-weight:700;color:#c9a84c;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Substack Version${post.substackTitle ? ': ' + escapeHTML(post.substackTitle) : ''}</div>
-                  ${post.substackBody ? `<div style="font-size:13px;line-height:1.7;color:#f5f0e8;white-space:pre-wrap;">${escapeHTML(post.substackBody)}</div>
-                  <button onclick="copyPost(${JSON.stringify(post.substackBody || '').replace(/"/g, '&quot;')})" style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(201,168,76,0.2);color:#c9a84c;cursor:pointer;font-weight:600;">Copy Substack</button>` : '<div style="font-size:11px;color:#8a8a8a;">Flagged for Substack expansion</div>'}
+                  ${post.substackBody ? `<div style="font-size:13px;line-height:1.7;color:var(--text-body);white-space:pre-wrap;">${escapeHTML(post.substackBody)}</div>
+                  <button onclick="copyPost(${JSON.stringify(post.substackBody || '').replace(/"/g, '&quot;')})" style="margin-top:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:none;background:rgba(201,168,76,0.2);color:#c9a84c;cursor:pointer;font-weight:600;">Copy Substack</button>` : '<div style="font-size:11px;color:var(--text-secondary);">Flagged for Substack expansion</div>'}
                 </div>
               ` : ""}
               <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
