@@ -3503,6 +3503,21 @@ const server = http.createServer(async (req, res) => {
       const body = JSON.parse(await readBody(req));
       const notes = body.notes || {}; // { loanId: { borrowerName, note, loanStatus, loanAmount } }
 
+      // Auto-create "Active Loans" project if it doesn't exist
+      const existingProjects = parseProjects(req.session.email);
+      if (!existingProjects.find(p => p.name === "Active Loans")) {
+        existingProjects.push({
+          id: generateId(),
+          name: "Active Loans",
+          description: "Tasks from pipeline reviews and active loan management",
+          owner: req.session.name || "",
+          ownerEmail: req.session.email,
+          members: [],
+          archived: false,
+        });
+        writeProjects(existingProjects, req.session.email);
+      }
+
       // Build prompt for Claude to parse notes into structured tasks
       const noteEntries = Object.entries(notes).filter(([, v]) => v.note && v.note.trim());
       if (noteEntries.length === 0) return json(res, 200, { tasks: [], summary: "No notes to process." });
@@ -3540,7 +3555,7 @@ ${notesText}
 Return a JSON object with:
 {
   "tasks": [
-    { "title": "task description", "assignee": "John or team member name", "due": "YYYY-MM-DD or empty", "priority": "low|normal|high|urgent", "project": "Pipeline", "category": "task|followup|escalation", "loanId": "loan id if relevant" }
+    { "title": "task description", "assignee": "John or team member name", "due": "YYYY-MM-DD or empty", "priority": "low|normal|high|urgent", "project": "Active Loans", "category": "task|followup|escalation", "loanId": "loan id if relevant" }
   ],
   "summary": "Brief summary of what was captured from this review"
 }
@@ -3570,7 +3585,7 @@ Be specific and actionable. Use borrower names in task titles. If a note mention
             assignee: "John",
             due: "",
             priority: "normal",
-            project: "Pipeline",
+            project: "Active Loans",
             loanId,
           }));
           return json(res, 200, { tasks: fallbackTasks, summary: `Created ${fallbackTasks.length} task(s) from pipeline notes (AI unavailable).` });
