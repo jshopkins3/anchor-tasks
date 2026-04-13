@@ -2122,17 +2122,23 @@
       <!-- Bottom panels: Email + Calendar + Content -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;">
 
-        <!-- Email — Action Needed -->
+        <!-- Email — Action Needed (Dan-powered triage) -->
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
             <div style="display:flex;align-items:center;gap:6px;">
               <span>&#9993;</span>
-              <span style="font-size:13px;font-weight:700;color:var(--text-heading);">Email — Action Needed</span>
+              <span style="font-size:13px;font-weight:700;color:var(--text-heading);">Email Triage</span>
+              <span id="hub-email-badge" style="display:none;font-size:10px;background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-weight:700;"></span>
             </div>
-            <a onclick="switchToTab('email')" style="font-size:10px;color:var(--gold);cursor:pointer;font-weight:600;">Inbox &rarr;</a>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <a onclick="refreshEmailTriage()" style="font-size:10px;color:var(--text-faint);cursor:pointer;" title="Refresh triage">&#8635;</a>
+              <a onclick="switchToTab('email')" style="font-size:10px;color:var(--gold);cursor:pointer;font-weight:600;">Inbox &rarr;</a>
+            </div>
           </div>
-          <div id="hub-email-list" style="max-height:200px;overflow-y:auto;padding:4px 0;">
-            <div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Loading email...</div>
+          <div id="hub-email-list" style="max-height:240px;overflow-y:auto;padding:0;">
+            <div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">
+              <span style="display:inline-block;animation:pulse 1.5s infinite;">&#9881;</span> Dan is triaging your inbox...
+            </div>
           </div>
         </div>
 
@@ -2439,6 +2445,8 @@
                 <option value="subject">Subject</option>
                 <option value="unread">Unread first</option>
               </select>
+              <button class="email-toolbar-btn" id="email-unread-filter-btn" onclick="toggleUnreadFilter()" title="Show unread only" style="background:var(--bg-card);color:var(--text-secondary);font-size:11px;border:1px solid var(--border-default);border-radius:6px;padding:4px 8px;cursor:pointer;font-family:inherit;">Unread</button>
+              <button class="email-toolbar-btn" onclick="markAllRead()" title="Mark all as read" style="background:var(--bg-card);color:var(--text-secondary);font-size:11px;border:1px solid var(--border-default);border-radius:6px;padding:4px 8px;cursor:pointer;font-family:inherit;">✓ All Read</button>
               <button class="email-toolbar-btn" onclick="refreshEmailFolder()" title="Refresh">↻</button>
               <a href="/api/gcal-auth" class="email-toolbar-btn" style="text-decoration:none;" title="Reconnect Google">⚙</a>
             </div>
@@ -4200,14 +4208,9 @@
         focusList.innerHTML = focusHtml || '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">All clear! No tasks or meetings right now.</div>';
       }
 
-      // Email panel
-      const emailList = document.getElementById("hub-email-list");
-      if (emailList && typeof inboxEmails !== "undefined") {
-        const unreadEmails = inboxEmails.filter(e => e.unread).slice(0, 5);
-        emailList.innerHTML = unreadEmails.length === 0
-          ? '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Inbox clear</div>'
-          : unreadEmails.map(e => `<div onclick="switchToTab('email')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'"><div style="font-size:12px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.from || "")}</div><div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(e.subject || "")}</div></div>`).join("");
-      }
+      // Email triage panel (Dan-powered)
+      loadEmailTriage();
+
 
       // Calendar panel
       const calList = document.getElementById("hub-calendar-list");
@@ -5011,6 +5014,78 @@
       calSelectedDate = calDateStr(new Date());
       await renderCalendarView();
     }
+
+    /* ── Email Triage (Dan-powered dashboard widget) ─────────── */
+    let triageData = null;
+    async function loadEmailTriage(forceRefresh) {
+      const el = document.getElementById("hub-email-list");
+      const badge = document.getElementById("hub-email-badge");
+      if (!el) return;
+      try {
+        const url = forceRefresh ? "/api/email-triage?refresh=1" : "/api/email-triage";
+        if (forceRefresh) el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;"><span style="display:inline-block;animation:pulse 1.5s infinite;">&#9881;</span> Dan is triaging your inbox...</div>';
+        const resp = await fetch(url);
+        triageData = await resp.json();
+        if (triageData.zeroInbox) {
+          el.innerHTML = '<div style="padding:20px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">&#9875;</div><div style="font-size:12px;color:var(--text-faint);font-weight:600;">Inbox Zero &#8212; smooth sailing!</div></div>';
+          if (badge) badge.style.display = "none";
+          return;
+        }
+        if (triageData.error || !triageData.categories || !triageData.categories.length) {
+          // Fallback: show raw unread emails
+          if (typeof inboxEmails !== "undefined" && inboxEmails.length) {
+            const unread = inboxEmails.filter(e => e.unread).slice(0, 5);
+            el.innerHTML = unread.length ? unread.map(e => `<div onclick="switchToTab('email')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'"><div style="font-size:12px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.from || "")}</div><div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(e.subject || "")}</div></div>`).join("") : '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">No unread email</div>';
+          } else {
+            el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Could not load triage</div>';
+          }
+          return;
+        }
+        // Show urgent count badge
+        const urgentCount = (triageData.categories.find(c => c.priority === "urgent") || {emails:[]}).emails.length;
+        if (badge) {
+          if (urgentCount > 0) { badge.textContent = urgentCount; badge.style.display = "inline"; }
+          else { badge.style.display = "none"; }
+        }
+        // Render categorized emails
+        let html = "";
+        for (const cat of triageData.categories) {
+          // Category header
+          html += `<div style="padding:6px 14px 3px;display:flex;align-items:center;gap:6px;background:var(--bg-base);">
+            <span style="font-size:10px;">${cat.emoji}</span>
+            <span style="font-size:10px;font-weight:700;color:${cat.color};text-transform:uppercase;letter-spacing:0.5px;">${esc(cat.label)}</span>
+            <span style="font-size:10px;color:var(--text-faint);">(${cat.emails.length})</span>
+          </div>`;
+          // Email rows (max 3 per category to keep compact)
+          const show = cat.emails.slice(0, 3);
+          for (const e of show) {
+            const fromName = (e.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
+            const summ = e.summary ? ` — ${e.summary}` : "";
+            html += `<div onclick="switchToTab('email')" style="padding:5px 14px 5px 24px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:11px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(fromName)}</div>
+                <div style="font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.subject || "")}${esc(summ)}</div>
+              </div>
+            </div>`;
+          }
+          if (cat.emails.length > 3) {
+            html += `<div style="padding:3px 14px 5px 24px;font-size:10px;color:var(--text-faint);">+${cat.emails.length - 3} more</div>`;
+          }
+        }
+        // Show auto-read summary at bottom
+        if (triageData.autoRead > 0) {
+          html += `<div style="padding:6px 14px;background:var(--bg-base);border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;">
+            <span style="font-size:10px;">&#9875;</span>
+            <span style="font-size:10px;color:var(--text-faint);">Dan auto-cleared <strong style="color:var(--text-secondary);">${triageData.autoRead}</strong> noise email${triageData.autoRead > 1 ? 's' : ''}</span>
+          </div>`;
+        }
+        el.innerHTML = html;
+      } catch (err) {
+        console.error("[email-triage]", err);
+        el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Triage unavailable</div>';
+      }
+    }
+    function refreshEmailTriage() { loadEmailTriage(true); }
 
     /* ── Inbox ───────────────────────────────────────────────── */
     let inboxEmails = [];
@@ -6295,7 +6370,8 @@
             <input type="checkbox" class="email-checkbox" onchange="toggleSelectAll(this.checked)" title="Select all">
           </div>`;
 
-      listEl.innerHTML = bulkBar + folderEmails.map(e => {
+      // Build email rows — with grouped sender headers when sorting by sender
+      const renderRow = (e) => {
         const hasAttachment = e.snippet && /attach/i.test(e.snippet);
         const isWork = isWorkEmail(e.to) || isWorkEmail(e.fromEmail) || isWorkEmail(e.from);
         const checked = selectedEmailIds.has(e.id);
@@ -6317,7 +6393,40 @@
             ${badges.length ? `<div class="email-row-badges">${badges.join("")}</div>` : ""}
           </div>
         </div>`;
-      }).join("");
+      };
+
+      let rowsHtml = "";
+      if (emailSortBy === "sender") {
+        // Group by sender with clickable headers
+        const groups = {};
+        folderEmails.forEach(e => {
+          const key = (e.from || "Unknown").trim();
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(e);
+        });
+        Object.keys(groups).forEach(sender => {
+          const groupEmails = groups[sender];
+          const groupIds = groupEmails.map(e => e.id);
+          const allChecked = groupIds.every(id => selectedEmailIds.has(id));
+          const unreadCount = groupEmails.filter(e => e.unread).length;
+          rowsHtml += `<div class="email-group-header" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-page,#f5f5f5);border-bottom:1px solid var(--border-default,#e5e5e5);position:sticky;top:0;z-index:2;cursor:pointer;" onclick="toggleGroupSelect('${esc(sender)}')">
+            <input type="checkbox" class="email-checkbox" ${allChecked ? "checked" : ""} onclick="event.stopPropagation();toggleGroupSelect('${esc(sender)}')" title="Select all from ${esc(sender)}">
+            ${emailAvatarHtml(sender)}
+            <div style="flex:1;min-width:0;">
+              <span style="font-size:13px;font-weight:600;color:var(--text-primary);">${esc(sender)}</span>
+              <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">${groupEmails.length} email${groupEmails.length > 1 ? "s" : ""}${unreadCount > 0 ? " · " + unreadCount + " unread" : ""}</span>
+            </div>
+            <div style="display:flex;gap:4px;">
+              <button class="email-bulk-btn" onclick="event.stopPropagation();groupMarkRead('${esc(sender)}')" title="Mark all from ${esc(sender)} as read" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--border-default);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;">✓ Read</button>
+              <button class="email-bulk-btn" onclick="event.stopPropagation();groupArchive('${esc(sender)}')" title="Archive all from ${esc(sender)}" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--border-default);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;">📥</button>
+            </div>
+          </div>`;
+          groupEmails.forEach(e => { rowsHtml += renderRow(e); });
+        });
+      } else {
+        rowsHtml = folderEmails.map(renderRow).join("");
+      }
+      listEl.innerHTML = bulkBar + rowsHtml;
 
       // Load more button
       if (hasMoreMessages) {
@@ -6366,6 +6475,72 @@
       folderEmails.forEach(e => { if (selectedEmailIds.has(e.id)) e.unread = false; });
       inboxEmails.forEach(e => { if (selectedEmailIds.has(e.id)) e.unread = false; });
       selectedEmailIds.clear();
+      renderEmailList();
+      updateEmailTabBadge();
+    }
+
+    // ── Group actions (for sender-grouped view) ────────────────
+    function toggleGroupSelect(sender) {
+      const groupEmails = folderEmails.filter(e => (e.from || "").trim() === sender);
+      const allSelected = groupEmails.every(e => selectedEmailIds.has(e.id));
+      if (allSelected) {
+        groupEmails.forEach(e => selectedEmailIds.delete(e.id));
+      } else {
+        groupEmails.forEach(e => selectedEmailIds.add(e.id));
+      }
+      renderEmailList();
+    }
+    async function groupMarkRead(sender) {
+      const groupEmails = folderEmails.filter(e => (e.from || "").trim() === sender && e.unread);
+      if (!groupEmails.length) return;
+      await Promise.all(groupEmails.map(e => fetch(`/api/gmail-mark-read/${e.id}`, { method: "POST" })));
+      groupEmails.forEach(e => { e.unread = false; });
+      const ids = new Set(groupEmails.map(e => e.id));
+      inboxEmails.forEach(e => { if (ids.has(e.id)) e.unread = false; });
+      renderEmailList();
+      updateEmailTabBadge();
+    }
+    async function groupArchive(sender) {
+      const groupEmails = folderEmails.filter(e => (e.from || "").trim() === sender);
+      if (!groupEmails.length) return;
+      if (!confirm(`Archive all ${groupEmails.length} emails from ${sender}?`)) return;
+      await Promise.all(groupEmails.map(e => fetch(`/api/gmail-archive/${e.id}`, { method: "POST" })));
+      const ids = new Set(groupEmails.map(e => e.id));
+      folderEmails = folderEmails.filter(e => !ids.has(e.id));
+      inboxEmails = inboxEmails.filter(e => !ids.has(e.id));
+      selectedEmailIds = new Set([...selectedEmailIds].filter(id => !ids.has(id)));
+      renderEmailList();
+      updateEmailTabBadge();
+    }
+
+    // ── Unread filter toggle ──────────────────────────────────
+    let emailUnreadFilterActive = false;
+    let emailAllEmails = []; // stash unfiltered list
+    function toggleUnreadFilter() {
+      const btn = document.getElementById("email-unread-filter-btn");
+      if (!emailUnreadFilterActive) {
+        emailAllEmails = [...folderEmails];
+        folderEmails = folderEmails.filter(e => e.unread);
+        emailUnreadFilterActive = true;
+        if (btn) { btn.style.background = "var(--accent-primary,#6366f1)"; btn.style.color = "#fff"; btn.textContent = "Unread ✓"; }
+      } else {
+        folderEmails = emailAllEmails.length ? emailAllEmails : folderEmails;
+        emailUnreadFilterActive = false;
+        if (btn) { btn.style.background = "var(--bg-card)"; btn.style.color = "var(--text-secondary)"; btn.textContent = "Unread"; }
+      }
+      renderEmailList();
+    }
+
+    // ── Mark all visible as read ──────────────────────────────
+    async function markAllRead() {
+      const unread = folderEmails.filter(e => e.unread);
+      if (!unread.length) return;
+      if (!confirm(`Mark ${unread.length} email${unread.length > 1 ? "s" : ""} as read?`)) return;
+      await Promise.all(unread.map(e => fetch(`/api/gmail-mark-read/${e.id}`, { method: "POST" })));
+      unread.forEach(e => { e.unread = false; });
+      const ids = new Set(unread.map(e => e.id));
+      inboxEmails.forEach(e => { if (ids.has(e.id)) e.unread = false; });
+      if (emailAllEmails.length) emailAllEmails.forEach(e => { if (ids.has(e.id)) e.unread = false; });
       renderEmailList();
       updateEmailTabBadge();
     }

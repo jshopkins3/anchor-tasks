@@ -22,6 +22,8 @@ const GCAL_TOKEN_FILE = path.join(DATA_DIR, "gcal-token.json");
 const EMAIL_CONTACTS_FILE = path.join(DATA_DIR, "email-contacts.json");
 const EMAIL_SIGNATURE_FILE = path.join(DATA_DIR, "email-signature.json");
 const PUSH_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "push-subscriptions.json");
+const TRIAGE_RULES_FILE = path.join(DATA_DIR, "triage-rules.json");
+const TRIAGE_LOG_FILE = path.join(DATA_DIR, "triage-log.json");
 
 /* ─── Multi-user helpers ─────────────────────────────────────────────── */
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || "").toLowerCase() ||
@@ -670,6 +672,80 @@ function decodeEmailBody(payload) {
   } catch { return ""; }
 }
 
+/* ─── Email Triage Rules & Auto-Read ──────────────────────────────────── */
+function loadTriageRules() {
+  try { return JSON.parse(fs.readFileSync(TRIAGE_RULES_FILE, "utf8")); }
+  catch {
+    const defaults = {
+      autoReadEnabled: true,
+      // Domains that are ALWAYS safe to auto-mark-read (newsletters, marketing, notifications)
+      blocklist: [
+        "noreply@", "no-reply@", "marketing@", "newsletter@", "notifications@",
+        "mailer-daemon@", "donotreply@", "info@bankrate.com", "notifications@github.com",
+      ],
+      // Domains that should NEVER be auto-touched — mortgage-critical
+      allowlist: [
+        "@myanchormortgage.com", "@mychomeloans.com",
+        // Major lenders
+        "@uwm.com", "@newrez.com", "@flagstar.com", "@pennymac.com", "@wellsfargo.com",
+        "@chase.com", "@loandepot.com", "@caliberhomeloans.com", "@freedommortgage.com",
+        "@nationstar.com", "@mrcooper.com", "@loancare.net", "@bfrg.com",
+        "@mcmcompanies.com", "@arive.com",
+        // Agencies / title / compliance
+        "@fanniemae.com", "@freddiemac.com", "@hud.gov", "@va.gov",
+        "@firstam.com", "@stewart.com", "@fidelitynational.com",
+      ],
+      // Loan number pattern — if email contains a loan number, NEVER auto-read
+      loanNumberPattern: "\\b\\d{7,10}\\b",  // 7-10 digit numbers (Arive loan IDs)
+    };
+    fs.writeFileSync(TRIAGE_RULES_FILE, JSON.stringify(defaults, null, 2));
+    return defaults;
+  }
+}
+function saveTriageRules(rules) {
+  fs.writeFileSync(TRIAGE_RULES_FILE, JSON.stringify(rules, null, 2));
+}
+
+function loadTriageLog() {
+  try { return JSON.parse(fs.readFileSync(TRIAGE_LOG_FILE, "utf8")); } catch { return []; }
+}
+function appendTriageLog(entries) {
+  const log = loadTriageLog();
+  log.push(...entries);
+  // Keep last 7 days only
+  const cutoff = Date.now() - 7 * 86400000;
+  const trimmed = log.filter(e => new Date(e.timestamp).getTime() > cutoff);
+  fs.writeFileSync(TRIAGE_LOG_FILE, JSON.stringify(trimmed, null, 2));
+}
+
+// Check if an email should be auto-marked read based on triage rules
+function shouldAutoRead(email, rules) {
+  const from = (email.from || "").toLowerCase();
+  const subject = (email.subject || "");
+  const snippet = (email.snippet || "");
+  const combined = subject + " " + snippet;
+
+  // NEVER auto-read allowlisted senders
+  for (const pattern of (rules.allowlist || [])) {
+    if (from.includes(pattern.toLowerCase())) return { autoRead: false, reason: "allowlisted" };
+  }
+
+  // NEVER auto-read if email contains a loan number (lender correspondence)
+  if (rules.loanNumberPattern) {
+    const loanRegex = new RegExp(rules.loanNumberPattern);
+    if (loanRegex.test(subject) || loanRegex.test(snippet)) {
+      return { autoRead: false, reason: "contains_loan_number" };
+    }
+  }
+
+  // Auto-read if sender matches blocklist
+  for (const pattern of (rules.blocklist || [])) {
+    if (from.includes(pattern.toLowerCase())) return { autoRead: true, reason: `blocklist: ${pattern}` };
+  }
+
+  return { autoRead: false, reason: "no_rule_match" };
+}
+
 function gmailExtractBody(payload) {
   // Recursively find the best body part (prefer text/html, fallback to text/plain)
   function findPart(p, mimeType) {
@@ -690,8 +766,8 @@ function gmailExtractBody(payload) {
   return null;
 }
 
-async function gmailGetInbox() {
-  const accessToken = await getGCalAccessToken();
+async function gmailGetInbox(userEmail) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return null;
   try {
     // List unread messages
@@ -742,8 +818,8 @@ async function gmailGetInbox() {
   }
 }
 
-async function gmailMarkRead(messageId) {
-  const accessToken = await getGCalAccessToken();
+async function gmailMarkRead(messageId, userEmail) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return false;
   try {
     const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
@@ -758,8 +834,8 @@ async function gmailMarkRead(messageId) {
   }
 }
 
-async function gmailArchive(messageId) {
-  const accessToken = await getGCalAccessToken();
+async function gmailArchive(messageId, userEmail) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return false;
   try {
     const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
@@ -775,8 +851,8 @@ async function gmailArchive(messageId) {
 }
 
 /* ─── Gmail: list messages by label with pagination ────────────────────── */
-async function gmailListMessages(labelId, pageToken, maxResults = 50, query = "") {
-  const accessToken = await getGCalAccessToken();
+async function gmailListMessages(labelId, pageToken, maxResults = 50, query = "", userEmail) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return null;
   try {
     const params = { maxResults: String(maxResults) };
@@ -823,8 +899,8 @@ async function gmailListMessages(labelId, pageToken, maxResults = 50, query = ""
 }
 
 /* ─── Gmail: get full thread ───────────────────────────────────────────── */
-async function gmailGetThread(threadId) {
-  const accessToken = await getGCalAccessToken();
+async function gmailGetThread(threadId, userEmail) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return null;
   try {
     const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`, {
@@ -881,12 +957,13 @@ async function gmailGetThread(threadId) {
 
 /* ─── Gmail: send email (full RFC 2822) ────────────────────────────────── */
 /* ─── Gmail: fetch user's email signature ──────────────────────────── */
-let cachedSignature = null;
-let signatureCacheTime = 0;
-async function gmailGetSignature() {
+const signatureCache = {};  // per-user signature cache: { email: { sig, time } }
+async function gmailGetSignature(userEmail) {
+  const cacheKey = userEmail || "_default";
   const now = Date.now();
-  if (cachedSignature !== null && (now - signatureCacheTime) < 3600000) return cachedSignature;
-  const accessToken = await getGCalAccessToken();
+  const cached = signatureCache[cacheKey];
+  if (cached && (now - cached.time) < 3600000) return cached.sig;
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return "";
   try {
     const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs", {
@@ -896,14 +973,14 @@ async function gmailGetSignature() {
     const data = await resp.json();
     // Find primary sendAs (isDefault or isPrimary)
     const primary = (data.sendAs || []).find(s => s.isDefault || s.isPrimary) || (data.sendAs || [])[0];
-    cachedSignature = primary?.signature || "";
-    signatureCacheTime = now;
-    return cachedSignature;
+    const sig = primary?.signature || "";
+    signatureCache[cacheKey] = { sig, time: now };
+    return sig;
   } catch { return ""; }
 }
 
-async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, attachments }) {
-  const accessToken = await getGCalAccessToken();
+async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, attachments, userEmail }) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return { error: "No access token" };
   try {
     const plainBody = body || "";
@@ -998,8 +1075,8 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
 }
 
 /* ─── Gmail: draft management ──────────────────────────────────────────── */
-async function gmailCreateDraft({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId }) {
-  const accessToken = await getGCalAccessToken();
+async function gmailCreateDraft({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, userEmail }) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return null;
   try {
     const headers = [`MIME-Version: 1.0`];
@@ -1027,8 +1104,8 @@ async function gmailCreateDraft({ to, cc, bcc, subject, body, bodyHtml, inReplyT
   }
 }
 
-async function gmailListDrafts() {
-  const accessToken = await getGCalAccessToken();
+async function gmailListDrafts(userEmail) {
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return null;
   try {
     const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=50", {
@@ -1063,12 +1140,13 @@ async function gmailListDrafts() {
 }
 
 /* ─── Gmail: get labels with counts ────────────────────────────────────── */
-let labelCache = null;
-let labelCacheTime = 0;
-async function gmailGetLabels(forceRefresh = false) {
+const labelCaches = {};  // per-user label cache: { email: { labels, time } }
+async function gmailGetLabels(forceRefresh = false, userEmail) {
+  const cacheKey = userEmail || "_default";
   const now = Date.now();
-  if (!forceRefresh && labelCache && (now - labelCacheTime) < 60000) return labelCache;
-  const accessToken = await getGCalAccessToken();
+  const cached = labelCaches[cacheKey];
+  if (!forceRefresh && cached && (now - cached.time) < 60000) return cached.labels;
+  const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return null;
   try {
     const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
@@ -1090,8 +1168,7 @@ async function gmailGetLabels(forceRefresh = false) {
         unread: detail.messagesUnread || 0,
       };
     }));
-    labelCache = detailed;
-    labelCacheTime = now;
+    labelCaches[cacheKey] = { labels: detailed, time: now };
     return detailed;
   } catch (err) {
     console.error("[gmail] Labels error:", err.message);
@@ -1345,6 +1422,14 @@ const server = http.createServer(async (req, res) => {
       const apiKey = req.headers["x-api-key"];
       return apiKey && apiKey === (process.env.COMMAND_API_KEY || "");
     };
+    // Extract user email from session (frontend) or request body/header (Dan API)
+    // Falls back to null → Gmail functions will use the master token
+    const getRequestUserEmail = (bodyObj) => {
+      if (req.session && req.session.email) return req.session.email;
+      if (bodyObj && bodyObj.userEmail) return bodyObj.userEmail;
+      if (req.headers["x-user-email"]) return req.headers["x-user-email"];
+      return null;
+    };
 
     // One-time migration: reassign tasks to correct user files based on assignee name
     if (urlPath === "/api/dan/migrate-task-assignments" && req.method === "POST") {
@@ -1380,7 +1465,7 @@ const server = http.createServer(async (req, res) => {
       const body = JSON.parse(await readBody(req));
       const query = body.query || "is:unread in:inbox";
       const maxResults = body.maxResults || 15;
-      const accessToken = await getGCalAccessToken();
+      const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected", emails: [] });
       try {
         const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: query, maxResults: String(maxResults) })}`;
@@ -1411,7 +1496,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === "/api/dan/gmail-read" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
-      const accessToken = await getGCalAccessToken();
+      const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
       try {
         const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}?format=full`, {
@@ -1467,9 +1552,10 @@ const server = http.createServer(async (req, res) => {
       const body = JSON.parse(await readBody(req));
       try {
         // Fetch forwarded attachments if any (re-attach from existing messages)
+        const reqUserEmail = getRequestUserEmail(body);
         const attachments = [];
         if (body.forwardedAttachments && Array.isArray(body.forwardedAttachments)) {
-          const accessToken = await getGCalAccessToken();
+          const accessToken = await getGCalAccessToken(reqUserEmail);
           for (const fwd of body.forwardedAttachments) {
             try {
               const attResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${fwd.messageId}/attachments/${fwd.attachmentId}`, {
@@ -1491,9 +1577,10 @@ const server = http.createServer(async (req, res) => {
           subject: body.subject, body: body.body,
           inReplyTo: body.inReplyTo, references: body.references, threadId: body.threadId,
           attachments: attachments.length > 0 ? attachments : undefined,
+          userEmail: reqUserEmail,
         });
         if (!result || result.error) return json(res, 200, { error: result?.error || "Send failed" });
-        console.log(`[dan-gmail] Sent email to ${body.to}: "${body.subject}"`);
+        console.log(`[dan-gmail] Sent email to ${body.to}: "${body.subject}" (as ${reqUserEmail || "master"})`);
         return json(res, 200, { success: true, messageId: result.id, to: body.to, subject: body.subject });
       } catch (e) { return json(res, 200, { error: e.message }); }
     }
@@ -1502,7 +1589,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === "/api/dan/gmail-attachment" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
-      const accessToken = await getGCalAccessToken();
+      const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
       try {
         const attResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}/attachments/${body.attachmentId}`, {
@@ -1523,7 +1610,7 @@ const server = http.createServer(async (req, res) => {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
       try {
-        const thread = await gmailGetThread(body.threadId);
+        const thread = await gmailGetThread(body.threadId, getRequestUserEmail(body));
         if (!thread) return json(res, 200, { error: "Thread not found" });
         return json(res, 200, thread);
       } catch (e) { return json(res, 200, { error: e.message }); }
@@ -1820,14 +1907,14 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === "/api/dan/gmail-archive" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
-      const ok = await gmailArchive(body.messageId);
+      const ok = await gmailArchive(body.messageId, getRequestUserEmail(body));
       return json(res, 200, { ok, messageId: body.messageId });
     }
 
     if (urlPath === "/api/dan/gmail-delete" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
-      const accessToken = await getGCalAccessToken();
+      const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
       try {
         const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}/trash`, {
@@ -1840,7 +1927,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === "/api/dan/gmail-label" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
-      const accessToken = await getGCalAccessToken();
+      const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
       try {
         const modBody = {};
@@ -1856,7 +1943,8 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath === "/api/dan/gmail-labels" && (req.method === "GET" || req.method === "POST")) {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
-      const accessToken = await getGCalAccessToken();
+      const bodyRaw = req.method === "POST" ? JSON.parse(await readBody(req)) : {};
+      const accessToken = await getGCalAccessToken(getRequestUserEmail(bodyRaw));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected", labels: [] });
       try {
         const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
@@ -1866,6 +1954,75 @@ const server = http.createServer(async (req, res) => {
         const data = await resp.json();
         return json(res, 200, { labels: (data.labels || []).map(l => ({ id: l.id, name: l.name, type: l.type })) });
       } catch (e) { return json(res, 200, { error: e.message, labels: [] }); }
+    }
+
+    // Dan: batch mark emails as read
+    if (urlPath === "/api/dan/gmail-mark-read-batch" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const reqUserEmail = getRequestUserEmail(body);
+      const ids = body.messageIds || [];
+      if (!ids.length) return json(res, 200, { error: "No messageIds provided" });
+      const results = await Promise.all(ids.map(id => gmailMarkRead(id, reqUserEmail)));
+      const success = results.filter(Boolean).length;
+      console.log(`[dan-gmail] Batch mark read: ${success}/${ids.length} (as ${reqUserEmail || "master"})`);
+      return json(res, 200, { ok: true, marked: success, total: ids.length });
+    }
+
+    // Dan: batch archive emails
+    if (urlPath === "/api/dan/gmail-archive-batch" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const reqUserEmail = getRequestUserEmail(body);
+      const ids = body.messageIds || [];
+      if (!ids.length) return json(res, 200, { error: "No messageIds provided" });
+      const results = await Promise.all(ids.map(id => gmailArchive(id, reqUserEmail)));
+      const success = results.filter(Boolean).length;
+      console.log(`[dan-gmail] Batch archive: ${success}/${ids.length} (as ${reqUserEmail || "master"})`);
+      return json(res, 200, { ok: true, archived: success, total: ids.length });
+    }
+
+    // Dan: triage inbox — fetch unread emails and categorize for action
+    if (urlPath === "/api/dan/gmail-triage" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const query = body.query || "is:unread in:inbox";
+      const maxResults = Math.min(body.maxResults || 30, 50);
+      const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
+      if (!accessToken) return json(res, 200, { error: "Gmail not connected" });
+      try {
+        const searchResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!searchResp.ok) return json(res, 200, { error: `Gmail API: ${searchResp.status}` });
+        const searchData = await searchResp.json();
+        const messages = searchData.messages || [];
+        if (!messages.length) return json(res, 200, { emails: [], total: 0, query });
+
+        // Fetch metadata for each message (lightweight — metadata only)
+        const emails = await Promise.all(messages.map(async (m) => {
+          try {
+            const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (!msgResp.ok) return null;
+            const msg = await msgResp.json();
+            const h = msg.payload?.headers || [];
+            const getH = (n) => (h.find(x => x.name.toLowerCase() === n.toLowerCase()) || {}).value || "";
+            return {
+              id: msg.id, threadId: msg.threadId,
+              from: getH("From"), to: getH("To"),
+              subject: getH("Subject") || "(No subject)",
+              date: getH("Date"), snippet: msg.snippet || "",
+              unread: (msg.labelIds || []).includes("UNREAD"),
+              starred: (msg.labelIds || []).includes("STARRED"),
+              labels: msg.labelIds || [],
+            };
+          } catch { return null; }
+        }));
+        const valid = emails.filter(Boolean);
+        return json(res, 200, { emails: valid, total: valid.length, query });
+      } catch (e) { return json(res, 200, { error: e.message }); }
     }
 
     // Dan: list shared drives
@@ -2643,7 +2800,8 @@ const server = http.createServer(async (req, res) => {
 
     /* ── GMAIL API ──────────────────────────────────────────────── */
     if (urlPath === "/api/gmail-inbox" && req.method === "GET") {
-      const result = await gmailGetInbox();
+      const ue = req.session && req.session.email;
+      const result = await gmailGetInbox(ue);
       if (result === null) return json(res, 200, { emails: [], connected: false });
       if (result && result.needsReauth) return json(res, 200, { emails: [], connected: false, needsReauth: true });
       return json(res, 200, { emails: result, connected: true });
@@ -2651,13 +2809,15 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath.match(/^\/api\/gmail-mark-read\//) && req.method === "POST") {
       const msgId = urlPath.split("/").pop();
-      const ok = await gmailMarkRead(msgId);
+      const ue = req.session && req.session.email;
+      const ok = await gmailMarkRead(msgId, ue);
       return json(res, 200, { ok });
     }
 
     if (urlPath.match(/^\/api\/gmail-message\/[^/]+$/) && req.method === "GET") {
       const msgId = urlPath.split("/").pop();
-      const accessToken = await getGCalAccessToken();
+      const ue = req.session && req.session.email;
+      const accessToken = await getGCalAccessToken(ue);
       if (!accessToken) return json(res, 401, { error: "Not authorized" });
       try {
         const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`, {
@@ -2709,7 +2869,8 @@ const server = http.createServer(async (req, res) => {
       const [, msgId, attachmentId] = attachMatch;
       const name = url.searchParams.get("name") || "attachment";
       const mimeType = url.searchParams.get("mime") || "application/octet-stream";
-      const accessToken = await getGCalAccessToken();
+      const ue = req.session && req.session.email;
+      const accessToken = await getGCalAccessToken(ue);
       if (!accessToken) return json(res, 401, { error: "Not authorized" });
       try {
         const attResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/attachments/${attachmentId}`, {
@@ -2732,13 +2893,15 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath.match(/^\/api\/gmail-archive\//) && req.method === "POST") {
       const msgId = urlPath.split("/").pop();
-      const ok = await gmailArchive(msgId);
+      const ue = req.session && req.session.email;
+      const ok = await gmailArchive(msgId, ue);
       return json(res, 200, { ok });
     }
 
     if (urlPath.match(/^\/api\/gmail-delete\//) && req.method === "POST") {
       const msgId = urlPath.split("/").pop();
-      const accessToken = await getGCalAccessToken();
+      const ue = req.session && req.session.email;
+      const accessToken = await getGCalAccessToken(ue);
       if (!accessToken) return json(res, 401, { error: "Not authorized" });
       try {
         const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/trash`, {
@@ -2754,7 +2917,8 @@ const server = http.createServer(async (req, res) => {
       const label = url.searchParams.get("label") || "INBOX";
       const pageToken = url.searchParams.get("page") || "";
       const max = parseInt(url.searchParams.get("max") || "50", 10);
-      const result = await gmailListMessages(label, pageToken || undefined, max);
+      const ue = req.session && req.session.email;
+      const result = await gmailListMessages(label, pageToken || undefined, max, "", ue);
       if (!result) return json(res, 200, { emails: [], connected: false });
       if (result.needsReauth) return json(res, 200, { emails: [], connected: false, needsReauth: true });
       return json(res, 200, { emails: result.emails, nextPageToken: result.nextPageToken, connected: true });
@@ -2763,7 +2927,8 @@ const server = http.createServer(async (req, res) => {
     /* ── GMAIL: Thread view ────────────────────────────────────── */
     if (urlPath.match(/^\/api\/gmail-thread\//) && req.method === "GET") {
       const threadId = urlPath.split("/").pop();
-      const thread = await gmailGetThread(threadId);
+      const ue = req.session && req.session.email;
+      const thread = await gmailGetThread(threadId, ue);
       if (!thread) return json(res, 500, { error: "Failed to fetch thread" });
       // Update contacts cache from thread participants
       for (const msg of thread.messages) {
@@ -2776,7 +2941,8 @@ const server = http.createServer(async (req, res) => {
 
     /* ── GMAIL: Labels with counts ─────────────────────────────── */
     if (urlPath === "/api/gmail-labels" && req.method === "GET") {
-      const labels = await gmailGetLabels(url.searchParams.get("refresh") === "1");
+      const ue = req.session && req.session.email;
+      const labels = await gmailGetLabels(url.searchParams.get("refresh") === "1", ue);
       if (!labels) return json(res, 200, { labels: [], connected: false });
       return json(res, 200, { labels, connected: true });
     }
@@ -2830,7 +2996,7 @@ const server = http.createServer(async (req, res) => {
         if (fwdAttachmentsJson) {
           try {
             const fwdAtts = JSON.parse(fwdAttachmentsJson);
-            const accessToken = await getGCalAccessToken();
+            const accessToken = await getGCalAccessToken(req.session && req.session.email);
             for (const fa of fwdAtts) {
               if (!fa.messageId || !fa.attachmentId) continue;
               try {
@@ -2850,6 +3016,7 @@ const server = http.createServer(async (req, res) => {
         emailPayload = JSON.parse(await readBody(req));
       }
 
+      emailPayload.userEmail = req.session && req.session.email;
       const result = await gmailSendEmail(emailPayload);
       if (!result || result.error) return json(res, 500, { error: result?.error || "Send failed. You may need to re-authorize: click ⚙ in email toolbar." });
       for (const addr of parseEmailAddress(emailPayload.to)) updateEmailContact(addr.email, addr.name);
@@ -2863,7 +3030,8 @@ const server = http.createServer(async (req, res) => {
     if (urlPath.match(/^\/api\/gmail-star\//) && req.method === "POST") {
       const msgId = urlPath.split("/").pop();
       const body = JSON.parse(await readBody(req));
-      const accessToken = await getGCalAccessToken();
+      const ue = req.session && req.session.email;
+      const accessToken = await getGCalAccessToken(ue);
       if (!accessToken) return json(res, 401, { error: "Not authorized" });
       const modBody = body.starred
         ? { addLabelIds: ["STARRED"] }
@@ -2884,20 +3052,23 @@ const server = http.createServer(async (req, res) => {
       const pageToken = url.searchParams.get("page") || "";
       const max = parseInt(url.searchParams.get("max") || "25", 10);
       if (!q) return json(res, 200, { emails: [], nextPageToken: null });
-      const result = await gmailListMessages(null, pageToken || undefined, max, q);
+      const ue = req.session && req.session.email;
+      const result = await gmailListMessages(null, pageToken || undefined, max, q, ue);
       if (!result) return json(res, 200, { emails: [], connected: false });
       return json(res, 200, { emails: result.emails, nextPageToken: result.nextPageToken, connected: true });
     }
 
     /* ── GMAIL: Drafts ─────────────────────────────────────────── */
     if (urlPath === "/api/gmail-drafts" && req.method === "GET") {
-      const drafts = await gmailListDrafts();
+      const ue = req.session && req.session.email;
+      const drafts = await gmailListDrafts(ue);
       if (!drafts) return json(res, 200, { drafts: [], connected: false });
       return json(res, 200, { drafts, connected: true });
     }
 
     if (urlPath === "/api/gmail-draft" && req.method === "POST") {
       const body = JSON.parse(await readBody(req));
+      body.userEmail = req.session && req.session.email;
       const result = await gmailCreateDraft(body);
       if (!result) return json(res, 500, { error: "Failed to create draft" });
       return json(res, 200, { success: true, draftId: result.id });
@@ -2905,7 +3076,8 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath.match(/^\/api\/gmail-draft\//) && req.method === "DELETE") {
       const draftId = urlPath.split("/").pop();
-      const accessToken = await getGCalAccessToken();
+      const ue = req.session && req.session.email;
+      const accessToken = await getGCalAccessToken(ue);
       if (!accessToken) return json(res, 401, { error: "Not authorized" });
       try {
         const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}`, {
@@ -2920,11 +3092,212 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === "/api/gmail-contacts" && req.method === "GET") {
       const q = (url.searchParams.get("q") || "").toLowerCase();
       if (!q || q.length < 2) return json(res, 200, { contacts: [] });
-      const contacts = loadEmailContacts();
+      const ue = req.session && req.session.email;
+      const contacts = loadEmailContacts(ue);
       const matches = contacts.filter(c =>
         c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))
       ).slice(0, 10);
       return json(res, 200, { contacts: matches });
+    }
+
+    /* ── GMAIL: AI Email Triage (Dan-powered dashboard widget) ──── */
+    const triageCache = {};  // per-user: { email: { result, time } }
+    if (urlPath === "/api/email-triage" && req.method === "GET") {
+      const ue = req.session && req.session.email;
+      // Check cache (10 min)
+      const cached = triageCache[ue || "_default"];
+      if (cached && (Date.now() - cached.time) < 600000) {
+        return json(res, 200, cached.result);
+      }
+      const forceRefresh = url.searchParams.get("refresh") === "1";
+      if (cached && !forceRefresh && (Date.now() - cached.time) < 600000) {
+        return json(res, 200, cached.result);
+      }
+      const accessToken = await getGCalAccessToken(ue);
+      if (!accessToken) return json(res, 200, { categories: [], error: "Gmail not connected" });
+      try {
+        // Fetch up to 20 unread inbox emails
+        const listResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: "is:unread in:inbox", maxResults: "20" })}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!listResp.ok) return json(res, 200, { categories: [], error: "Gmail API error" });
+        const listData = await listResp.json();
+        const messages = listData.messages || [];
+        if (!messages.length) {
+          const result = { categories: [], total: 0, triaged: true, zeroInbox: true };
+          triageCache[ue || "_default"] = { result, time: Date.now() };
+          return json(res, 200, result);
+        }
+        // Fetch metadata for each
+        const emails = (await Promise.all(messages.slice(0, 20).map(async m => {
+          try {
+            const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (!r.ok) return null;
+            const msg = await r.json();
+            const h = msg.payload?.headers || [];
+            const getH = n => (h.find(x => x.name.toLowerCase() === n.toLowerCase()) || {}).value || "";
+            return { id: msg.id, threadId: msg.threadId, from: getH("From"), subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "" };
+          } catch { return null; }
+        }))).filter(Boolean);
+        if (!emails.length) {
+          const result = { categories: [], total: 0, triaged: true };
+          triageCache[ue || "_default"] = { result, time: Date.now() };
+          return json(res, 200, result);
+        }
+        // Use Claude to categorize
+        const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
+        if (!ANTHROPIC_KEY) {
+          // No AI key — fallback to showing raw emails uncategorized
+          const result = { categories: [{ priority: "needs_response", label: "Unread", emoji: "🟡", emails }], total: emails.length, triaged: false };
+          triageCache[ue || "_default"] = { result, time: Date.now() };
+          return json(res, 200, result);
+        }
+        const emailSummaries = emails.map((e, i) => `${i + 1}. From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
+        const triageResp = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1024,
+            messages: [{
+              role: "user",
+              content: `You are an email triage assistant for a mortgage loan officer. Categorize each email into exactly ONE category. Return ONLY valid JSON, no markdown.
+
+Categories:
+- "urgent": Client deadlines, lender conditions due, compliance items, time-sensitive (red)
+- "needs_response": Team questions, partner emails, needs the user's input (yellow)
+- "fyi": Newsletters, automated notifications, CC'd threads, informational (green)
+- "archive": Marketing spam, old threads, no action needed (gray)
+
+Emails:
+${emailSummaries}
+
+Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive","summary":"5 word summary"},...]}`,
+            }],
+          }),
+        });
+        let categories = { urgent: [], needs_response: [], fyi: [], archive: [] };
+        if (triageResp.ok) {
+          const triageData = await triageResp.json();
+          const text = (triageData.content || []).find(c => c.type === "text")?.text || "{}";
+          try {
+            const parsed = JSON.parse(text.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
+            for (const item of (parsed.items || [])) {
+              const idx = (item.index || 1) - 1;
+              if (idx >= 0 && idx < emails.length && categories[item.category]) {
+                categories[item.category].push({ ...emails[idx], summary: item.summary || "" });
+              }
+            }
+          } catch (parseErr) {
+            console.error("[email-triage] Parse error:", parseErr.message);
+            // Fallback: all as needs_response
+            categories.needs_response = emails;
+          }
+        } else {
+          categories.needs_response = emails;
+        }
+        // Auto-read: check blocklist rules BEFORE building result
+        const rules = loadTriageRules();
+        const autoReadResults = [];
+        if (rules.autoReadEnabled) {
+          // Check all archive-categorized emails AND any blocklisted emails from other categories
+          const allEmails = [...categories.urgent, ...categories.needs_response, ...categories.fyi, ...categories.archive];
+          for (const email of allEmails) {
+            const check = shouldAutoRead(email, rules);
+            if (check.autoRead) {
+              // Move to archive category and auto-mark read
+              autoReadResults.push({ ...email, reason: check.reason });
+              // Remove from its current category
+              for (const cat of Object.keys(categories)) {
+                categories[cat] = categories[cat].filter(e => e.id !== email.id);
+              }
+            }
+          }
+          // Also auto-read anything Claude categorized as "archive" from blocklisted senders
+          for (const email of categories.archive) {
+            const check = shouldAutoRead(email, rules);
+            if (!check.autoRead && check.reason !== "allowlisted" && check.reason !== "contains_loan_number") {
+              // Claude said archive + not protected = safe to auto-read
+              autoReadResults.push({ ...email, reason: "ai_categorized_archive" });
+              categories.archive = categories.archive.filter(e => e.id !== email.id);
+            }
+          }
+          // Execute auto-reads
+          if (autoReadResults.length > 0) {
+            const markPromises = autoReadResults.map(e => gmailMarkRead(e.id, ue));
+            await Promise.all(markPromises);
+            // Log the auto-reads
+            const logEntries = autoReadResults.map(e => ({
+              timestamp: new Date().toISOString(),
+              emailId: e.id,
+              from: e.from,
+              subject: e.subject,
+              reason: e.reason,
+              userEmail: ue || "master",
+              action: "auto_mark_read",
+            }));
+            appendTriageLog(logEntries);
+            console.log(`[email-triage] Auto-marked ${autoReadResults.length} emails as read for ${ue || "master"}`);
+          }
+        }
+        const result = {
+          categories: [
+            { priority: "urgent", label: "Urgent", emoji: "\uD83D\uDD34", color: "#ef4444", emails: categories.urgent },
+            { priority: "needs_response", label: "Needs Response", emoji: "\uD83D\uDFE1", color: "#eab308", emails: categories.needs_response },
+            { priority: "fyi", label: "FYI", emoji: "\uD83D\uDFE2", color: "#22c55e", emails: categories.fyi },
+            { priority: "archive", label: "Can Archive", emoji: "\uD83D\uDDD1\uFE0F", color: "#6b7280", emails: categories.archive },
+          ].filter(c => c.emails.length > 0),
+          total: emails.length,
+          triaged: true,
+          autoRead: autoReadResults.length,
+          autoReadEmails: autoReadResults.map(e => ({ from: e.from, subject: e.subject, reason: e.reason })),
+        };
+        triageCache[ue || "_default"] = { result, time: Date.now() };
+        return json(res, 200, result);
+      } catch (e) {
+        console.error("[email-triage] Error:", e.message);
+        return json(res, 200, { categories: [], error: e.message });
+      }
+    }
+
+    // Triage log — yesterday's auto-reads (for daily recap) — also accessible via API key for recap server
+    if (urlPath === "/api/email-triage-log" && req.method === "GET") {
+      if (!req.session && !(req.headers["x-api-key"] && req.headers["x-api-key"] === (process.env.COMMAND_API_KEY || ""))) return json(res, 401, { error: "Not authenticated" });
+      const log = loadTriageLog();
+      const daysBack = parseInt(url.searchParams.get("days") || "1", 10);
+      const cutoff = Date.now() - daysBack * 86400000;
+      const recent = log.filter(e => new Date(e.timestamp).getTime() > cutoff);
+      return json(res, 200, { entries: recent, total: recent.length });
+    }
+
+    // Triage rules — view/update blocklist and allowlist
+    if (urlPath === "/api/email-triage-rules" && req.method === "GET") {
+      return json(res, 200, loadTriageRules());
+    }
+    if (urlPath === "/api/email-triage-rules" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req));
+      const rules = loadTriageRules();
+      if (body.addBlocklist) {
+        const items = Array.isArray(body.addBlocklist) ? body.addBlocklist : [body.addBlocklist];
+        rules.blocklist = [...new Set([...rules.blocklist, ...items])];
+      }
+      if (body.removeBlocklist) {
+        const items = Array.isArray(body.removeBlocklist) ? body.removeBlocklist : [body.removeBlocklist];
+        rules.blocklist = rules.blocklist.filter(b => !items.includes(b));
+      }
+      if (body.addAllowlist) {
+        const items = Array.isArray(body.addAllowlist) ? body.addAllowlist : [body.addAllowlist];
+        rules.allowlist = [...new Set([...rules.allowlist, ...items])];
+      }
+      if (body.removeAllowlist) {
+        const items = Array.isArray(body.removeAllowlist) ? body.removeAllowlist : [body.removeAllowlist];
+        rules.allowlist = rules.allowlist.filter(a => !items.includes(a));
+      }
+      if (typeof body.autoReadEnabled === "boolean") rules.autoReadEnabled = body.autoReadEnabled;
+      saveTriageRules(rules);
+      return json(res, 200, { ok: true, rules });
     }
 
     /* ── GMAIL: Email signature ────────────────────────────────── */
