@@ -2282,10 +2282,19 @@
     <div class="section" id="sec-tasks">
       <div class="stats" id="task-stats"></div>
 
-      <div class="filters" id="task-filters">
+      <div class="filters" id="task-filters" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <button class="filter-btn active" data-filter="active">Active</button>
         <button class="filter-btn" data-filter="completed">Completed</button>
         <button class="filter-btn" data-filter="all">All</button>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+          <label style="font-size:12px;color:var(--text-secondary);font-weight:600;">Sort:</label>
+          <select id="task-sort-select" onchange="taskSortMode=this.value;renderTasks();" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);cursor:pointer;">
+            <option value="priority">Priority</option>
+            <option value="project">Project</option>
+            <option value="assignee">Assignee</option>
+            <option value="due">Due Date</option>
+          </select>
+        </span>
       </div>
 
       <div class="card">
@@ -2823,6 +2832,7 @@
     let goals = [];
     let user = null;
     let taskFilter = "active";
+    let taskSortMode = "priority";
     let editingTaskId = null;
     let editingGoalId = null;
     let showingGoalForm = false;
@@ -2930,21 +2940,62 @@
         return;
       }
 
-      // Sort: urgent > high > normal > low, then by due date
+      // Sort based on selected mode
       const priOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
-      filtered.sort((a, b) => {
-        if (a.done !== b.done) return a.done ? 1 : -1;
-        const pa = priOrder[a.priority] ?? 2;
-        const pb = priOrder[b.priority] ?? 2;
-        if (pa !== pb) return pa - pb;
-        if (a.due && b.due) return a.due.localeCompare(b.due);
-        if (a.due) return -1;
-        if (b.due) return 1;
-        return 0;
-      });
+      if (taskSortMode === "project") {
+        filtered.sort((a, b) => {
+          if (a.done !== b.done) return a.done ? 1 : -1;
+          const pa = (a.project || "zzz").toLowerCase();
+          const pb = (b.project || "zzz").toLowerCase();
+          if (pa !== pb) return pa.localeCompare(pb);
+          const pra = priOrder[a.priority] ?? 2;
+          const prb = priOrder[b.priority] ?? 2;
+          return pra - prb;
+        });
+      } else if (taskSortMode === "assignee") {
+        filtered.sort((a, b) => {
+          if (a.done !== b.done) return a.done ? 1 : -1;
+          const aa = (a.assignee || "zzz").toLowerCase();
+          const ab = (b.assignee || "zzz").toLowerCase();
+          if (aa !== ab) return aa.localeCompare(ab);
+          const pra = priOrder[a.priority] ?? 2;
+          const prb = priOrder[b.priority] ?? 2;
+          return pra - prb;
+        });
+      } else if (taskSortMode === "due") {
+        filtered.sort((a, b) => {
+          if (a.done !== b.done) return a.done ? 1 : -1;
+          if (a.due && b.due) return a.due.localeCompare(b.due);
+          if (a.due) return -1;
+          if (b.due) return 1;
+          return 0;
+        });
+      } else {
+        filtered.sort((a, b) => {
+          if (a.done !== b.done) return a.done ? 1 : -1;
+          const pa = priOrder[a.priority] ?? 2;
+          const pb = priOrder[b.priority] ?? 2;
+          if (pa !== pb) return pa - pb;
+          if (a.due && b.due) return a.due.localeCompare(b.due);
+          if (a.due) return -1;
+          if (b.due) return 1;
+          return 0;
+        });
+      }
 
       const projectOpts = projects.filter(p => !p.archived);
-      list.innerHTML = filtered.map(t => `
+      // Add group headers when sorting by project or assignee
+      let lastGroup = null;
+      list.innerHTML = filtered.map(t => {
+        let groupHeader = "";
+        if (taskSortMode === "project") {
+          const group = t.project || "No Project";
+          if (group !== lastGroup) { lastGroup = group; groupHeader = `<li style="list-style:none;"><div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;padding:12px 0 4px;margin-top:8px;border-bottom:1px solid var(--border);">${esc(group)}</div></li>`; }
+        } else if (taskSortMode === "assignee") {
+          const group = t.assignee || "Unassigned";
+          if (group !== lastGroup) { lastGroup = group; groupHeader = `<li style="list-style:none;"><div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;padding:12px 0 4px;margin-top:8px;border-bottom:1px solid var(--border);">${esc(group)}</div></li>`; }
+        }
+        return groupHeader + `
         <li>
           <div class="task-item">
             <button class="task-check ${t.done ? "done" : ""}" onclick="toggleTask('${t.id}')"></button>
@@ -3016,7 +3067,7 @@
             </div>
           </div>` : ""}
         </li>
-      `).join("");
+      `; }).join("");
     }
 
     function renderProjects() {
