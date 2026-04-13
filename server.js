@@ -53,6 +53,25 @@ function userEmailContactsFile(email) { return userFile(email, "email-contacts.j
 function userEmailSignatureFile(email) { return userFile(email, "email-signature.json"); }
 function userPushSubsFile(email) { return userFile(email, "push-subscriptions.json"); }
 
+// ── Team member name → email lookup ───────────────────────────────────
+const TEAM_MAP = {
+  "john": "john@myanchormortgage.com",
+  "john hopkins": "john@myanchormortgage.com",
+  "kat": "kat@myanchormortgage.com",
+  "kateryna": "kat@myanchormortgage.com",
+  "kat pazzaglia": "kat@myanchormortgage.com",
+  "corey": "corey@myanchormortgage.com",
+  "corey mccullar": "corey@myanchormortgage.com",
+  "brenda": "brenda@mychomeloans.com",
+  "brenda corona": "brenda@mychomeloans.com",
+};
+
+function resolveAssigneeEmail(assigneeName) {
+  if (!assigneeName) return "";
+  const key = assigneeName.toLowerCase().trim();
+  return TEAM_MAP[key] || "";
+}
+
 // Shared file paths
 function sharedProjectsFile() { return path.join(SHARED_DIR, "projects.md"); }
 function sharedProjectDetailPath(id) { return path.join(SHARED_DIR, `project-${id}.json`); }
@@ -1267,6 +1286,34 @@ const server = http.createServer(async (req, res) => {
       return apiKey && apiKey === (process.env.COMMAND_API_KEY || "");
     };
 
+    // One-time migration: reassign tasks to correct user files based on assignee name
+    if (urlPath === "/api/dan/migrate-task-assignments" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const ownerEmail = OWNER_EMAIL || "john@myanchormortgage.com";
+      const tasks = parseTasks(ownerEmail);
+      const moved = [];
+      const remaining = [];
+      for (const task of tasks) {
+        const resolvedEmail = resolveAssigneeEmail(task.assignee);
+        if (resolvedEmail && resolvedEmail.toLowerCase() !== ownerEmail.toLowerCase()) {
+          // Move this task to the assignee's file
+          ensureUserDir(resolvedEmail);
+          const targetTasks = parseTasks(resolvedEmail);
+          task.assigneeEmail = resolvedEmail;
+          targetTasks.push(task);
+          writeTasks(targetTasks, resolvedEmail);
+          moved.push({ id: task.id, title: task.title, assignee: task.assignee, movedTo: resolvedEmail });
+        } else {
+          remaining.push(task);
+        }
+      }
+      // Rewrite owner's file without the moved tasks
+      if (moved.length > 0) {
+        writeTasks(remaining, ownerEmail);
+      }
+      return json(res, 200, { migrated: moved.length, moved, remaining: remaining.length });
+    }
+
     // Gmail: search/inbox
     if (urlPath === "/api/dan/gmail-search" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
@@ -1497,11 +1544,15 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === "/api/dan/tasks-create" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
-      const tasks = parseTasks();
+      // Resolve which user's file to write to: assigneeEmail > session email > owner
+      const targetEmail = (body.assigneeEmail || (req.session && req.session.email) || OWNER_EMAIL || "").toLowerCase().trim();
+      if (targetEmail) ensureUserDir(targetEmail);
+      const tasks = parseTasks(targetEmail || undefined);
       const task = {
         id: generateId(),
         title: String(body.title || "").substring(0, 200),
         assignee: String(body.assignee || "").substring(0, 100),
+        assigneeEmail: String(body.assigneeEmail || targetEmail || "").substring(0, 200),
         due: String(body.due || "").substring(0, 10),
         priority: ["low", "normal", "high", "urgent"].includes(body.priority) ? body.priority : "normal",
         project: String(body.project || "").substring(0, 100),
@@ -1513,8 +1564,8 @@ const server = http.createServer(async (req, res) => {
       };
       if (!task.title) return json(res, 400, { error: "Title required" });
       tasks.push(task);
-      writeTasks(tasks);
-      return json(res, 201, { task });
+      writeTasks(tasks, targetEmail || undefined);
+      return json(res, 201, { task, writtenTo: targetEmail || "default" });
     }
 
     if (urlPath === "/api/dan/tasks-update" && req.method === "POST") {
@@ -1853,38 +1904,51 @@ const server = http.createServer(async (req, res) => {
         const { Pinecone } = require("@pinecone-database/pinecone");
         const PINECONE_INDEX_HOST = process.env.PINECONE_INDEX_HOST || "anchor-brain-7c50nhv.svc.aped-4627-b74a.pinecone.io";
         const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-        const fields = ["chunk_text", "source", "fileName", "fileId", "driveUrl", "folderName",
-                        "agency", "chapter", "section", "sourceUrl", "chunkIndex", "totalChunks"];
         const topK = body.maxResults || 7;
+
+        // Embed the query
+        const embResult = await pc.inference.embed({
+          model: "multilingual-e5-large",
+          inputs: [query],
+          parameters: { inputType: "query", truncate: "END" },
+        });
+        const queryVector = embResult.data[0].values;
+
+        async function queryNamespace(ns) {
+          try {
+            const resp = await pc.index({ host: PINECONE_INDEX_HOST, namespace: ns }).query({
+              vector: queryVector, topK, includeMetadata: true,
+            });
+            return resp.matches || [];
+          } catch { return []; }
+        }
 
         let results = [];
         if (source === "all") {
           const [docRes, guideRes] = await Promise.all([
-            pc.index({ host: PINECONE_INDEX_HOST, namespace: "documents" }).searchRecords({ query: { inputs: { text: query }, topK }, fields }).catch(() => ({ result: { hits: [] } })),
-            pc.index({ host: PINECONE_INDEX_HOST, namespace: "guidelines" }).searchRecords({ query: { inputs: { text: query }, topK }, fields }).catch(() => ({ result: { hits: [] } })),
+            queryNamespace("documents"),
+            queryNamespace("guidelines"),
           ]);
-          const allHits = [...(docRes.result?.hits || []), ...(guideRes.result?.hits || [])];
-          results = allHits.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, topK);
+          results = [...docRes, ...guideRes].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, topK);
         } else {
           const namespace = source === "guidelines" ? "guidelines" : "documents";
-          const searchRes = await pc.index({ host: PINECONE_INDEX_HOST, namespace }).searchRecords({ query: { inputs: { text: query }, topK }, fields });
-          results = searchRes.result?.hits || [];
+          results = await queryNamespace(namespace);
         }
 
         return json(res, 200, {
           query,
           source,
           found: results.length,
-          results: results.map(hit => ({
-            score: Math.round((hit.score || 0) * 100) / 100,
-            text: hit.fields?.chunk_text || "",
-            source: hit.fields?.source || "",
-            fileName: hit.fields?.fileName || "",
-            agency: hit.fields?.agency || "",
-            chapter: hit.fields?.chapter || "",
-            section: hit.fields?.section || "",
-            driveUrl: hit.fields?.driveUrl || "",
-            sourceUrl: hit.fields?.sourceUrl || "",
+          results: results.map(m => ({
+            score: Math.round((m.score || 0) * 100) / 100,
+            text: m.metadata?.chunk_text || "",
+            source: m.metadata?.source || "",
+            fileName: m.metadata?.fileName || "",
+            agency: m.metadata?.agency || "",
+            chapter: m.metadata?.chapter || "",
+            section: m.metadata?.section || "",
+            driveUrl: m.metadata?.driveUrl || "",
+            sourceUrl: m.metadata?.sourceUrl || "",
           })),
         });
       } catch (e) {
@@ -2012,11 +2076,16 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath === "/api/tasks" && req.method === "POST") {
       const body = JSON.parse(await readBody(req));
-      const tasks = parseTasks(req.session.email);
+      // Resolve assignee name to email for routing to correct user's file
+      const assigneeName = String(body.assignee || req.session.name || "").substring(0, 100);
+      const resolvedEmail = body.assigneeEmail || resolveAssigneeEmail(assigneeName) || req.session.email;
+      const targetEmail = resolvedEmail.toLowerCase().trim();
+      if (targetEmail) ensureUserDir(targetEmail);
+      const tasks = parseTasks(targetEmail);
       const task = {
         id: generateId(),
         title: String(body.title || "").substring(0, 200),
-        assignee: String(body.assignee || req.session.name || "").substring(0, 100),
+        assignee: assigneeName,
         due: String(body.due || "").substring(0, 10),
         priority: ["low", "normal", "high", "urgent"].includes(body.priority) ? body.priority : "normal",
         project: String(body.project || "").substring(0, 100),
@@ -2031,13 +2100,13 @@ const server = http.createServer(async (req, res) => {
         scheduledStart: "",
         emailId: String(body.emailId || "").substring(0, 200),
         emailSubject: String(body.emailSubject || "").substring(0, 500),
-        assigneeEmail: String(body.assigneeEmail || "").substring(0, 200),
+        assigneeEmail: targetEmail,
         done: false,
       };
       if (!task.title) return json(res, 400, { error: "Title required" });
       tasks.push(task);
-      writeTasks(tasks, req.session.email);
-      return json(res, 201, { task });
+      writeTasks(tasks, targetEmail);
+      return json(res, 201, { task, writtenTo: targetEmail });
     }
 
     if (urlPath.startsWith("/api/tasks/") && req.method === "PATCH") {
@@ -3638,6 +3707,14 @@ const server = http.createServer(async (req, res) => {
       try {
         const prompt = `You are Dan, John's mortgage business AI assistant at Anchor Mortgage Group. Parse these pipeline review notes into structured actions.
 
+THE CREW — assign tasks to the right person based on their role:
+- John Hopkins — Owner / LO (john@myanchormortgage.com) — loan officer tasks, client relationships, escalations, decisions
+- Corey McCullar — Intake Coordinator / Closer (corey@myanchormortgage.com) — file intake, disclosures, closing coordination, post-close
+- Brenda Corona — Processor (brenda@mychomeloans.com) — UW submissions, conditions, title coordination, TRID tracking
+- Kat Pazzaglia — LO (kat@myanchormortgage.com) — loan officer tasks on her files
+
+IMPORTANT: When the notes mention a team member by name, assign the task to THAT person. When the context implies a role (e.g. "submit to UW" = Brenda, "order title" = Brenda, "send disclosures" = Corey, "call borrower" = John), assign accordingly. Default to John only if no other assignee is clear.
+
 For each note, extract ALL of the following that apply:
 1. **Tasks** — actionable items (things to do, follow-ups, escalations)
 2. **Loan Notes** — anything that should be recorded on the loan file for the record (status updates, decisions, key info)
@@ -3650,7 +3727,7 @@ ${notesText}
 Return a JSON object with:
 {
   "tasks": [
-    { "title": "task description", "assignee": "John", "due": "YYYY-MM-DD or empty", "priority": "low|normal|high|urgent", "project": "Active Loans", "category": "task|followup|escalation", "loanId": "loan id if relevant" }
+    { "title": "task description", "assignee": "John|Corey|Brenda|Kat (use first name)", "due": "YYYY-MM-DD or empty", "priority": "low|normal|high|urgent", "project": "Active Loans", "category": "task|followup|escalation", "loanId": "loan id if relevant" }
   ],
   "loanNotes": [
     { "loanId": "the loan id", "borrowerName": "name", "note": "what to record on the loan file" }
@@ -3736,6 +3813,20 @@ Be specific and actionable. Use borrower names everywhere. If a note mentions a 
         source: "pipeline-review",
       });
       saveLoanNotes(notes);
+
+      // Forward loan note to Anchor Command so the team can see it there
+      const COMMAND_URL = process.env.COMMAND_API_URL || "";
+      const COMMAND_KEY = process.env.COMMAND_API_KEY || "";
+      if (COMMAND_URL && COMMAND_KEY) {
+        try {
+          fetch(`${COMMAND_URL}/api/dan/loan-note-sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-API-Key": COMMAND_KEY },
+            body: JSON.stringify({ ariveId: body.ariveId, note: body.note, source: "pipeline-review", addedBy: req.session.email, addedAt: new Date().toISOString() }),
+          }).catch(e => console.error("[loan-note] Failed to sync to Command:", e.message));
+        } catch {}
+      }
+
       return json(res, 201, { ok: true });
     }
 
