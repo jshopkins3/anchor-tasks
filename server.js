@@ -1421,6 +1421,61 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 200, { error: e.message }); }
     }
 
+    // Dan: update a calendar event
+    if (urlPath === "/api/dan/calendar-update" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.eventId) return json(res, 200, { error: "eventId required" });
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Calendar not connected" });
+      try {
+        const patch = {};
+        if (body.title) patch.summary = body.title;
+        if (body.description !== undefined) patch.description = body.description;
+        if (body.location !== undefined) patch.location = body.location;
+        if (body.date && body.time) {
+          const duration = body.duration || 60;
+          const [h, m] = body.time.split(":").map(Number);
+          const endH = h + Math.floor((m + duration) / 60);
+          const endM = (m + duration) % 60;
+          patch.start = { dateTime: `${body.date}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`, timeZone: "America/New_York" };
+          patch.end = { dateTime: `${body.date}T${String(endH).padStart(2,"0")}:${String(endM).padStart(2,"0")}:00`, timeZone: "America/New_York" };
+        } else if (body.date) {
+          const nextDay = new Date(body.date + "T12:00:00Z");
+          nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+          patch.start = { date: body.date };
+          patch.end = { date: nextDay.toISOString().split("T")[0] };
+        }
+        const resp = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${body.eventId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!resp.ok) return json(res, 200, { error: `Update failed: ${resp.status}` });
+        const updated = await resp.json();
+        console.log(`[dan-calendar] Updated: "${updated.summary}" (${body.eventId})`);
+        return json(res, 200, { success: true, eventId: body.eventId, title: updated.summary });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
+    // Dan: delete a calendar event
+    if (urlPath === "/api/dan/calendar-delete" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      if (!body.eventId) return json(res, 200, { error: "eventId required" });
+      const accessToken = await getGCalAccessToken();
+      if (!accessToken) return json(res, 200, { error: "Calendar not connected" });
+      try {
+        const resp = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${body.eventId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!resp.ok) return json(res, 200, { error: `Delete failed: ${resp.status}` });
+        console.log(`[dan-calendar] Deleted event: ${body.eventId}`);
+        return json(res, 200, { success: true, eventId: body.eventId });
+      } catch (e) { return json(res, 200, { error: e.message }); }
+    }
+
     // Dan: full Anchor Tasks data access (tasks, projects, goals)
     if (urlPath === "/api/dan/tasks-overview" && req.method === "POST") {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
