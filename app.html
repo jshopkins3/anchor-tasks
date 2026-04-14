@@ -7844,7 +7844,7 @@
           </div>
         </div>
         <div style="padding:12px 16px;border-top:1px solid var(--border-default);display:flex;gap:8px;">
-          <input id="dan-input" type="text" placeholder="Ask Anchor Dan..." style="flex:1;padding:10px 14px;font-size:13px;background:var(--bg-active);border:1px solid var(--border-default);border-radius:10px;color:var(--text-primary);outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')askDan()" />
+          <textarea id="dan-input" placeholder="Ask Anchor Dan..." rows="1" style="flex:1;padding:10px 14px;font-size:13px;background:var(--bg-active);border:1px solid var(--border-default);border-radius:10px;color:var(--text-primary);outline:none;font-family:inherit;resize:none;line-height:1.5;min-height:40px;max-height:120px;overflow-y:auto;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();askDan();this.style.height='auto';}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';"></textarea>
           <button onclick="askDan()" style="padding:10px 16px;font-size:13px;font-weight:700;border-radius:10px;border:none;background:#1B3A6B;color:#fff;cursor:pointer;">Send</button>
         </div>
       `;
