@@ -1175,6 +1175,8 @@
       transition: background .1s;
     }
     .email-row:hover { background: rgba(24,24,27,.8); }
+    .email-row:hover .email-row-hide-dan { opacity:1 !important; }
+    .email-row-hide-dan:hover { color:#d4af37 !important; transform:scale(1.15); }
     .email-row.active { background: #1a1a2e; border-left: 3px solid #3b82f6; padding-left: 17px; }
     .email-row.unread .email-row-from { color: #f4f4f5; font-weight: 600; }
     .email-row.unread .email-row-subject { color: #e4e4e7; font-weight: 600; }
@@ -6487,6 +6489,7 @@
             <div class="email-row-snippet">${esc(e.snippet)}</div>
             ${badges.length ? `<div class="email-row-badges">${badges.join("")}</div>` : ""}
           </div>
+          <button class="email-row-hide-dan" onclick="event.stopPropagation();trainDanFilter('${e.id}')" title="Hide from Dan's briefings" style="opacity:0;flex-shrink:0;padding:4px 6px;border:none;background:none;color:var(--text-faint,#71717a);cursor:pointer;font-size:14px;transition:opacity .15s;">🚫</button>
         </div>`;
       };
 
@@ -6514,6 +6517,7 @@
             <div style="display:flex;gap:4px;">
               <button class="email-bulk-btn" onclick="event.stopPropagation();groupMarkRead('${esc(sender)}')" title="Mark all from ${esc(sender)} as read" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--border-default);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;">✓ Read</button>
               <button class="email-bulk-btn" onclick="event.stopPropagation();groupArchive('${esc(sender)}')" title="Archive all from ${esc(sender)}" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--border-default);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;">📥</button>
+              <button class="email-bulk-btn" onclick="event.stopPropagation();trainDanFilterBySender('${esc(sender)}')" title="Hide all from ${esc(sender)} in Dan's briefings" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid rgba(212,175,55,.3);background:var(--bg-card);color:#d4af37;cursor:pointer;">🚫 Dan</button>
             </div>
           </div>`;
           groupEmails.forEach(e => { rowsHtml += renderRow(e); });
@@ -6736,6 +6740,38 @@
       }
     }
 
+    /* ── Train Dan by sender (from group header) ────────────── */
+    async function trainDanFilterBySender(senderName) {
+      // Find an email from this sender to get the email address/domain
+      const email = (folderEmails || inboxEmails || []).find(e => (e.from || "").trim() === senderName);
+      const fromEmail = email ? (email.fromEmail || email.from || senderName) : senderName;
+      const fromDomain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
+
+      if (!confirm(`Hide all emails from ${senderName} in Dan's briefings?`)) return;
+
+      try {
+        const resp = await fetch("/api/dan-email-filter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fromEmail,
+            fromDomain,
+            subjectPattern: "",
+            from: senderName,
+            reason: "User hid entire sender via group action",
+            filterType: "sender",
+            createdAt: new Date().toISOString(),
+          }),
+        });
+        if (resp.ok) {
+          const btn = event.target;
+          btn.textContent = "Hidden!";
+          btn.style.color = "#22c55e";
+          setTimeout(() => { btn.textContent = "🚫 Dan"; btn.style.color = "#d4af37"; }, 2000);
+        }
+      } catch (e) { console.error("Train Dan by sender failed:", e); }
+    }
+
     /* ── Thread / Conversation view ───────────────────────────── */
     async function renderThreadView(threadId, selectedMsgId) {
       const detailEl = document.getElementById("email-detail-pane");
@@ -6907,7 +6943,7 @@
               <button class="email-action-btn" onclick="archiveEmail('${id}')">📥 Archive</button>
               <button class="email-action-btn danger" onclick="deleteEmail('${id}')">🗑 Delete</button>
               <button class="email-action-btn task-action" onclick="document.getElementById('email-task-card-${id}').style.display='block'">✚ Task</button>
-              <button class="email-action-btn" onclick="trainDanFilter('${id}')" title="Teach Dan to hide emails like this" style="color:#d4af37;border-color:rgba(212,175,55,.3);">🚫 Train Dan</button>
+              <button class="email-action-btn" onclick="trainDanFilter('${id}')" title="Hide emails like this from Dan's briefings" style="color:#d4af37;border-color:rgba(212,175,55,.3);">🚫 Hide from Dan</button>
             </div>
             <div id="email-attach-area-${id}" class="email-attachments"></div>
             <div id="email-body-area-${id}" class="email-body-container"></div>
