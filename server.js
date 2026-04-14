@@ -4395,68 +4395,104 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
           return json(res, 500, { error: "MCP SDK not available: " + sdkErr.message });
         }
 
-        const mcpToken = process.env.ZAPIER_MCP_TOKEN || "";
-        const mcpUrl = process.env.ZAPIER_MCP_URL || "https://mcp.zapier.com/api/v1/connect";
-        if (!mcpToken) return json(res, 500, { error: "ZAPIER_MCP_TOKEN not configured" });
+        // Strategy: fetch from Command's /api/loans-json (same normalized data used by the mortgage app)
+        // This ensures both apps show identical loan data including closing dates
+        const COMMAND_URL = process.env.COMMAND_API_URL || "https://anchor-mortgage-app-production.up.railway.app";
 
-        const fullUrl = mcpUrl.includes("token=") ? mcpUrl : `${mcpUrl}?token=${mcpToken}`;
-        const transport = new StreamableHTTPClientTransport(new URL(fullUrl));
-        const client = new Client({ name: "anchor-tasks-pipeline", version: "1.0.0" });
-        await client.connect(transport);
+        let normalized = [];
+        let source = "command";
 
-        // Fetch all loans (paginate in blocks of 100)
-        let allLoans = [];
-        for (let page = 0; page < 10; page++) {
-          const result = await client.callTool({
-            name: "arive_api_1_0_23_get_loan_list",
-            arguments: {
-              instructions: "Get the loan list with all fields.",
-              output_hint: "Return every row with original API field names exactly as-is.",
-              limit: "100",
-              offset: String(page * 100),
-            },
-          });
+        try {
+          const commandResp = await fetch(`${COMMAND_URL}/api/loans-json`, { timeout: 15000 });
+          if (commandResp.ok) {
+            const commandData = await commandResp.json();
+            const commandLoans = commandData.loans || [];
+            normalized = commandLoans.map(l => ({
+              id: String(l.ariveId || l.id || ""),
+              displayId: String(l.ariveId || ""),
+              borrowerFirst: (l.borrower || "").split(" ")[0] || "",
+              borrowerLast: (l.borrower || "").split(" ").slice(1).join(" ") || "",
+              borrowerName: l.borrower || "",
+              loanAmount: parseFloat(l.loanAmount || l.baseLoanAmount || 0),
+              loanPurpose: l.purpose || l.loanPurpose || "",
+              loanStatus: l.stage || l.loanStatus || "",
+              propertyAddress: l.propertyAddress || l.subjectProperty || "",
+              propertyCity: l.propertyCity || "",
+              propertyState: l.propertyState || "",
+              loanProgram: l.loanType || l.mortgageType || "",
+              loanOfficer: l.loanOfficer || "",
+              lastStatusChange: l.dateUpdated || l.currentLoanStatus_date || "",
+              closingDate: l.estClosing || l.firmCloseDate || l["Estimated Closing Date"] || l["Firm Closing Date"] || "",
+              deepLinkURL: l.deepLinkURL || l.ariveDeepLink || "",
+            }));
+          } else {
+            throw new Error(`Command API returned ${commandResp.status}`);
+          }
+        } catch (commandErr) {
+          console.warn(`[pipeline] Command API failed (${commandErr.message}), falling back to direct Arive MCP`);
+          source = "arive-direct";
 
-          let parsed = null;
-          if (result.content && Array.isArray(result.content)) {
-            const text = result.content.filter(c => c.type === "text").map(c => c.text).join("\n");
-            try { parsed = JSON.parse(text); } catch { parsed = null; }
+          const mcpToken = process.env.ZAPIER_MCP_TOKEN || "";
+          const mcpUrl = process.env.ZAPIER_MCP_URL || "https://mcp.zapier.com/api/v1/connect";
+          if (!mcpToken) return json(res, 500, { error: "ZAPIER_MCP_TOKEN not configured and Command API unavailable" });
+
+          const fullUrl = mcpUrl.includes("token=") ? mcpUrl : `${mcpUrl}?token=${mcpToken}`;
+          const transport = new StreamableHTTPClientTransport(new URL(fullUrl));
+          const client = new Client({ name: "anchor-tasks-pipeline", version: "1.0.0" });
+          await client.connect(transport);
+
+          let allLoans = [];
+          for (let page = 0; page < 10; page++) {
+            const result = await client.callTool({
+              name: "arive_api_1_0_23_get_loan_list",
+              arguments: {
+                instructions: "Get the loan list with all fields including key dates.",
+                output_hint: "Return every row with original API field names exactly as-is, including all keyDates fields.",
+                limit: "100",
+                offset: String(page * 100),
+              },
+            });
+
+            let parsed = null;
+            if (result.content && Array.isArray(result.content)) {
+              const text = result.content.filter(c => c.type === "text").map(c => c.text).join("\n");
+              try { parsed = JSON.parse(text); } catch { parsed = null; }
+            }
+
+            let loans = [];
+            if (Array.isArray(parsed)) loans = parsed;
+            else if (parsed && Array.isArray(parsed.loans)) loans = parsed.loans;
+            else if (parsed && Array.isArray(parsed.data)) loans = parsed.data;
+            else if (parsed && parsed.results && Array.isArray(parsed.results)) loans = parsed.results;
+            else if (parsed && parsed.results && Array.isArray(parsed.results.rows)) loans = parsed.results.rows;
+
+            allLoans = allLoans.concat(loans);
+            if (loans.length < 100) break;
           }
 
-          let loans = [];
-          if (Array.isArray(parsed)) loans = parsed;
-          else if (parsed && Array.isArray(parsed.loans)) loans = parsed.loans;
-          else if (parsed && Array.isArray(parsed.data)) loans = parsed.data;
-          else if (parsed && parsed.results && Array.isArray(parsed.results)) loans = parsed.results;
-          else if (parsed && parsed.results && Array.isArray(parsed.results.rows)) loans = parsed.results.rows;
+          await client.close().catch(() => {});
 
-          allLoans = allLoans.concat(loans);
-          if (loans.length < 100) break;
+          normalized = allLoans.map(l => ({
+            id: String(l.loan_id || l.ariveLoanId || l.id || ""),
+            displayId: String(l.display_loan_id || l.ariveLoanId || ""),
+            borrowerFirst: l.borrower_first_name || l.loanBorrower1_firstName || "",
+            borrowerLast: l.borrower_last_name || l.loanBorrower1_lastName || "",
+            borrowerName: `${l.borrower_first_name || l.loanBorrower1_firstName || ""} ${l.borrower_last_name || l.loanBorrower1_lastName || ""}`.trim(),
+            loanAmount: parseFloat(l.loan_amount || l.baseLoanAmount || 0),
+            loanPurpose: l.loan_purpose || l.loanPurpose || "",
+            loanStatus: l.loan_status || l.currentLoanStatus_status || "",
+            propertyAddress: l.property_address || l.subjectProperty_streetAddress || "",
+            propertyCity: l.property_city || l.subjectProperty_city || "",
+            propertyState: l.property_state || l.subjectProperty_state || "",
+            loanProgram: l.loan_program || l.mortgageType || "",
+            loanOfficer: l.loan_officer_name || l.loanOfficer_name || "",
+            lastStatusChange: l.last_status_change_date || l.currentLoanStatus_date || "",
+            closingDate: l.closing_date || l.keyDates_closingDate || l.keyDates_closingContingency || l.firmCloseDate || l.estClosing || l["Firm Closing Date"] || l["Estimated Closing Date"] || l.closingContingency || "",
+            deepLinkURL: l.deepLinkURL || "",
+          }));
         }
 
-        await client.close().catch(() => {});
-
-        // Normalize loan fields for the UI
-        const normalized = allLoans.map(l => ({
-          id: String(l.loan_id || l.ariveLoanId || l.id || ""),
-          displayId: String(l.display_loan_id || l.ariveLoanId || ""),
-          borrowerFirst: l.borrower_first_name || l.loanBorrower1_firstName || "",
-          borrowerLast: l.borrower_last_name || l.loanBorrower1_lastName || "",
-          borrowerName: `${l.borrower_first_name || l.loanBorrower1_firstName || ""} ${l.borrower_last_name || l.loanBorrower1_lastName || ""}`.trim(),
-          loanAmount: parseFloat(l.loan_amount || l.baseLoanAmount || 0),
-          loanPurpose: l.loan_purpose || l.loanPurpose || "",
-          loanStatus: l.loan_status || l.currentLoanStatus_status || "",
-          propertyAddress: l.property_address || l.subjectProperty_streetAddress || "",
-          propertyCity: l.property_city || l.subjectProperty_city || "",
-          propertyState: l.property_state || l.subjectProperty_state || "",
-          loanProgram: l.loan_program || l.mortgageType || "",
-          loanOfficer: l.loan_officer_name || l.loanOfficer_name || "",
-          lastStatusChange: l.last_status_change_date || l.currentLoanStatus_date || "",
-          closingDate: l.closing_date || l.keyDates_closingDate || l.keyDates_closingContingency || l.firmCloseDate || l.estClosing || l["Firm Closing Date"] || l["Estimated Closing Date"] || l.closingContingency || "",
-          deepLinkURL: l.deepLinkURL || "",
-        }));
-
-        console.log(`[pipeline] Fetched ${normalized.length} loans from Arive`);
+        console.log(`[pipeline] Fetched ${normalized.length} loans from ${source}`);
         return json(res, 200, { loans: normalized });
       } catch (e) {
         console.error("[pipeline] Error fetching loans:", e.message);
