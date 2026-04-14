@@ -4403,7 +4403,11 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
         let source = "command";
 
         try {
-          const commandResp = await fetch(`${COMMAND_URL}/api/loans-json`, { timeout: 15000 });
+          const COMMAND_KEY = process.env.COMMAND_API_KEY || "";
+          const commandResp = await fetch(`${COMMAND_URL}/api/loans-json`, {
+            headers: COMMAND_KEY ? { "x-api-key": COMMAND_KEY } : {},
+            timeout: 15000,
+          });
           if (commandResp.ok) {
             const commandData = await commandResp.json();
             const commandLoans = commandData.loans || [];
