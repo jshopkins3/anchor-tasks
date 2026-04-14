@@ -7826,7 +7826,7 @@
       const initLeft = savedX || (window.innerWidth - parseInt(savedW) - 24);
       panel.style.cssText = `display:none;position:fixed;top:${initTop}px;left:${initLeft}px;right:auto;bottom:auto;width:${savedW}px;height:${savedH}px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:16px;box-shadow:var(--shadow-hover);z-index:9999;overflow:hidden;flex-direction:column;resize:both;min-width:340px;min-height:400px;max-width:90vw;max-height:85vh;`;
       panel.innerHTML = `
-        <div id="dan-drag-header" onmousedown="startDanDrag(event)" ontouchstart="startDanDrag(event)" style="padding:16px 20px;background:linear-gradient(135deg,#1B3A6B,#2d7a9a);display:flex;align-items:center;justify-content:space-between;cursor:grab;user-select:none;">
+        <div id="dan-drag-header" style="padding:16px 20px;background:linear-gradient(135deg,#1B3A6B,#2d7a9a);display:flex;align-items:center;justify-content:space-between;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;">
           <div style="display:flex;align-items:center;gap:10px;">
             <img src="/dan-avatar.svg" alt="Dan" style="width:36px;height:36px;border-radius:50%;border:1.5px solid #d4af37;" />
             <div>
@@ -7874,6 +7874,42 @@
             localStorage.setItem("dan-panel-h", panel.offsetHeight);
           });
           panel._resizeObserver.observe(panel);
+        }
+        // Attach drag handlers on first open
+        if (!panel._dragReady) {
+          panel._dragReady = true;
+          const header = document.getElementById("dan-drag-header");
+          if (header) {
+            let dragging = false, sx, sy, sl, st;
+            const onDown = (ex, ey) => {
+              dragging = true; sx = ex; sy = ey;
+              sl = panel.offsetLeft; st = panel.offsetTop;
+              panel.style.right = "auto"; panel.style.bottom = "auto";
+            };
+            const onMove = (ex, ey) => {
+              if (!dragging) return;
+              panel.style.left = Math.max(0, sl + ex - sx) + "px";
+              panel.style.top = Math.max(0, st + ey - sy) + "px";
+            };
+            const onUp = () => {
+              if (!dragging) return;
+              dragging = false;
+              localStorage.setItem("dan-panel-x", panel.offsetLeft);
+              localStorage.setItem("dan-panel-y", panel.offsetTop);
+            };
+            header.addEventListener("pointerdown", e => {
+              if (e.target.closest("button")) return;
+              header.setPointerCapture(e.pointerId);
+              onDown(e.clientX, e.clientY);
+              e.preventDefault();
+            });
+            header.addEventListener("pointermove", e => onMove(e.clientX, e.clientY));
+            header.addEventListener("pointerup", e => {
+              header.releasePointerCapture(e.pointerId);
+              onUp();
+            });
+            header.addEventListener("pointercancel", onUp);
+          }
         }
       }
     }
@@ -7970,56 +8006,7 @@
 
     createDanPanel();
 
-    // ── Dan panel drag support ──
-    let _danDrag = { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 };
-
-    function startDanDrag(e) {
-      if (e.target.tagName === "BUTTON" || e.target.closest("button")) return;
-      const panel = document.getElementById("dan-panel");
-      if (!panel) return;
-      const ev = e.touches ? e.touches[0] : e;
-      _danDrag = { active: true, startX: ev.clientX, startY: ev.clientY, startLeft: panel.offsetLeft, startTop: panel.offsetTop };
-      panel.style.right = "auto";
-      panel.style.bottom = "auto";
-      e.preventDefault();
-    }
-
-    document.addEventListener("mousemove", e => {
-      if (!_danDrag.active) return;
-      const panel = document.getElementById("dan-panel");
-      if (!panel) return;
-      panel.style.left = Math.max(0, Math.min(_danDrag.startLeft + (e.clientX - _danDrag.startX), window.innerWidth - 100)) + "px";
-      panel.style.top = Math.max(0, Math.min(_danDrag.startTop + (e.clientY - _danDrag.startY), window.innerHeight - 60)) + "px";
-    });
-
-    document.addEventListener("touchmove", e => {
-      if (!_danDrag.active) return;
-      const panel = document.getElementById("dan-panel");
-      if (!panel) return;
-      const t = e.touches[0];
-      panel.style.left = Math.max(0, Math.min(_danDrag.startLeft + (t.clientX - _danDrag.startX), window.innerWidth - 100)) + "px";
-      panel.style.top = Math.max(0, Math.min(_danDrag.startTop + (t.clientY - _danDrag.startY), window.innerHeight - 60)) + "px";
-    }, { passive: false });
-
-    document.addEventListener("mouseup", () => {
-      if (!_danDrag.active) return;
-      _danDrag.active = false;
-      const panel = document.getElementById("dan-panel");
-      if (panel) {
-        localStorage.setItem("dan-panel-x", panel.offsetLeft);
-        localStorage.setItem("dan-panel-y", panel.offsetTop);
-      }
-    });
-
-    document.addEventListener("touchend", () => {
-      if (!_danDrag.active) return;
-      _danDrag.active = false;
-      const panel = document.getElementById("dan-panel");
-      if (panel) {
-        localStorage.setItem("dan-panel-x", panel.offsetLeft);
-        localStorage.setItem("dan-panel-y", panel.offsetTop);
-      }
-    });
+    // Dan panel drag is initialized inside toggleDan() on first open
 
     // PWA Service Worker + Push Notifications
     if ("serviceWorker" in navigator) {
