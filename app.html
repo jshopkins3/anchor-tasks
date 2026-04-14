@@ -7285,9 +7285,15 @@
       }).catch(() => {});
       // Render forwarded attachments if present
       setTimeout(() => renderComposeAttachments(), 50);
+      // Sync chips from composeState (for reply/forward pre-populated addresses)
+      setTimeout(() => {
+        syncChipsFromState("to");
+        syncChipsFromState("cc");
+        syncChipsFromState("bcc");
+      }, 50);
       // Focus appropriate field
       setTimeout(() => {
-        if (!composeState.to) document.getElementById("compose-to")?.focus();
+        if (!composeState.to && !composeChips.to.length) document.getElementById("compose-to")?.focus();
         else document.getElementById("compose-body")?.focus();
       }, 100);
     }
@@ -7421,6 +7427,7 @@
       const container = document.getElementById("compose-container");
       if (container) container.innerHTML = "";
       composeState = null;
+      composeChips.to = []; composeChips.cc = []; composeChips.bcc = [];
     }
 
     function handleComposeFiles(files) {
@@ -7577,21 +7584,89 @@
 
     /* ── Contact autocomplete ─────────────────────────────────── */
     let autocompleteTimeout = null;
+    // ── Compose: chip-based recipient input ──
+    const composeChips = { to: [], cc: [], bcc: [] };
+
+    function renderComposeChips(field) {
+      const container = document.getElementById(`compose-${field}-chips`);
+      const input = document.getElementById(`compose-${field}`);
+      if (!container || !input) return;
+      // Remove old chips
+      container.querySelectorAll(".compose-chip").forEach(c => c.remove());
+      // Add chips before the input
+      composeChips[field].forEach((chip, i) => {
+        const el = document.createElement("span");
+        el.className = "compose-chip";
+        el.innerHTML = `${escapeHTML(chip.name || chip.email)} <button class="compose-chip-remove" onclick="removeComposeChip('${field}',${i})">&times;</button>`;
+        el.title = chip.email;
+        container.insertBefore(el, input);
+      });
+      // Update composeState for sending
+      composeState[field] = composeChips[field].map(c => c.email).join(", ");
+    }
+
+    function addComposeChip(field, email, name) {
+      const e = email.toLowerCase().trim();
+      if (!e || composeChips[field].some(c => c.email === e)) return;
+      composeChips[field].push({ email: e, name: name || "" });
+      const input = document.getElementById(`compose-${field}`);
+      if (input) input.value = "";
+      renderComposeChips(field);
+    }
+
+    function removeComposeChip(field, idx) {
+      composeChips[field].splice(idx, 1);
+      renderComposeChips(field);
+    }
+
+    // Pre-populate chips from composeState string (for reply/forward)
+    function syncChipsFromState(field) {
+      const val = composeState[field] || "";
+      composeChips[field] = [];
+      if (!val) return;
+      // Smart split on commas not inside angle brackets
+      const parts = []; let cur = "", depth = 0;
+      for (const ch of val) { if (ch === "<") depth++; if (ch === ">") depth--; if (ch === "," && depth === 0) { parts.push(cur.trim()); cur = ""; } else cur += ch; }
+      if (cur.trim()) parts.push(cur.trim());
+      for (const p of parts) {
+        if (!p) continue;
+        const m = p.match(/^(.+?)\s*<([^>]+)>$/);
+        if (m) addComposeChip(field, m[2], m[1].replace(/^["']|["']$/g, "").trim());
+        else if (p.includes("@")) addComposeChip(field, p);
+      }
+    }
+
     async function onComposeRecipientInput(input, field) {
       clearTimeout(autocompleteTimeout);
       const q = input.value.trim();
       const dropdown = document.getElementById(`compose-${field}-autocomplete`);
       if (!dropdown) return;
       if (q.length < 2) { dropdown.style.display = "none"; return; }
+      // If they typed a comma or semicolon, add what's before it as a chip
+      if (input.value.includes(",") || input.value.includes(";")) {
+        const addr = input.value.replace(/[,;]/g, "").trim();
+        if (addr && addr.includes("@")) { addComposeChip(field, addr); return; }
+      }
       autocompleteTimeout = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/gmail-contacts?q=${encodeURIComponent(q)}`);
-          const data = await res.json();
-          if (!data.contacts?.length) { dropdown.style.display = "none"; return; }
-          dropdown.innerHTML = data.contacts.map(c =>
-            `<div class="compose-autocomplete-item" onclick="selectAutocomplete('${field}', '${esc(c.email)}', '${esc(c.name)}')">
-              <span class="compose-autocomplete-name">${esc(c.name || c.email)}</span>
-              ${c.name ? `<span class="compose-autocomplete-email">${esc(c.email)}</span>` : ""}
+          // Try Command address book first, fall back to Gmail contacts
+          let contacts = [];
+          try {
+            const abRes = await fetch(`/api/address-book-search?q=${encodeURIComponent(q)}`);
+            if (abRes.ok) { const abData = await abRes.json(); contacts = abData.contacts || []; }
+          } catch {}
+          if (contacts.length === 0) {
+            const res = await fetch(`/api/gmail-contacts?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            contacts = data.contacts || [];
+          }
+          const existing = new Set(composeChips[field].map(c => c.email));
+          contacts = contacts.filter(c => c.email && !existing.has(c.email.toLowerCase()));
+          if (!contacts.length) { dropdown.style.display = "none"; return; }
+          dropdown.innerHTML = contacts.slice(0, 10).map(c =>
+            `<div class="compose-autocomplete-item" onmousedown="event.preventDefault();addComposeChip('${field}', '${escapeHTML(c.email)}', '${escapeHTML(c.name || "")}');document.getElementById('compose-${field}-autocomplete').style.display='none';">
+              <span class="compose-autocomplete-name">${escapeHTML(c.name || c.email)}</span>
+              ${c.name ? `<span class="compose-autocomplete-email">${escapeHTML(c.email)}</span>` : ""}
             </div>`
           ).join("");
           dropdown.style.display = "block";
@@ -7603,22 +7678,12 @@
       if (event.key === "Escape") {
         const dropdown = document.getElementById(`compose-${field}-autocomplete`);
         if (dropdown) dropdown.style.display = "none";
+      } else if (event.key === "Enter" || event.key === "Tab") {
+        const v = input.value.trim();
+        if (v && v.includes("@")) { event.preventDefault(); addComposeChip(field, v); }
+      } else if (event.key === "Backspace" && !input.value && composeChips[field].length > 0) {
+        removeComposeChip(field, composeChips[field].length - 1);
       }
-    }
-
-    function selectAutocomplete(field, email, name) {
-      const input = document.getElementById(`compose-${field}`);
-      if (!input) return;
-      const existing = input.value.trim();
-      // If there's already text, append with comma
-      if (existing && !existing.endsWith(",")) {
-        input.value = existing + ", " + (name ? `${name} <${email}>` : email);
-      } else {
-        input.value = (existing ? existing + " " : "") + (name ? `${name} <${email}>` : email);
-      }
-      const dropdown = document.getElementById(`compose-${field}-autocomplete`);
-      if (dropdown) dropdown.style.display = "none";
-      input.focus();
     }
 
     /* ── Backward-compatible renderEmailSection ───────────────── */

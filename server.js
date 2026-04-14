@@ -2454,6 +2454,29 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    /* ── ADDRESS BOOK SEARCH (proxy to Command) ────────────────── */
+    if (urlPath === "/api/address-book-search" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const url = new URL(req.url, "http://localhost");
+        const q = url.searchParams.get("q") || "";
+        const COMMAND_URL = process.env.COMMAND_API_URL || "https://anchorcommand.myanchormortgage.com";
+        const COMMAND_API_KEY = process.env.COMMAND_API_KEY || "";
+        const resp = await new Promise((resolve, reject) => {
+          const proxyReq = https.request(`${COMMAND_URL}/api/address-book?q=${encodeURIComponent(q)}`, {
+            headers: { "X-API-Key": COMMAND_API_KEY, "X-Proxy-User": req.session.email },
+          }, proxyRes => {
+            let d = "";
+            proxyRes.on("data", c => d += c);
+            proxyRes.on("end", () => { try { resolve(JSON.parse(d)); } catch { resolve({ contacts: [] }); } });
+          });
+          proxyReq.on("error", () => resolve({ contacts: [] }));
+          proxyReq.end();
+        });
+        return json(res, 200, resp);
+      } catch (e) { return json(res, 200, { contacts: [] }); }
+    }
+
     /* ── DRIVE FOLDER SEARCH (proxy for Anchor Command) ────────── */
     if (urlPath === "/api/drive-search" && req.method === "POST") {
       const apiKey = req.headers["x-api-key"];
