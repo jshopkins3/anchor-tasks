@@ -1087,6 +1087,30 @@ async function gmailGetSignature(userEmail) {
   } catch { return ""; }
 }
 
+// Sanitize email header values — extract proper addresses, quote display names with commas
+function sanitizeEmailHeader(val) {
+  if (!val) return val;
+  // Split on commas that are NOT inside angle brackets
+  const parts = [];
+  let current = "", depth = 0;
+  for (const ch of val) {
+    if (ch === "<") depth++;
+    if (ch === ">") depth--;
+    if (ch === "," && depth === 0) { parts.push(current.trim()); current = ""; }
+    else current += ch;
+  }
+  if (current.trim()) parts.push(current.trim());
+  // For each part, ensure display names with commas are quoted
+  return parts.filter(p => p.includes("@")).map(p => {
+    const m = p.match(/^(.+?)\s*<([^>]+)>$/);
+    if (m) {
+      const name = m[1].replace(/^["']|["']$/g, "").trim();
+      return name.includes(",") ? `"${name}" <${m[2]}>` : `${name} <${m[2]}>`;
+    }
+    return p;
+  }).join(", ");
+}
+
 async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, attachments, userEmail }) {
   const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return { error: "No access token" };
@@ -1099,9 +1123,9 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     } catch {}
     const rawLines = [];
     rawLines.push(`From: me`);
-    if (to) rawLines.push(`To: ${to}`);
-    if (cc) rawLines.push(`Cc: ${cc}`);
-    if (bcc) rawLines.push(`Bcc: ${bcc}`);
+    if (to) rawLines.push(`To: ${sanitizeEmailHeader(to)}`);
+    if (cc) rawLines.push(`Cc: ${sanitizeEmailHeader(cc)}`);
+    if (bcc) rawLines.push(`Bcc: ${sanitizeEmailHeader(bcc)}`);
     // RFC 2047 encode subject if it contains non-ASCII characters
     const subjectStr = subject || "";
     const hasNonAscii = /[^\x00-\x7F]/.test(subjectStr);
