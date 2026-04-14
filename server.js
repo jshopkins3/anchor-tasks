@@ -1350,44 +1350,62 @@ async function sendPushToAll(payload) {
 /* ─── Server-side email polling for push notifications ─────────────── */
 let lastKnownInboxIds = new Set();
 let emailPollStarted = false;
+let emailPollReady = false; // Don't notify until initial snapshot is loaded
 function startServerEmailPoll() {
   if (emailPollStarted) return;
   emailPollStarted = true;
-  // Initial load of known IDs
+  // Initial load — snapshot current inbox IDs so we DON'T notify for existing emails
   gmailGetInbox().then(result => {
     if (Array.isArray(result)) {
       lastKnownInboxIds = new Set(result.map(e => e.id));
+      console.log(`[push] Email poll ready — ${lastKnownInboxIds.size} existing emails snapshotted`);
     }
-  }).catch(() => {});
-  // Poll every 60 seconds
+    emailPollReady = true;
+  }).catch(() => { emailPollReady = true; });
+  // Poll every 3 minutes (was 60s — too aggressive, wastes Gmail API quota)
   setInterval(async () => {
+    if (!emailPollReady) return; // Wait for initial snapshot
     try {
       const result = await gmailGetInbox();
       if (!Array.isArray(result)) return;
       const currentIds = new Set(result.map(e => e.id));
       const newEmails = result.filter(e => !lastKnownInboxIds.has(e.id));
-      if (newEmails.length > 0) {
-        const subs = loadPushSubscriptions();
-        if (subs.length > 0) {
-          if (newEmails.length === 1) {
-            const e = newEmails[0];
-            await sendPushToAll({
-              title: e.from || "New Email",
-              body: e.subject || "(No subject)",
-              url: "/?tab=email",
-            });
-          } else {
-            await sendPushToAll({
-              title: `${newEmails.length} new emails`,
-              body: newEmails.map(e => e.subject).slice(0, 3).join(", "),
-              url: "/?tab=email",
-            });
+      if (newEmails.length > 0 && newEmails.length <= 10) {
+        // Skip if >10 "new" — likely a server restart race condition, not real new emails
+        // Filter out noise: only notify for emails that wouldn't be auto-read
+        const rules = loadTriageRules();
+        const notifyEmails = newEmails.filter(e => {
+          const check = shouldAutoRead(e, rules);
+          return !check.autoRead;
+        });
+        if (notifyEmails.length > 0) {
+          const subs = loadPushSubscriptions();
+          if (subs.length > 0) {
+            if (notifyEmails.length === 1) {
+              const e = notifyEmails[0];
+              const fromName = (e.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
+              await sendPushToAll({
+                title: fromName || "New Email",
+                body: e.subject || "(No subject)",
+                url: "/?tab=email",
+                tag: "email-new",
+              });
+            } else {
+              await sendPushToAll({
+                title: `${notifyEmails.length} new emails`,
+                body: notifyEmails.map(e => (e.subject || "").substring(0, 50)).slice(0, 3).join(" · "),
+                url: "/?tab=email",
+                tag: "email-new",
+              });
+            }
           }
         }
+      } else if (newEmails.length > 10) {
+        console.log(`[push] Skipped notification — ${newEmails.length} "new" emails (likely restart/race)`);
       }
       lastKnownInboxIds = currentIds;
     } catch {}
-  }, 60000);
+  }, 180000); // 3 minutes
 }
 
 /* ─── Per-project detail files (notes, ethos, docs) ──────────────────── */
