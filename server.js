@@ -2436,6 +2436,7 @@ const server = http.createServer(async (req, res) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
           "X-API-Key": COMMAND_API_KEY,
           "X-Proxy-User": req.session.email,
         },
