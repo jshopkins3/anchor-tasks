@@ -7949,12 +7949,14 @@
             const onDown = (ex, ey) => {
               dragging = true; sx = ex; sy = ey;
               sl = panel.offsetLeft; st = panel.offsetTop;
-              panel.style.right = "auto"; panel.style.bottom = "auto";
+              // Must use setProperty with !important to beat media query overrides
+              panel.style.setProperty("right", "auto", "important");
+              panel.style.setProperty("bottom", "auto", "important");
             };
             const onMove = (ex, ey) => {
               if (!dragging) return;
-              panel.style.left = Math.max(0, sl + ex - sx) + "px";
-              panel.style.top = Math.max(0, st + ey - sy) + "px";
+              panel.style.setProperty("left", Math.max(0, sl + ex - sx) + "px", "important");
+              panel.style.setProperty("top", Math.max(0, st + ey - sy) + "px", "important");
             };
             const onUp = () => {
               if (!dragging) return;
