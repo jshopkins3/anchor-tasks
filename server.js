@@ -1021,14 +1021,16 @@ async function gmailGetThread(threadId, userEmail) {
       const fromEmail = fromMatch ? fromMatch[2].trim() : from;
       const body = gmailExtractBody(msg.payload);
       const attachments = [];
+      const inlineImages = [];
       function findAttachments(p) {
         if (!p) return;
         if (p.filename && p.body?.attachmentId) {
-          // Skip inline images (signature logos, etc.) - they have Content-ID headers
           const contentDisp = (p.headers || []).find(h => h.name.toLowerCase() === "content-disposition");
           const contentId = (p.headers || []).find(h => h.name.toLowerCase() === "content-id");
           const isInline = (contentDisp && /^\s*inline/i.test(contentDisp.value)) || (contentId && /^image\//i.test(p.mimeType));
-          if (!isInline) {
+          if (isInline && contentId) {
+            inlineImages.push({ cid: contentId.value.replace(/[<>]/g, ""), attachmentId: p.body.attachmentId, mimeType: p.mimeType });
+          } else {
             attachments.push({ name: p.filename, attachmentId: p.body.attachmentId, mimeType: p.mimeType, size: p.body.size || 0 });
           }
         }
@@ -1047,7 +1049,7 @@ async function gmailGetThread(threadId, userEmail) {
         messageId: parseEmailHeader(h, "Message-ID"),
         inReplyTo: parseEmailHeader(h, "In-Reply-To"),
         references: parseEmailHeader(h, "References"),
-        body, attachments,
+        body, attachments, inlineImages,
         unread: (msg.labelIds || []).includes("UNREAD"),
         starred: (msg.labelIds || []).includes("STARRED"),
         labelIds: msg.labelIds || [],
@@ -2974,12 +2976,20 @@ const server = http.createServer(async (req, res) => {
         const msg = await msgResp.json();
         const h = msg.payload?.headers || [];
         const body = gmailExtractBody(msg.payload);
-        // Collect attachments
+        // Collect attachments and inline images
         const attachments = [];
+        const inlineImages = [];
         function findAttachments(p) {
           if (!p) return;
           if (p.filename && p.body?.attachmentId) {
-            attachments.push({ name: p.filename, attachmentId: p.body.attachmentId, mimeType: p.mimeType, size: p.body.size || 0 });
+            const contentDisp = (p.headers || []).find(h => h.name.toLowerCase() === "content-disposition");
+            const contentId = (p.headers || []).find(h => h.name.toLowerCase() === "content-id");
+            const isInline = (contentDisp && /^\s*inline/i.test(contentDisp.value)) || (contentId && /^image\//i.test(p.mimeType));
+            if (isInline && contentId) {
+              inlineImages.push({ cid: contentId.value.replace(/[<>]/g, ""), attachmentId: p.body.attachmentId, mimeType: p.mimeType });
+            } else {
+              attachments.push({ name: p.filename, attachmentId: p.body.attachmentId, mimeType: p.mimeType, size: p.body.size || 0 });
+            }
           }
           if (p.parts) p.parts.forEach(findAttachments);
         }
@@ -2999,7 +3009,7 @@ const server = http.createServer(async (req, res) => {
           messageId: parseEmailHeader(h, "Message-ID"),
           inReplyTo: parseEmailHeader(h, "In-Reply-To"),
           references: parseEmailHeader(h, "References"),
-          body, attachments,
+          body, attachments, inlineImages,
           unread: (msg.labelIds || []).includes("UNREAD"),
           starred: (msg.labelIds || []).includes("STARRED"),
           labelIds: msg.labelIds || [],

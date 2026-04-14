@@ -6879,7 +6879,7 @@
         // Render body for the newest (expanded) message
         const lastBody = document.querySelector(`#thread-msg-${lastMsg.id} .email-thread-msg-body`);
         if (lastBody && lastMsg.body) {
-          renderEmailBodyInContainer(lastBody, lastMsg.body, lastMsg.id);
+          renderEmailBodyInContainer(lastBody, lastMsg.body, lastMsg.id, lastMsg.inlineImages);
         }
 
         // Store thread data for reply/forward
@@ -6919,7 +6919,7 @@
           const res = await fetch(`/api/gmail-message/${msgId}`);
           const data = await res.json();
           if (data.body) {
-            renderEmailBodyInContainer(bodyEl, data.body, msgId);
+            renderEmailBodyInContainer(bodyEl, data.body, msgId, data.inlineImages);
             bodyEl.dataset.loaded = "1";
           }
           // Update header to show to/cc
@@ -6933,8 +6933,18 @@
       bodyEl.style.display = "";
     }
 
-    function renderEmailBodyInContainer(container, body, msgId) {
+    function renderEmailBodyInContainer(container, body, msgId, inlineImages) {
       if (body.type === "html") {
+        let html = body.data;
+        // Replace cid: references with proxy URLs for inline images
+        if (inlineImages && inlineImages.length) {
+          for (const img of inlineImages) {
+            if (img.cid && img.attachmentId) {
+              const proxyUrl = `/api/gmail-message/${msgId}/attachment/${encodeURIComponent(img.attachmentId)}?mime=${encodeURIComponent(img.mimeType)}&name=inline.png`;
+              html = html.replace(new RegExp(`cid:${img.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi'), proxyUrl);
+            }
+          }
+        }
         const iframe = document.createElement("iframe");
         iframe.sandbox = "allow-same-origin allow-popups allow-popups-to-escape-sandbox";
         iframe.referrerPolicy = "no-referrer";
@@ -6942,7 +6952,7 @@
         container.innerHTML = "";
         container.appendChild(iframe);
         iframe.contentDocument.open();
-        iframe.contentDocument.write(`<base target="_blank">${body.data}`);
+        iframe.contentDocument.write(`<base target="_blank">${html}`);
         iframe.contentDocument.close();
         const resizeIframe = () => {
           try { iframe.style.height = Math.max(200, iframe.contentDocument.body.scrollHeight + 30) + "px"; } catch {}
@@ -7035,7 +7045,7 @@
 
         // Render body
         const bodyArea = document.getElementById(`email-body-area-${id}`);
-        if (bodyArea && data.body) renderEmailBodyInContainer(bodyArea, data.body, id);
+        if (bodyArea && data.body) renderEmailBodyInContainer(bodyArea, data.body, id, data.inlineImages);
 
       } catch {
         detailEl.innerHTML = `<div class="email-detail-wrap"><div class="email-empty-text">Failed to load message</div></div>`;
