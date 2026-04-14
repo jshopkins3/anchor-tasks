@@ -4132,6 +4132,12 @@
       if (tab) tab.click();
     }
 
+    function openTriageEmail(emailId, threadId) {
+      switchToTab('email');
+      // Give the tab a moment to render, then select the email
+      setTimeout(() => { selectEmail(emailId, threadId); }, 150);
+    }
+
     async function updateHubView() {
       // Greeting — instant
       const hour = new Date().getHours();
@@ -5051,7 +5057,7 @@
           // Fallback: show raw unread emails
           if (typeof inboxEmails !== "undefined" && inboxEmails.length) {
             const unread = inboxEmails.filter(e => e.unread).slice(0, 5);
-            el.innerHTML = unread.length ? unread.map(e => `<div onclick="switchToTab('email')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'"><div style="font-size:12px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.from || "")}</div><div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(e.subject || "")}</div></div>`).join("") : '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">No unread email</div>';
+            el.innerHTML = unread.length ? unread.map(e => `<div onclick="openTriageEmail('${e.id}','${e.threadId || ""}')" style="padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'"><div style="font-size:12px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.from || "")}</div><div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(e.subject || "")}</div></div>`).join("") : '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">No unread email</div>';
           } else {
             el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:12px;">Could not load triage</div>';
           }
@@ -5078,7 +5084,7 @@
             const fromName = (e.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
             const summ = e.summary ? ` — ${e.summary}` : "";
             const ccBadge = e.isCC ? '<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(99,102,241,0.12);color:#6366f1;font-weight:600;margin-left:4px;">CC</span>' : "";
-            html += `<div onclick="switchToTab('email')" style="padding:5px 14px 5px 24px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+            html += `<div onclick="openTriageEmail('${e.id}','${e.threadId || ""}')" style="padding:5px 14px 5px 24px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
               <div style="flex:1;min-width:0;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(fromName)}${ccBadge}</div>
                 <div style="font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.subject || "")}${esc(summ)}</div>
