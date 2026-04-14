@@ -837,17 +837,37 @@
       /* Email layout: mobile list/detail toggle (not stacked) */
       .email-layout { flex-direction: column !important; }
       .email-folder-sidebar { display: none !important; }
+      .email-folder-toggle-mobile { display: flex !important; }
       .email-list-pane { max-width: 100% !important; width: 100% !important; height: calc(100vh - 52px) !important; }
       .email-detail-pane { max-width: 100% !important; width: 100% !important; height: calc(100vh - 52px) !important; position: absolute; top: 0; left: 0; z-index: 10; background: var(--bg-page, #09090b); display: none !important; }
       .email-detail-pane.mobile-active { display: block !important; }
       .email-resize-handle { display: none !important; }
-      .compose-panel { width: 100% !important; right: 0 !important; }
+      .compose-panel { width: 100% !important; right: 0 !important; left: 0 !important; border-radius: 12px 12px 0 0 !important; }
       .email-mobile-back { display: flex !important; }
-      .email-list-toolbar { padding: 10px 12px; }
-      .email-row { padding: 10px 12px !important; }
-      .email-row-hide-dan { opacity: 0.6 !important; } /* Always show on mobile (no hover) */
+      .email-row-hide-dan { opacity: 0.6 !important; }
+
+      /* Email mobile: reduce detail padding */
+      .email-detail-wrap { padding: 14px 16px !important; }
+      .email-detail-subject { font-size: 18px !important; margin-bottom: 14px !important; }
+
+      /* Email mobile: larger touch targets */
+      .email-row { padding: 14px 16px !important; min-height: 64px; }
+      .email-row-from { font-size: 14px !important; }
+      .email-row-subject { font-size: 14px !important; }
+      .email-row-snippet { font-size: 13px !important; }
+
+      /* Email mobile: readable body text */
+      .email-body-container pre { font-size: 15px !important; }
+
+      /* Email mobile: touch-friendly action buttons */
+      .email-action-btn { padding: 10px 16px !important; font-size: 13px !important; }
       .email-detail-actions { flex-wrap: wrap; }
-      .email-action-btn { font-size: 11px; padding: 6px 10px; }
+
+      /* Email mobile: attachments */
+      .email-attachment { padding: 10px 14px !important; }
+
+      /* Email mobile: list toolbar */
+      .email-list-toolbar { padding: 12px 16px !important; }
 
       /* Dan panel: full width */
       #dan-panel { width: calc(100vw - 16px) !important; right: 8px !important; bottom: 80px !important; max-height: 70vh !important; }
@@ -874,6 +894,15 @@
       .tab { font-size: 10px; padding: 8px 10px; }
       [style*="grid-template-columns"], [style*="gridTemplateColumns"] { grid-template-columns: 1fr !important; }
       #dan-panel { width: calc(100vw - 8px) !important; right: 4px !important; left: 4px !important; }
+
+      /* Email 480px: tighter for phones */
+      .email-detail-wrap { padding: 10px 12px !important; }
+      .email-detail-subject { font-size: 16px !important; }
+      .email-row { padding: 12px 12px !important; }
+      .email-row-from, .email-row-subject { font-size: 13px !important; }
+      .email-detail-sender { flex-wrap: wrap; gap: 8px !important; }
+      .email-detail-date { width: 100%; }
+      .email-action-btn { padding: 9px 12px !important; font-size: 12px !important; }
     }
     .today-col-main { display: flex; flex-direction: column; gap: 16px; }
     .today-col-side { display: flex; flex-direction: column; gap: 16px; }
@@ -1304,6 +1333,23 @@
       border-right: 1px solid #27272a; overflow-y: auto;
       padding: 12px 0; display: flex; flex-direction: column;
     }
+    .email-folder-toggle-mobile {
+      display: none; align-items: center; gap: 6px;
+      background: none; border: 1px solid #27272a; color: #a1a1aa;
+      border-radius: 6px; padding: 6px 10px; font-size: 13px;
+      cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    .email-folder-toggle-mobile:hover { background: #18181b; color: #e4e4e7; }
+    .email-folder-sidebar.mobile-open {
+      display: flex !important; position: fixed; top: 0; left: 0; bottom: 0;
+      width: 240px; z-index: 100; background: #09090b; border-right: 1px solid #27272a;
+      box-shadow: 4px 0 24px rgba(0,0,0,.5); padding-top: 16px;
+    }
+    .email-folder-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.5); z-index: 99;
+    }
+    .email-folder-overlay.active { display: block; }
     .email-compose-btn {
       display: flex; align-items: center; gap: 8px; margin: 0 12px 12px;
       background: #3b82f6; color: #fff; border: none; border-radius: 8px;
@@ -2426,6 +2472,7 @@
     <!-- ── Email section ──────────────────────────────────────── -->
     <div class="section" id="sec-email">
       <div class="email-layout">
+        <div class="email-folder-overlay" id="email-folder-overlay" onclick="toggleMobileFolders()"></div>
         <div class="email-folder-sidebar" id="email-folder-sidebar">
           <button class="email-compose-btn" onclick="openCompose()">✏ Compose</button>
           <div id="email-folder-list"></div>
@@ -2439,6 +2486,7 @@
         <div class="email-resize-handle" id="email-sidebar-resize-handle"></div>
         <div class="email-list-pane" id="email-list-pane">
           <div class="email-list-toolbar">
+            <button class="email-folder-toggle-mobile" onclick="toggleMobileFolders()">☰ Folders</button>
             <span class="email-toolbar-title" id="email-toolbar-title">Inbox</span>
             <span class="email-toolbar-count" id="email-unread-count" style="display:none;">0</span>
             <div class="email-search-bar">
@@ -6418,6 +6466,11 @@
         allLabels.find(l => l.id === labelId)?.name || labelId;
       document.getElementById("email-toolbar-title").textContent = folderName;
       renderFolderSidebar();
+      // Close mobile folder sidebar if open
+      const sidebar = document.getElementById("email-folder-sidebar");
+      const overlay = document.getElementById("email-folder-overlay");
+      if (sidebar) sidebar.classList.remove("mobile-open");
+      if (overlay) overlay.classList.remove("active");
       await loadFolderMessages();
     }
 
@@ -7609,6 +7662,14 @@
       });
     }
     setupEmailResize();
+
+    function toggleMobileFolders() {
+      const sidebar = document.getElementById("email-folder-sidebar");
+      const overlay = document.getElementById("email-folder-overlay");
+      const isOpen = sidebar.classList.contains("mobile-open");
+      sidebar.classList.toggle("mobile-open", !isOpen);
+      overlay.classList.toggle("active", !isOpen);
+    }
 
     // Sidebar resize
     (function setupSidebarResize() {
