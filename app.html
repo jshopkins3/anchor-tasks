@@ -7470,12 +7470,20 @@
     async function sendCompose() {
       const btn = document.getElementById("compose-send-btn");
       if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
-      const to = document.getElementById("compose-to")?.value || "";
-      const cc = document.getElementById("compose-cc")?.value || "";
-      const bcc = document.getElementById("compose-bcc")?.value || "";
+      // Also add any text left in the input as a chip before sending
+      for (const field of ["to", "cc", "bcc"]) {
+        const inp = document.getElementById(`compose-${field}`);
+        if (inp && inp.value.trim() && inp.value.includes("@")) {
+          addComposeChip(field, inp.value.trim());
+        }
+      }
+      // Get recipients from chips (not from input value which is just the typing area)
+      const to = composeChips.to.map(c => c.email).join(", ");
+      const cc = composeChips.cc.map(c => c.email).join(", ");
+      const bcc = composeChips.bcc.map(c => c.email).join(", ");
       const subject = document.getElementById("compose-subject")?.value || "";
       const body = document.getElementById("compose-body")?.value || "";
-      if (!to.trim()) { if (btn) { btn.disabled = false; btn.textContent = "Send"; } return; }
+      if (!to.trim()) { if (btn) { btn.disabled = false; btn.textContent = "Send"; } alert("Please add at least one recipient."); return; }
       try {
         const hasLocalAttachments = composeState?.attachments?.length > 0;
         const hasFwdAttachments = composeState?.forwardedAttachments?.length > 0;
