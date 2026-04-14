@@ -4253,15 +4253,23 @@
       // Compliance alerts
       const alertsEl = document.getElementById("hub-alerts");
       const alertsListEl = document.getElementById("hub-alerts-list");
-      const inProcessStages = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+      // Only flag closing-track stages (under contract / actively processing) — not APPROVED_WITH_CONDITION which may be waiting for contract
+      const closingTrackStages = new Set(["DISCLOSURE_SENT","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+      const needsClosingDate = new Set(["DISCLOSURE_SENT","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED","APPROVED_WITH_CONDITION"]);
       const alerts = [];
       for (const loan of activeLoans) {
-        if (inProcessStages.has(loan.loanStatus)) {
-          if (!loan.closingDate) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:#ef4444;">No closing date set</span></div>`);
+        if (needsClosingDate.has(loan.loanStatus)) {
+          // "No closing date" only critical for closing-track stages, warning for APPROVED_WITH_CONDITION
+          if (!loan.closingDate) {
+            const isCritical = closingTrackStages.has(loan.loanStatus);
+            alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:${isCritical ? '#ef4444' : '#f59e0b'};">${isCritical ? 'No closing date set' : 'Needs closing date'}</span></div>`);
+          }
           else { const cd = new Date(loan.closingDate); const d = Math.ceil((cd - now) / 86400000); if (d < 0) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#ef4444;">Closing date passed ${Math.abs(d)}d ago</span></div>`); else if (d <= 3) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#f59e0b;">Closing in ${d} day${d !== 1 ? "s" : ""}</span></div>`); }
-          if (loan.lastStatusChange) { const ds = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000); if (ds > 14) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:#f59e0b;">No movement in ${ds} days</span></div>`); }
+          if (loan.lastStatusChange && closingTrackStages.has(loan.loanStatus)) { const ds = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000); if (ds > 14) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> (${STAGE_LABELS[loan.loanStatus] || loan.loanStatus}) — <span style="color:#f59e0b;">No movement in ${ds} days</span></div>`); }
         }
-        if (loan.loanStatus === "PREAPPROVED" && loan.lastStatusChange) { const ds = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000); if (ds > 30) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#f59e0b;">Pre-approval stale (${ds}d)</span></div>`); }
+        // Pre-approved borrowers shopping for a house can sit for months — that's normal, not a compliance issue.
+        // Only alert if APPLICATION_INTAKE or QUALIFICATION (undecisioned) exceeds 30 days (ECOA).
+        if ((loan.loanStatus === "APPLICATION_INTAKE" || loan.loanStatus === "QUALIFICATION") && loan.lastStatusChange) { const ds = Math.ceil((now - new Date(loan.lastStatusChange)) / 86400000); if (ds > 25) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#ef4444;">ECOA: ${ds}d without decision (30d limit)</span></div>`); else if (ds > 15) alerts.push(`<div style="margin-bottom:4px;"><strong>${loan.borrowerName}</strong> — <span style="color:#f59e0b;">ECOA: ${ds}d since app — decision needed within ${30 - ds}d</span></div>`); }
       }
       if (alertsEl) { alertsEl.style.display = alerts.length > 0 ? "block" : "none"; if (alertsListEl) alertsListEl.innerHTML = alerts.join(""); }
 
@@ -6684,6 +6692,50 @@
       }
     }
 
+    /* ── Train Dan: teach Dan to filter emails like this ─────── */
+    async function trainDanFilter(emailId) {
+      const email = folderEmails.find(e => e.id === emailId) || inboxEmails.find(e => e.id === emailId);
+      if (!email) return;
+
+      const fromEmail = email.fromEmail || email.from || "";
+      const fromDomain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
+      const subject = email.subject || "";
+
+      // Show quick confirmation
+      const choice = confirm(
+        `Train Dan to filter emails like this?\n\nFrom: ${email.from}\nSubject: ${subject}\n\nDan will learn to hide similar emails from your briefings.`
+      );
+      if (!choice) return;
+
+      // Save the filter rule
+      try {
+        const resp = await fetch("/api/dan-email-filter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fromEmail,
+            fromDomain,
+            subjectPattern: subject,
+            from: email.from,
+            reason: "User marked as unwanted via Train Dan button",
+            createdAt: new Date().toISOString(),
+          }),
+        });
+        if (resp.ok) {
+          // Visual feedback
+          const btn = event.target;
+          btn.textContent = "Trained!";
+          btn.style.color = "#22c55e";
+          setTimeout(() => { btn.textContent = "🚫 Train Dan"; btn.style.color = "#d4af37"; }, 2000);
+
+          // Also archive the email
+          await archiveEmail(emailId);
+        }
+      } catch (e) {
+        console.error("Train Dan failed:", e);
+      }
+    }
+
     /* ── Thread / Conversation view ───────────────────────────── */
     async function renderThreadView(threadId, selectedMsgId) {
       const detailEl = document.getElementById("email-detail-pane");
@@ -6855,6 +6907,7 @@
               <button class="email-action-btn" onclick="archiveEmail('${id}')">📥 Archive</button>
               <button class="email-action-btn danger" onclick="deleteEmail('${id}')">🗑 Delete</button>
               <button class="email-action-btn task-action" onclick="document.getElementById('email-task-card-${id}').style.display='block'">✚ Task</button>
+              <button class="email-action-btn" onclick="trainDanFilter('${id}')" title="Teach Dan to hide emails like this" style="color:#d4af37;border-color:rgba(212,175,55,.3);">🚫 Train Dan</button>
             </div>
             <div id="email-attach-area-${id}" class="email-attachments"></div>
             <div id="email-body-area-${id}" class="email-body-container"></div>

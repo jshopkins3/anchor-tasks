@@ -3045,6 +3045,36 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok });
     }
 
+    /* ── Dan Email Filter: train Dan to hide emails like this ── */
+    if (urlPath === "/api/dan-email-filter" && req.method === "POST") {
+      try {
+        const body = await readBody(req);
+        const rule = JSON.parse(body);
+        const filterFile = path.join(DATA_DIR, "dan-email-filters.json");
+        let filters = [];
+        try { filters = JSON.parse(fs.readFileSync(filterFile, "utf8")); } catch {}
+        // Dedupe by fromEmail
+        if (rule.fromEmail && !filters.find(f => f.fromEmail === rule.fromEmail)) {
+          filters.push(rule);
+        } else if (rule.fromDomain && !filters.find(f => f.fromDomain === rule.fromDomain)) {
+          filters.push(rule);
+        }
+        fs.writeFileSync(filterFile, JSON.stringify(filters, null, 2));
+        console.log(`[dan-filter] Added filter: ${rule.from || rule.fromEmail} — ${filters.length} total rules`);
+        return json(res, 200, { ok: true, totalRules: filters.length });
+      } catch (e) {
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    /* ── Dan Email Filter: GET rules (for Dan's briefing to read) ── */
+    if (urlPath === "/api/dan-email-filter" && req.method === "GET") {
+      const filterFile = path.join(DATA_DIR, "dan-email-filters.json");
+      let filters = [];
+      try { filters = JSON.parse(fs.readFileSync(filterFile, "utf8")); } catch {}
+      return json(res, 200, { filters });
+    }
+
     if (urlPath.match(/^\/api\/gmail-delete\//) && req.method === "POST") {
       const msgId = urlPath.split("/").pop();
       const ue = req.session && req.session.email;
