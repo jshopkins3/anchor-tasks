@@ -870,7 +870,7 @@
       .email-list-toolbar { padding: 12px 16px !important; }
 
       /* Dan panel: full width */
-      #dan-panel { width: calc(100vw - 16px) !important; right: 8px !important; bottom: 80px !important; max-height: 70vh !important; }
+      #dan-panel { width: calc(100vw - 16px) !important; left: 8px !important; top: auto !important; bottom: 80px !important; max-height: 70vh !important; }
 
       /* General grids: single column */
       [style*="grid-template-columns: repeat(4"], [style*="gridTemplateColumns"][style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
@@ -893,7 +893,7 @@
     @media (max-width: 480px) {
       .tab { font-size: 10px; padding: 8px 10px; }
       [style*="grid-template-columns"], [style*="gridTemplateColumns"] { grid-template-columns: 1fr !important; }
-      #dan-panel { width: calc(100vw - 8px) !important; right: 4px !important; left: 4px !important; }
+      #dan-panel { width: calc(100vw - 8px) !important; left: 4px !important; top: auto !important; bottom: 80px !important; }
 
       /* Email 480px: tighter for phones */
       .email-detail-wrap { padding: 10px 12px !important; }
@@ -7824,7 +7824,7 @@
       const savedY = localStorage.getItem("dan-panel-y");
       const initTop = savedY || (window.innerHeight - parseInt(savedH) - 90);
       const initLeft = savedX || (window.innerWidth - parseInt(savedW) - 24);
-      panel.style.cssText = `display:none;position:fixed;top:${initTop}px;left:${initLeft}px;width:${savedW}px;height:${savedH}px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:16px;box-shadow:var(--shadow-hover);z-index:9999;overflow:hidden;display:flex;flex-direction:column;resize:both;min-width:340px;min-height:400px;max-width:90vw;max-height:85vh;`;
+      panel.style.cssText = `display:none;position:fixed;top:${initTop}px;left:${initLeft}px;right:auto;bottom:auto;width:${savedW}px;height:${savedH}px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:16px;box-shadow:var(--shadow-hover);z-index:9999;overflow:hidden;flex-direction:column;resize:both;min-width:340px;min-height:400px;max-width:90vw;max-height:85vh;`;
       panel.innerHTML = `
         <div id="dan-drag-header" style="padding:16px 20px;background:linear-gradient(135deg,#1B3A6B,#2d7a9a);display:flex;align-items:center;justify-content:space-between;cursor:grab;user-select:none;">
           <div style="display:flex;align-items:center;gap:10px;">
@@ -7980,6 +7980,7 @@
         if (e.target.tagName === "BUTTON" || e.target.closest("button")) return;
         dragging = true; startX = e.clientX; startY = e.clientY;
         startLeft = panel.offsetLeft; startTop = panel.offsetTop;
+        panel.style.right = "auto"; panel.style.bottom = "auto";
         header.style.cursor = "grabbing";
         e.preventDefault();
       });
@@ -7987,6 +7988,7 @@
         if (e.target.tagName === "BUTTON" || e.target.closest("button")) return;
         const t = e.touches[0]; dragging = true; startX = t.clientX; startY = t.clientY;
         startLeft = panel.offsetLeft; startTop = panel.offsetTop;
+        panel.style.right = "auto"; panel.style.bottom = "auto";
       }, { passive: false });
       document.addEventListener("mousemove", e => {
         if (!dragging) return;
