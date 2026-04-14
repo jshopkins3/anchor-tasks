@@ -4280,7 +4280,8 @@
       if (pipeList) {
         const stageColors = { APPLICATION_INTAKE:"#6366f1", QUALIFICATION:"#8b5cf6", PREAPPROVED:"#3b82f6", DISCLOSURE_SENT:"#0ea5e9", APPROVED_WITH_CONDITION:"#f59e0b", CLEAR_TO_CLOSE:"#10b981", DOCS_OUT:"#14b8a6", DOCS_SIGNED:"#06b6d4" };
         const stageLabelsShort = { APPLICATION_INTAKE:"Intake", QUALIFICATION:"Qual", PREAPPROVED:"Pre-Appr", DISCLOSURE_SENT:"Disclosed", APPROVED_WITH_CONDITION:"Cond Appr", CLEAR_TO_CLOSE:"CTC", DOCS_OUT:"Docs Out", DOCS_SIGNED:"Docs Signed" };
-        const sorted = [...activeLoans].sort((a, b) => { const ap = inProcessStages.has(a.loanStatus) ? 0 : 1; const bp = inProcessStages.has(b.loanStatus) ? 0 : 1; return ap !== bp ? ap - bp : (b.loanAmount || 0) - (a.loanAmount || 0); });
+        const inProcessSet = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+        const sorted = [...activeLoans].sort((a, b) => { const ap = inProcessSet.has(a.loanStatus) ? 0 : 1; const bp = inProcessSet.has(b.loanStatus) ? 0 : 1; return ap !== bp ? ap - bp : (b.loanAmount || 0) - (a.loanAmount || 0); });
         pipeList.innerHTML = sorted.length === 0
           ? '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">No active loans</div>'
           : sorted.map(loan => {
