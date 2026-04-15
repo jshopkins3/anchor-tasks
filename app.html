@@ -6661,7 +6661,15 @@
       }
     }
 
+    let _renderingTriageFilter = false; // guard against re-entry
     function renderEmailList() {
+      // If a triage filter is active, re-apply it instead of showing all emails
+      if (triageFilterCategory && triageData && triageData.categories && !_renderingTriageFilter) {
+        _renderingTriageFilter = true;
+        setTriageFilter(triageFilterCategory);
+        _renderingTriageFilter = false;
+        return;
+      }
       const listEl = document.getElementById("email-list-items");
       const countEl = document.getElementById("email-unread-count");
       if (!listEl) return;
