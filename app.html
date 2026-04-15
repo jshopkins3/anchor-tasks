@@ -7492,6 +7492,39 @@
         if (!composeState.to && !composeChips.to.length) document.getElementById("compose-to")?.focus();
         else document.getElementById("compose-body")?.focus();
       }, 100);
+      // Paste attachments from clipboard (images, screenshots, files)
+      setTimeout(() => {
+        const body = document.getElementById("compose-body");
+        if (body) body.addEventListener("paste", handleComposePaste);
+      }, 50);
+    }
+
+    function handleComposePaste(e) {
+      if (!composeState) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      let handled = false;
+      for (const item of items) {
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (!file) continue;
+          // Name pasted images something useful
+          const ext = file.type.split("/")[1] || "png";
+          const name = file.name && file.name !== "image.png"
+            ? file.name
+            : `pasted-${new Date().toISOString().replace(/[:.]/g, "-").substring(0, 19)}.${ext}`;
+          const namedFile = new File([file], name, { type: file.type });
+          if (namedFile.size > 25 * 1024 * 1024) { alert(`${name} is too large (max 25MB)`); continue; }
+          composeState.attachments.push(namedFile);
+          handled = true;
+        }
+      }
+      if (handled) {
+        renderComposeAttachments();
+        // Flash the attachments bar to show something was added
+        const el = document.getElementById("compose-attachments-preview");
+        if (el) { el.style.transition = "border-color .3s"; el.style.borderColor = "#22c55e"; setTimeout(() => el.style.borderColor = "", 800); }
+      }
     }
 
     const EMOJI_LIST = [
