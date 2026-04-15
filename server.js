@@ -1929,6 +1929,8 @@ const server = http.createServer(async (req, res) => {
         personal: !!body.personal,
         urgent: !!body.urgent,
         important: !!body.important,
+        todayFocus: !!body.todayFocus,
+        todayOrder: body.todayFocus ? Date.now() : 0,
         done: false,
       };
       if (!task.title) return json(res, 400, { error: "Title required" });

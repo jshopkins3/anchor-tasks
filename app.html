@@ -4244,48 +4244,8 @@
       if (emailCountEl) emailCountEl.textContent = unread || "--";
       if (emailSubEl) emailSubEl.textContent = unread > 0 ? "needs attention" : "all caught up";
 
-      // Today's Focus panel
-      const focusList = document.getElementById("hub-focus-list");
-      if (focusList) {
-        let focusHtml = '';
-        const overdue = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date(now.toDateString()) && !t.todayFocus) : [];
-        if (overdue.length > 0) {
-          focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.05em;background:rgba(239,68,68,0.04);">Overdue</div>`;
-          for (const t of overdue.slice(0, 3)) {
-            focusHtml += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);background:rgba(239,68,68,0.02);">
-              <button class="task-check" onclick="toggleTask('${t.id}').then(()=>updateHubView())" style="flex-shrink:0;"></button>
-              <div style="flex:1;min-width:0;"><div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
-              <div style="font-size:10px;color:#ef4444;margin-top:2px;">Was due ${t.due}</div></div>
-              <span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">OVERDUE</span>
-            </div>`;
-          }
-        }
-        if (todayTasks.length > 0) {
-          focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;">Focus</div>`;
-          for (const t of todayTasks.slice(0, 6)) {
-            const pb = t.project === "Active Loans" ? `<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(59,130,246,0.1);color:#3b82f6;margin-left:4px;">${t.project}</span>` : "";
-            focusHtml += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);">
-              <button class="task-check" onclick="toggleTask('${t.id}').then(()=>updateHubView())" style="flex-shrink:0;"></button>
-              <div style="flex:1;min-width:0;"><div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}${pb}</div>
-              ${t.due ? `<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Due ${t.due}</div>` : ""}</div>
-              ${t.priority === "high" || t.priority === "urgent" ? '<span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">' + t.priority.toUpperCase() + '</span>' : ""}
-            </div>`;
-          }
-        }
-        const todayStr2 = now.toISOString().substring(0, 10);
-        const upcomingEvents = (typeof calEvents !== "undefined" ? calEvents : []).filter(ev => (ev.start || "").substring(0, 10) === todayStr2 && !ev.allDay).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
-        if (upcomingEvents.length > 0) {
-          focusHtml += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.05em;">Today's Meetings</div>`;
-          for (const ev of upcomingEvents.slice(0, 3)) {
-            const time = typeof formatEventTime === "function" ? formatEventTime(ev.start) : "";
-            focusHtml += `<div onclick="switchToTab('calendar')" style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
-              <span style="font-size:11px;color:#0ea5e9;font-weight:600;min-width:55px;">${time}</span>
-              <div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ev.title || "")}</div>
-            </div>`;
-          }
-        }
-        focusList.innerHTML = focusHtml || '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">All clear! No tasks or meetings right now.</div>';
-      }
+      // Today's Focus panel — uses shared renderer
+      renderHubFocus(now, todayTasks);
 
       // Email triage panel (Dan-powered)
       loadEmailTriage();
@@ -5701,6 +5661,54 @@
       } catch {}
     }
 
+    function renderHubFocus(now, todayTasks) {
+      const focusList = document.getElementById("hub-focus-list");
+      if (!focusList) return;
+      if (!now) now = new Date();
+      if (!todayTasks) todayTasks = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.todayFocus) : [];
+      let html = '';
+      const overdue = (typeof tasks !== "undefined") ? tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date(now.toDateString()) && !t.todayFocus) : [];
+      if (overdue.length > 0) {
+        html += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.05em;background:rgba(239,68,68,0.04);">Overdue</div>`;
+        for (const t of overdue.slice(0, 3)) {
+          html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);background:rgba(239,68,68,0.02);">
+            <button class="task-check" onclick="toggleTask('${t.id}').then(()=>{renderAll();renderHubFocus();})" style="flex-shrink:0;"></button>
+            <div style="flex:1;min-width:0;"><div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
+            <div style="font-size:10px;color:#ef4444;margin-top:2px;">Was due ${t.due}</div></div>
+            <span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">OVERDUE</span>
+          </div>`;
+        }
+      }
+      if (todayTasks.length > 0) {
+        html += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;">Focus</div>`;
+        for (const t of todayTasks.slice(0, 6)) {
+          const pb = t.project ? `<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(59,130,246,0.1);color:#3b82f6;margin-left:4px;">${esc(t.project)}</span>` : "";
+          html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);">
+            <button class="task-check" onclick="toggleTask('${t.id}').then(()=>{renderAll();renderHubFocus();})" style="flex-shrink:0;"></button>
+            <div style="flex:1;min-width:0;"><div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}${pb}</div>
+            ${t.due ? `<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Due ${t.due}</div>` : ""}</div>
+            ${t.priority === "high" || t.priority === "urgent" ? '<span style="font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(239,68,68,0.1);color:#ef4444;font-weight:600;">' + t.priority.toUpperCase() + '</span>' : ""}
+          </div>`;
+        }
+      }
+      const todayStr2 = now.toISOString().substring(0, 10);
+      const upcomingEvents = (typeof calEvents !== "undefined" ? calEvents : []).filter(ev => (ev.start || "").substring(0, 10) === todayStr2 && !ev.allDay).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+      if (upcomingEvents.length > 0) {
+        html += `<div style="padding:6px 16px;font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.05em;">Today's Meetings</div>`;
+        for (const ev of upcomingEvents.slice(0, 3)) {
+          const time = typeof formatEventTime === "function" ? formatEventTime(ev.start) : "";
+          html += `<div onclick="switchToTab('calendar')" style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+            <span style="font-size:11px;color:#0ea5e9;font-weight:600;min-width:55px;">${time}</span>
+            <div style="font-size:13px;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ev.title || "")}</div>
+          </div>`;
+        }
+      }
+      if (todayTasks.length > 6) {
+        html += `<div onclick="switchToTab('today')" style="padding:8px 16px;font-size:11px;color:var(--gold);cursor:pointer;font-weight:600;text-align:center;">+${todayTasks.length - 6} more — View Today →</div>`;
+      }
+      focusList.innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">No tasks pinned for today. Ask Dan or use AI Prioritize.</div>';
+    }
+
     function renderToday() {
       renderMorningBrief();
 
@@ -5761,6 +5769,9 @@
 
       // Needs attention
       renderNeedsAttention();
+
+      // Keep hub focus in sync
+      renderHubFocus();
     }
 
     function renderCalendar() {
