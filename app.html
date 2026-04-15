@@ -7699,7 +7699,6 @@
         body: JSON.stringify({ messageId: emailId, addLabels: ["SPAM"], removeLabels: ["INBOX"] }),
       });
       // Also block the sender
-      const fromEmail = email.fromEmail || email.from || "";
       const fromDomain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
       const blockPattern = fromDomain && !["gmail.com","yahoo.com","hotmail.com","outlook.com","aol.com","icloud.com"].includes(fromDomain.toLowerCase())
         ? fromDomain : fromEmail;
