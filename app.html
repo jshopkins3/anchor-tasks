@@ -5245,6 +5245,9 @@
     /* ── Inbox ───────────────────────────────────────────────── */
     let inboxEmails = [];
     let inboxEmailTaskForm = null; // email id currently showing task form
+    const locallyDismissedIds = new Set(); // emails deleted/archived/read-dismissed locally — don't let poll resurrect them
+    // Clear dismissed IDs after 3 minutes (Gmail API propagation window)
+    setInterval(() => { locallyDismissedIds.clear(); }, 180000);
 
     async function loadInbox() {
       try {
@@ -5434,6 +5437,7 @@
 
       // Mark email as read
       await fetch(`/api/gmail-mark-read/${emailId}`, { method: "POST" });
+      locallyDismissedIds.add(emailId);
       inboxEmails = inboxEmails.filter(e => e.id !== emailId);
       inboxEmailTaskForm = null;
 
@@ -5443,6 +5447,7 @@
 
     async function deleteEmail(emailId) {
       await fetch(`/api/gmail-delete/${emailId}`, { method: "POST" });
+      locallyDismissedIds.add(emailId);
       inboxEmails = inboxEmails.filter(e => e.id !== emailId);
       folderEmails = folderEmails.filter(e => e.id !== emailId);
       if (selectedEmailId === emailId) {
@@ -5475,6 +5480,7 @@
 
     async function markEmailRead(emailId) {
       await fetch(`/api/gmail-mark-read/${emailId}`, { method: "POST" });
+      locallyDismissedIds.add(emailId);
       inboxEmails = inboxEmails.filter(e => e.id !== emailId);
       const fe = folderEmails.find(e => e.id === emailId);
       if (fe) fe.unread = false;
@@ -6621,6 +6627,7 @@
     async function bulkArchive() {
       const ids = [...selectedEmailIds];
       await Promise.all(ids.map(id => fetch(`/api/gmail-archive/${id}`, { method: "POST" })));
+      ids.forEach(id => locallyDismissedIds.add(id));
       folderEmails = folderEmails.filter(e => !selectedEmailIds.has(e.id));
       inboxEmails = inboxEmails.filter(e => !selectedEmailIds.has(e.id));
       selectedEmailIds.clear();
@@ -6630,6 +6637,7 @@
     async function bulkDelete() {
       const ids = [...selectedEmailIds];
       await Promise.all(ids.map(id => fetch(`/api/gmail-delete/${id}`, { method: "POST" })));
+      ids.forEach(id => locallyDismissedIds.add(id));
       folderEmails = folderEmails.filter(e => !selectedEmailIds.has(e.id));
       inboxEmails = inboxEmails.filter(e => !selectedEmailIds.has(e.id));
       selectedEmailIds.clear();
@@ -6673,6 +6681,7 @@
       if (!confirm(`Archive all ${groupEmails.length} emails from ${sender}?`)) return;
       await Promise.all(groupEmails.map(e => fetch(`/api/gmail-archive/${e.id}`, { method: "POST" })));
       const ids = new Set(groupEmails.map(e => e.id));
+      ids.forEach(id => locallyDismissedIds.add(id));
       folderEmails = folderEmails.filter(e => !ids.has(e.id));
       inboxEmails = inboxEmails.filter(e => !ids.has(e.id));
       selectedEmailIds = new Set([...selectedEmailIds].filter(id => !ids.has(id)));
@@ -7820,7 +7829,8 @@
           const res = await fetch("/api/gmail-inbox");
           const data = await res.json();
           if (data.emails) {
-            inboxEmails = data.emails;
+            // Filter out locally dismissed emails (deleted/archived/read) so they don't resurrect
+            inboxEmails = data.emails.filter(e => !locallyDismissedIds.has(e.id));
             // Update tab badge
             const badge = document.getElementById("email-tab-badge");
             const unread = inboxEmails.filter(e => e.unread).length;
@@ -7832,8 +7842,12 @@
             const emailSection = document.getElementById("sec-email");
             if (emailSection?.classList.contains("active") && currentFolder === "INBOX" && !emailSearchQuery) {
               folderEmails = inboxEmails;
-              renderEmailList();
-              loadEmailLabels();
+              // If a triage filter is active, re-apply it instead of raw render
+              if (triageFilterCategory && triageData) {
+                setTriageFilter(triageFilterCategory);
+              } else {
+                renderEmailList();
+              }
             }
           }
         } catch {}
