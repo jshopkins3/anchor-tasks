@@ -4525,7 +4525,7 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
               loanProgram: l.loanType || l.mortgageType || "",
               loanOfficer: l.loanOfficer || "",
               lastStatusChange: l.dateUpdated || l.currentLoanStatus_date || "",
-              closingDate: l.estClosing || l.firmCloseDate || l["Estimated Closing Date"] || l["Firm Closing Date"] || "",
+              closingDate: l.estClosing || l.firmCloseDate || l.closingContingency || l.keyDates_closingContingency || l.keyDates_estimatedFundingDate || l["Estimated Closing Date"] || l["Firm Closing Date"] || "",
               deepLinkURL: l.deepLinkURL || l.ariveDeepLink || "",
             }));
           } else {
@@ -4590,7 +4590,7 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
             loanProgram: l.loan_program || l.mortgageType || "",
             loanOfficer: l.loan_officer_name || l.loanOfficer_name || "",
             lastStatusChange: l.last_status_change_date || l.currentLoanStatus_date || "",
-            closingDate: l.closing_date || l.keyDates_closingDate || l.keyDates_closingContingency || l.firmCloseDate || l.estClosing || l["Firm Closing Date"] || l["Estimated Closing Date"] || l.closingContingency || "",
+            closingDate: l.closing_date || l.keyDates_closingDate || l.keyDates_closingContingency || l.keyDates_estimatedFundingDate || l.firmCloseDate || l.estClosing || l["Firm Closing Date"] || l["Estimated Closing Date"] || l.closingContingency || "",
             deepLinkURL: l.deepLinkURL || "",
           }));
         }
