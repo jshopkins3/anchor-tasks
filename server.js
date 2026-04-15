@@ -916,7 +916,7 @@ async function gmailGetInbox(userEmail) {
         unread: (msg.labelIds || []).includes("UNREAD"),
       };
     }));
-    return emails.filter(Boolean);
+    return emails.filter(Boolean).sort((a, b) => new Date(b.date) - new Date(a.date));
   } catch (err) {
     console.error("[gmail] Inbox error:", err.message);
     return null;
@@ -996,7 +996,7 @@ async function gmailListMessages(labelId, pageToken, maxResults = 50, query = ""
         labelIds: msg.labelIds || [],
       };
     }));
-    return { emails: emails.filter(Boolean), nextPageToken: listData.nextPageToken || null };
+    return { emails: emails.filter(Boolean).sort((a, b) => new Date(b.date) - new Date(a.date)), nextPageToken: listData.nextPageToken || null };
   } catch (err) {
     console.error("[gmail] List messages error:", err.message);
     return null;

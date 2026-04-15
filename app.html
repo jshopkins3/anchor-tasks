@@ -6664,6 +6664,8 @@
         } else {
           folderEmails = data.emails || [];
         }
+        // Always sort by date (newest first) after loading — Promise.all can return out of order
+        folderEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
         hasMoreMessages = !!data.nextPageToken;
         currentPageToken = data.nextPageToken || null;
         renderEmailList();
@@ -8328,11 +8330,11 @@
       if (emailPollInterval) return;
       emailPollInterval = setInterval(async () => {
         try {
-          // Always check inbox unread count for the tab badge
+          // Check inbox unread count for the tab badge
           const res = await fetch("/api/gmail-inbox");
           const data = await res.json();
           if (data.emails) {
-            // Filter out locally dismissed emails (deleted/archived/read) so they don't resurrect
+            // Filter out locally dismissed emails
             inboxEmails = data.emails.filter(e => !locallyDismissedIds.has(e.id));
             // Update tab badge
             const badge = document.getElementById("email-tab-badge");
@@ -8341,16 +8343,31 @@
               badge.textContent = unread;
               badge.style.display = unread > 0 ? "inline-block" : "none";
             }
-            // If email tab is active and viewing inbox, refresh the list
+            // If email tab is active and viewing inbox, DON'T overwrite folderEmails
+            // (gmail-inbox only returns unread — would lose read emails from the full list)
+            // Instead, merge unread status from poll into existing folderEmails
             const emailSection = document.getElementById("sec-email");
             if (emailSection?.classList.contains("active") && currentFolder === "INBOX" && !emailSearchQuery) {
-              folderEmails = inboxEmails;
-              // If a triage filter is active, re-apply it instead of raw render
-              if (triageFilterCategory && triageData) {
-                setTriageFilter(triageFilterCategory);
-              } else {
-                renderEmailList();
+              const inboxIds = new Set(inboxEmails.map(e => e.id));
+              const dismissedIds = new Set([...locallyDismissedIds]);
+              // Update unread status on existing folderEmails
+              for (const fe of folderEmails) {
+                if (dismissedIds.has(fe.id)) continue;
+                fe.unread = inboxIds.has(fe.id);
               }
+              // Remove dismissed emails from folderEmails
+              folderEmails = folderEmails.filter(e => !dismissedIds.has(e.id));
+              // Add any NEW unread emails not yet in folderEmails (arrived since last full load)
+              const existingIds = new Set(folderEmails.map(e => e.id));
+              const newEmails = inboxEmails.filter(e => !existingIds.has(e.id));
+              if (newEmails.length > 0) {
+                folderEmails = [...newEmails, ...folderEmails];
+                // Re-sort to maintain current sort order
+                if (emailSortBy === "date" || !emailSortBy) {
+                  folderEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+                }
+              }
+              renderEmailList();
             }
           }
         } catch {}
