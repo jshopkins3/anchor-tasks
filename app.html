@@ -5128,11 +5128,16 @@
         // Render categorized emails
         let html = "";
         for (const cat of triageData.categories) {
-          // Category header
+          // Category header with quick actions
+          const canArchive = cat.priority === "archive" || cat.priority === "fyi";
           html += `<div style="padding:6px 14px 3px;display:flex;align-items:center;gap:6px;background:var(--bg-base);">
             <span style="font-size:10px;">${cat.emoji}</span>
             <span style="font-size:10px;font-weight:700;color:${cat.color};text-transform:uppercase;letter-spacing:0.5px;">${esc(cat.label)}</span>
             <span style="font-size:10px;color:var(--text-faint);">(${cat.emails.length})</span>
+            <span style="margin-left:auto;display:flex;gap:3px;">
+              ${canArchive ? `<button onclick="event.stopPropagation();triageBatchArchive('${cat.priority}')" style="padding:1px 6px;border-radius:4px;font-size:9px;cursor:pointer;border:1px solid rgba(63,63,70,0.3);background:transparent;color:var(--text-faint);" title="Archive all">📥</button>` : ""}
+              <button onclick="event.stopPropagation();triageBatchMarkRead('${cat.priority}')" style="padding:1px 6px;border-radius:4px;font-size:9px;cursor:pointer;border:1px solid rgba(63,63,70,0.3);background:transparent;color:var(--text-faint);" title="Mark all read">✓</button>
+            </span>
           </div>`;
           // Email rows (max 5 per category)
           const show = cat.emails.slice(0, 5);
@@ -5168,6 +5173,51 @@
     }
     function refreshEmailTriage() { loadEmailTriage(true); }
 
+    // Re-render hub triage widget from existing triageData (no API call)
+    function renderHubTriageWidget() {
+      const el = document.getElementById("hub-email-list");
+      const badge = document.getElementById("hub-email-badge");
+      if (!el || !triageData) return;
+      if (!triageData.categories || !triageData.categories.length || triageData.categories.every(c => c.emails.length === 0)) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">&#9875;</div><div style="font-size:12px;color:var(--text-faint);font-weight:600;">Inbox Zero &#8212; smooth sailing!</div></div>';
+        if (badge) badge.style.display = "none";
+        return;
+      }
+      const urgentCount = (triageData.categories.find(c => c.priority === "urgent") || {emails:[]}).emails.length;
+      if (badge) {
+        if (urgentCount > 0) { badge.textContent = urgentCount; badge.style.display = "inline"; }
+        else { badge.style.display = "none"; }
+      }
+      let html = "";
+      for (const cat of triageData.categories.filter(c => c.emails.length > 0)) {
+        const canArchive = cat.priority === "archive" || cat.priority === "fyi";
+        html += `<div style="padding:6px 14px 3px;display:flex;align-items:center;gap:6px;background:var(--bg-base);">
+          <span style="font-size:10px;">${cat.emoji}</span>
+          <span style="font-size:10px;font-weight:700;color:${cat.color};text-transform:uppercase;letter-spacing:0.5px;">${esc(cat.label)}</span>
+          <span style="font-size:10px;color:var(--text-faint);">(${cat.emails.length})</span>
+          <span style="margin-left:auto;display:flex;gap:3px;">
+            ${canArchive ? `<button onclick="event.stopPropagation();triageBatchArchive('${cat.priority}')" style="padding:1px 6px;border-radius:4px;font-size:9px;cursor:pointer;border:1px solid rgba(63,63,70,0.3);background:transparent;color:var(--text-faint);" title="Archive all">📥</button>` : ""}
+            <button onclick="event.stopPropagation();triageBatchMarkRead('${cat.priority}')" style="padding:1px 6px;border-radius:4px;font-size:9px;cursor:pointer;border:1px solid rgba(63,63,70,0.3);background:transparent;color:var(--text-faint);" title="Mark all read">✓</button>
+          </span>
+        </div>`;
+        for (const e of cat.emails.slice(0, 5)) {
+          const fromName = (e.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
+          const summ = e.summary ? ` — ${e.summary}` : "";
+          const ccBadge = e.isCC ? '<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(99,102,241,0.12);color:#6366f1;font-weight:600;margin-left:4px;">CC</span>' : "";
+          html += `<div onclick="openTriageEmail('${e.id}','${e.threadId || ""}')" style="padding:5px 14px 5px 24px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='transparent'">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:11px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(fromName)}${ccBadge}</div>
+              <div style="font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.subject || "")}${esc(summ)}</div>
+            </div>
+          </div>`;
+        }
+        if (cat.emails.length > 5) {
+          html += `<div style="padding:3px 14px 5px 24px;font-size:10px;color:var(--text-faint);">+${cat.emails.length - 5} more</div>`;
+        }
+      }
+      el.innerHTML = html;
+    }
+
     // Triage bar in the email tab — shows category pills for quick filtering
     let triageFilterCategory = null; // null = show all, or "urgent"|"needs_response"|"fyi"|"archive"
     function renderTriageBar() {
@@ -5189,7 +5239,19 @@
           ${cat.emoji} ${cat.label} <span style="font-weight:400;opacity:0.8;">${cat.emails.length}</span>
         </button>`;
       }
-      if (triageData.autoRead > 0) {
+      // Quick action buttons when a category is selected
+      if (triageFilterCategory) {
+        const cat = triageData.categories.find(c => c.priority === triageFilterCategory);
+        if (cat && cat.emails.length > 0) {
+          html += `<span style="margin-left:auto;display:flex;gap:4px;align-items:center;">`;
+          if (triageFilterCategory === "archive" || triageFilterCategory === "fyi") {
+            html += `<button onclick="triageBatchArchive('${triageFilterCategory}')" style="padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.3);background:transparent;color:var(--text-secondary);">📥 Archive all</button>`;
+          }
+          html += `<button onclick="triageBatchMarkRead('${triageFilterCategory}')" style="padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid rgba(63,63,70,0.3);background:transparent;color:var(--text-secondary);">✓ Mark all read</button>`;
+          html += `</span>`;
+        }
+      }
+      if (!triageFilterCategory && triageData.autoRead > 0) {
         html += `<span style="margin-left:auto;font-size:10px;color:var(--text-faint);">⚓ ${triageData.autoRead} auto-cleared</span>`;
       }
       bar.innerHTML = html;
@@ -5240,6 +5302,81 @@
         </div>`;
       }
       listEl.innerHTML = html;
+    }
+
+    /* ── Triage Batch Actions ───────────────────────────────── */
+    async function triageBatchArchive(category) {
+      if (!triageData || !triageData.categories) return;
+      const cat = triageData.categories.find(c => c.priority === category);
+      if (!cat || !cat.emails.length) return;
+      if (!confirm(`Archive all ${cat.emails.length} ${cat.label} emails?`)) return;
+      const ids = cat.emails.map(e => e.id);
+      // Optimistic UI update
+      ids.forEach(id => locallyDismissedIds.add(id));
+      folderEmails = folderEmails.filter(e => !ids.includes(e.id));
+      inboxEmails = inboxEmails.filter(e => !ids.includes(e.id));
+      cat.emails = [];
+      triageData.categories = triageData.categories.filter(c => c.emails.length > 0);
+      renderEmailList();
+      renderTriageBar();
+      updateEmailTabBadge();
+      renderHubTriageWidget();
+      // Fire API calls in background
+      await Promise.all(ids.map(id => fetch(`/api/gmail-archive/${id}`, { method: "POST" })));
+    }
+
+    async function triageBatchMarkRead(category) {
+      if (!triageData || !triageData.categories) return;
+      const cat = triageData.categories.find(c => c.priority === category);
+      if (!cat || !cat.emails.length) return;
+      const ids = cat.emails.map(e => e.id);
+      // Optimistic UI update
+      ids.forEach(id => {
+        locallyDismissedIds.add(id);
+        const fe = folderEmails.find(e => e.id === id);
+        if (fe) fe.unread = false;
+      });
+      inboxEmails = inboxEmails.filter(e => !ids.includes(e.id));
+      renderEmailList();
+      renderTriageBar();
+      updateEmailTabBadge();
+      renderHubTriageWidget();
+      // Fire API calls in background
+      await Promise.all(ids.map(id => fetch(`/api/gmail-mark-read/${id}`, { method: "POST" })));
+    }
+
+    /* ── Ask Dan (AI-drafted reply) ──────────────────────────── */
+    async function askDanAboutEmail(emailId, action) {
+      const email = folderEmails.find(e => e.id === emailId) || inboxEmails.find(e => e.id === emailId);
+      if (!email) return;
+      // Fetch full message for context
+      let fullMsg = null;
+      try {
+        const res = await fetch(`/api/gmail-message/${emailId}`);
+        fullMsg = await res.json();
+      } catch {}
+      const from = fullMsg?.from || email.from || "";
+      const subject = fullMsg?.subject || email.subject || "";
+      const body = fullMsg?.body?.type === "text" ? fullMsg.body.data : (email.snippet || "");
+      const bodySnippet = body.substring(0, 2000);
+
+      let prompt;
+      if (action === "summarize") {
+        prompt = `Summarize this email thread for me:\n\nFrom: ${from}\nSubject: ${subject}\n\n${bodySnippet}`;
+      } else if (action === "action-items") {
+        prompt = `What are the action items from this email?\n\nFrom: ${from}\nSubject: ${subject}\n\n${bodySnippet}`;
+      } else {
+        prompt = `Draft a reply to this email for me to review.\n\nFrom: ${from}\nSubject: ${subject}\n\n${bodySnippet}`;
+      }
+      // Open Dan panel if not open, then auto-send
+      if (!danOpen) toggleDan();
+      setTimeout(() => {
+        const input = document.getElementById("dan-input");
+        if (input) {
+          input.value = prompt;
+          askDan();
+        }
+      }, 150);
     }
 
     /* ── Inbox ───────────────────────────────────────────────── */
@@ -6913,6 +7050,10 @@
             <button class="email-action-btn" onclick="archiveEmail(selectedEmailId)">📥 Archive</button>
             <button class="email-action-btn danger" onclick="deleteEmail(selectedEmailId)">🗑 Delete</button>
             <button class="email-action-btn task-action" onclick="showTaskCardInThread(selectedEmailId)">✚ Task</button>
+            <span style="width:1px;height:20px;background:var(--border-default);margin:0 2px;"></span>
+            <button class="email-action-btn" onclick="askDanAboutEmail(selectedEmailId, 'reply')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan drafts a reply">⚓ Draft Reply</button>
+            <button class="email-action-btn" onclick="askDanAboutEmail(selectedEmailId, 'summarize')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan summarizes this thread">⚓ Summarize</button>
+            <button class="email-action-btn" onclick="askDanAboutEmail(selectedEmailId, 'action-items')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan extracts action items">⚓ Actions</button>
           </div>
           <div class="email-task-card" id="email-task-card-thread" style="display:none;"></div>`;
 
@@ -7066,6 +7207,10 @@
               <button class="email-action-btn danger" onclick="deleteEmail('${id}')">🗑 Delete</button>
               <button class="email-action-btn task-action" onclick="document.getElementById('email-task-card-${id}').style.display='block'">✚ Task</button>
               <button class="email-action-btn" onclick="trainDanFilter('${id}')" title="Hide emails like this from Dan's briefings" style="color:#d4af37;border-color:rgba(212,175,55,.3);">🚫 Hide from Dan</button>
+              <span style="width:1px;height:20px;background:var(--border-default);margin:0 2px;"></span>
+              <button class="email-action-btn" onclick="askDanAboutEmail('${id}', 'reply')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan drafts a reply">⚓ Draft Reply</button>
+              <button class="email-action-btn" onclick="askDanAboutEmail('${id}', 'summarize')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan summarizes this">⚓ Summarize</button>
+              <button class="email-action-btn" onclick="askDanAboutEmail('${id}', 'action-items')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan extracts action items">⚓ Actions</button>
             </div>
             <div id="email-attach-area-${id}" class="email-attachments"></div>
             <div id="email-body-area-${id}" class="email-body-container"></div>
