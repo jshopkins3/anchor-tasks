@@ -5266,42 +5266,48 @@
         renderEmailList();
         return;
       }
-      // Filter: find which email IDs are in this triage category
+      // Filter: render directly from triage data (not folderEmails which may have a different set)
       const cat = triageData.categories.find(c => c.priority === category);
       if (!cat) { renderEmailList(); return; }
-      const triageIds = new Set(cat.emails.map(e => e.id));
-      // Filter folderEmails to only those IDs and re-render
       const listEl = document.getElementById("email-list-items");
       if (!listEl) return;
-      const filtered = folderEmails.filter(e => triageIds.has(e.id));
-      if (!filtered.length) {
+      if (!cat.emails.length) {
         listEl.innerHTML = `<div class="email-empty" style="height:200px;"><div class="email-empty-icon">${cat.emoji}</div><div class="email-empty-text">No ${cat.label.toLowerCase()} emails</div></div>`;
         return;
       }
-      // Re-use the row renderer from renderEmailList
-      let html = `<div class="email-bulk-bar" style="padding:4px 16px;"><input type="checkbox" class="email-checkbox" onchange="toggleSelectAll(this.checked)" title="Select all"></div>`;
-      for (const e of filtered) {
-        const hasAttachment = e.snippet && /attach/i.test(e.snippet);
-        const checked = selectedEmailIds.has(e.id);
-        // Find summary from triage data
-        const triageEmail = cat.emails.find(te => te.id === e.id);
-        const summary = triageEmail && triageEmail.summary ? ` — ${triageEmail.summary}` : "";
+      // Render from triage emails, enriching with folderEmails data where available
+      let html = `<div class="email-bulk-bar" style="padding:4px 16px;"><input type="checkbox" class="email-checkbox" onchange="toggleTriageSelectAll(this.checked, '${category}')" title="Select all"></div>`;
+      for (const te of cat.emails) {
+        // Try to find the richer folderEmail version, fall back to triage data
+        const e = folderEmails.find(fe => fe.id === te.id) || te;
+        const checked = selectedEmailIds.has(te.id);
+        const fromName = (e.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
+        const summary = te.summary ? ` — ${te.summary}` : "";
+        const isUnread = e.unread !== undefined ? e.unread : true; // triage emails are unread by definition
         html += `
-        <div class="email-row ${e.unread ? 'unread' : ''} ${selectedEmailId === e.id ? 'active' : ''}" onclick="selectEmail('${e.id}', '${e.threadId}')">
-          <input type="checkbox" class="email-checkbox" ${checked ? "checked" : ""} onclick="event.stopPropagation();toggleEmailCheck('${e.id}')" >
-          <span class="email-star ${e.starred ? 'starred' : ''}" onclick="event.stopPropagation();toggleStar('${e.id}', ${!e.starred})" title="${e.starred ? 'Unstar' : 'Star'}">★</span>
-          ${typeof emailAvatarHtml === "function" ? emailAvatarHtml(e.from) : ""}
+        <div class="email-row ${isUnread ? 'unread' : ''} ${selectedEmailId === te.id ? 'active' : ''}" onclick="selectEmail('${te.id}', '${te.threadId || e.threadId || ""}')">
+          <input type="checkbox" class="email-checkbox" ${checked ? "checked" : ""} onclick="event.stopPropagation();toggleEmailCheck('${te.id}')" >
+          <span class="email-star ${e.starred ? 'starred' : ''}" onclick="event.stopPropagation();toggleStar('${te.id}', ${!e.starred})" title="${e.starred ? 'Unstar' : 'Star'}">★</span>
+          ${typeof emailAvatarHtml === "function" ? emailAvatarHtml(e.from || fromName) : ""}
           <div class="email-row-content">
             <div class="email-row-top">
-              <span class="email-row-from">${esc(e.from)}</span>
-              <span class="email-row-time">${typeof formatEmailDate === "function" ? formatEmailDate(e.date) : ""}</span>
+              <span class="email-row-from">${esc(fromName)}</span>
+              <span class="email-row-time">${typeof formatEmailDate === "function" ? formatEmailDate(e.date || te.date) : ""}</span>
             </div>
-            <div class="email-row-subject">${esc(e.subject)}${summary ? `<span style="color:var(--text-faint);font-weight:400;font-size:11px;">${esc(summary)}</span>` : ""}</div>
-            <div class="email-row-snippet">${esc(e.snippet || "")}</div>
+            <div class="email-row-subject">${esc(e.subject || te.subject)}${summary ? `<span style="color:var(--text-faint);font-weight:400;font-size:11px;">${esc(summary)}</span>` : ""}</div>
+            <div class="email-row-snippet">${esc(e.snippet || te.snippet || "")}</div>
           </div>
         </div>`;
       }
       listEl.innerHTML = html;
+    }
+
+    function toggleTriageSelectAll(checked, category) {
+      const cat = triageData?.categories?.find(c => c.priority === category);
+      if (!cat) return;
+      if (checked) cat.emails.forEach(e => selectedEmailIds.add(e.id));
+      else cat.emails.forEach(e => selectedEmailIds.delete(e.id));
+      setTriageFilter(category);
     }
 
     /* ── Triage Batch Actions ───────────────────────────────── */
