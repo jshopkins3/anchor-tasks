@@ -3103,6 +3103,47 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok });
     }
 
+    /* ── GMAIL: Label/move email ──────────────────────────────── */
+    if (urlPath === "/api/gmail-label" && req.method === "POST") {
+      const ue = req.session && req.session.email;
+      const accessToken = await getGCalAccessToken(ue);
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+      try {
+        const body = JSON.parse(await readBody(req));
+        const modBody = {};
+        if (body.addLabels) modBody.addLabelIds = body.addLabels;
+        if (body.removeLabels) modBody.removeLabelIds = body.removeLabels;
+        const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${body.messageId}/modify`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(modBody),
+        });
+        return json(res, 200, { ok: resp.ok });
+      } catch (e) { return json(res, 500, { error: e.message }); }
+    }
+
+    /* ── GMAIL: Batch label multiple emails ───────────────────── */
+    if (urlPath === "/api/gmail-label-batch" && req.method === "POST") {
+      const ue = req.session && req.session.email;
+      const accessToken = await getGCalAccessToken(ue);
+      if (!accessToken) return json(res, 401, { error: "Not authorized" });
+      try {
+        const body = JSON.parse(await readBody(req));
+        const results = await Promise.all((body.messageIds || []).map(async msgId => {
+          const modBody = {};
+          if (body.addLabels) modBody.addLabelIds = body.addLabels;
+          if (body.removeLabels) modBody.removeLabelIds = body.removeLabels;
+          const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/modify`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify(modBody),
+          });
+          return resp.ok;
+        }));
+        return json(res, 200, { ok: results.every(r => r), count: results.length });
+      } catch (e) { return json(res, 500, { error: e.message }); }
+    }
+
     /* ── Dan Email Filter: train Dan to hide emails like this ── */
     if (urlPath === "/api/dan-email-filter" && req.method === "POST") {
       try {

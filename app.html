@@ -2476,10 +2476,22 @@
         <div class="email-folder-sidebar" id="email-folder-sidebar">
           <button class="email-compose-btn" onclick="openCompose()">✏ Compose</button>
           <div id="email-folder-list"></div>
-          <div style="margin-top:auto;padding:8px 12px;border-top:1px solid var(--border-default);">
+          <div style="margin-top:auto;padding:8px 12px;border-top:1px solid var(--border-default);display:flex;flex-direction:column;gap:2px;">
             <button class="email-folder-item" onclick="openSignatureEditor()" style="border:none;width:100%;text-align:left;background:none;font-family:inherit;cursor:pointer;">
               <span class="email-folder-icon">✍</span>
               <span class="email-folder-name">Signature</span>
+            </button>
+            <button class="email-folder-item" onclick="openTriageRulesPanel()" style="border:none;width:100%;text-align:left;background:none;font-family:inherit;cursor:pointer;">
+              <span class="email-folder-icon">⚓</span>
+              <span class="email-folder-name">Dan's Email Rules</span>
+            </button>
+            <button class="email-folder-item" onclick="openScheduledEmailsPanel()" style="border:none;width:100%;text-align:left;background:none;font-family:inherit;cursor:pointer;">
+              <span class="email-folder-icon">🕐</span>
+              <span class="email-folder-name">Scheduled Emails</span>
+            </button>
+            <button class="email-folder-item" onclick="openTriageLogPanel()" style="border:none;width:100%;text-align:left;background:none;font-family:inherit;cursor:pointer;">
+              <span class="email-folder-icon">📋</span>
+              <span class="email-folder-name">Auto-Read Log</span>
             </button>
           </div>
         </div>
@@ -7054,7 +7066,10 @@
             <button class="email-action-btn" onclick="openReply('${threadId}', true)">↩↩ Reply All</button>
             <button class="email-action-btn" onclick="openForward('${threadId}')">↪ Forward</button>
             <button class="email-action-btn" onclick="archiveEmail(selectedEmailId)">📥 Archive</button>
+            <button class="email-action-btn" onclick="showLabelDropdown(selectedEmailId, this)">🏷 Label</button>
             <button class="email-action-btn danger" onclick="deleteEmail(selectedEmailId)">🗑 Delete</button>
+            <button class="email-action-btn danger" onclick="blockSender(selectedEmailId)" title="Block sender">🚫 Block</button>
+            <button class="email-action-btn danger" onclick="reportSpam(selectedEmailId)" title="Report as spam">⚠ Spam</button>
             <button class="email-action-btn task-action" onclick="showTaskCardInThread(selectedEmailId)">✚ Task</button>
             <span style="width:1px;height:20px;background:var(--border-default);margin:0 2px;"></span>
             <button class="email-action-btn" onclick="askDanAboutEmail(selectedEmailId, 'reply')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan drafts a reply">⚓ Draft Reply</button>
@@ -7210,9 +7225,11 @@
               <button class="email-action-btn" onclick="openReplyAllFromSingle('${id}')">↩↩ Reply All</button>
               <button class="email-action-btn" onclick="openForwardFromSingle('${id}')">↪ Forward</button>
               <button class="email-action-btn" onclick="archiveEmail('${id}')">📥 Archive</button>
+              <button class="email-action-btn" onclick="showLabelDropdown('${id}', this)">🏷 Label</button>
               <button class="email-action-btn danger" onclick="deleteEmail('${id}')">🗑 Delete</button>
+              <button class="email-action-btn danger" onclick="blockSender('${id}')" title="Block sender — auto-read future emails and move this to trash">🚫 Block</button>
+              <button class="email-action-btn danger" onclick="reportSpam('${id}')" title="Report as spam">⚠ Spam</button>
               <button class="email-action-btn task-action" onclick="document.getElementById('email-task-card-${id}').style.display='block'">✚ Task</button>
-              <button class="email-action-btn" onclick="trainDanFilter('${id}')" title="Hide emails like this from Dan's briefings" style="color:#d4af37;border-color:rgba(212,175,55,.3);">🚫 Hide from Dan</button>
               <span style="width:1px;height:20px;background:var(--border-default);margin:0 2px;"></span>
               <button class="email-action-btn" onclick="askDanAboutEmail('${id}', 'reply')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan drafts a reply">⚓ Draft Reply</button>
               <button class="email-action-btn" onclick="askDanAboutEmail('${id}', 'summarize')" style="color:#d4af37;border-color:rgba(212,175,55,.3);" title="Dan summarizes this">⚓ Summarize</button>
@@ -7580,6 +7597,290 @@
         }
       } catch (e) {
         alert("Failed to save: " + e.message);
+      }
+    }
+
+    /* ── Label/Move Email ────────────────────────────────────── */
+    function showLabelDropdown(emailId, btnEl) {
+      // Close any existing dropdown
+      document.querySelectorAll(".label-dropdown").forEach(d => d.remove());
+      const userLabels = allLabels.filter(l => l.type === "user").sort((a, b) => a.name.localeCompare(b.name));
+      if (!userLabels.length) { alert("No custom labels found. Create labels in Gmail first."); return; }
+      const dd = document.createElement("div");
+      dd.className = "label-dropdown";
+      dd.style.cssText = "position:absolute;z-index:100;background:var(--bg-card);border:1px solid var(--border-default);border-radius:8px;padding:6px 0;min-width:180px;max-height:240px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);";
+      dd.innerHTML = userLabels.map(l =>
+        `<div onclick="applyLabel('${emailId}','${l.id}','${esc(l.name)}')" style="padding:6px 14px;font-size:12px;color:var(--text-secondary);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background=''">${esc(l.name)}</div>`
+      ).join("") + `<div style="border-top:1px solid var(--border-default);padding:6px 14px;font-size:11px;color:var(--text-faint);">Move removes from Inbox</div>
+        ${userLabels.slice(0, 8).map(l =>
+          `<div onclick="moveToLabel('${emailId}','${l.id}','${esc(l.name)}')" style="padding:6px 14px;font-size:12px;color:var(--blue);cursor:pointer;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background=''">→ Move to ${esc(l.name)}</div>`
+        ).join("")}`;
+      btnEl.style.position = "relative";
+      btnEl.parentElement.style.position = "relative";
+      btnEl.parentElement.appendChild(dd);
+      // Close on click outside
+      setTimeout(() => {
+        const handler = (e) => { if (!dd.contains(e.target) && e.target !== btnEl) { dd.remove(); document.removeEventListener("click", handler); } };
+        document.addEventListener("click", handler);
+      }, 10);
+    }
+
+    async function applyLabel(emailId, labelId, labelName) {
+      document.querySelectorAll(".label-dropdown").forEach(d => d.remove());
+      await fetch("/api/gmail-label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: emailId, addLabels: [labelId] }),
+      });
+    }
+
+    async function moveToLabel(emailId, labelId, labelName) {
+      document.querySelectorAll(".label-dropdown").forEach(d => d.remove());
+      await fetch("/api/gmail-label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: emailId, addLabels: [labelId], removeLabels: ["INBOX"] }),
+      });
+      locallyDismissedIds.add(emailId);
+      folderEmails = folderEmails.filter(e => e.id !== emailId);
+      inboxEmails = inboxEmails.filter(e => e.id !== emailId);
+      renderEmailList();
+      updateEmailTabBadge();
+    }
+
+    /* ── Block Sender / Report Spam ─────────────────────────── */
+    const PROTECTED_DOMAINS = ["mychomeloans.com", "myanchormortgage.com", "gmail.googleapis.com"];
+    function isProtectedSender(emailAddr) {
+      const lower = (emailAddr || "").toLowerCase();
+      return PROTECTED_DOMAINS.some(d => lower.includes(d));
+    }
+
+    async function blockSender(emailId) {
+      const email = folderEmails.find(e => e.id === emailId) || inboxEmails.find(e => e.id === emailId);
+      if (!email) return;
+      const fromEmail = email.fromEmail || email.from || "";
+      if (isProtectedSender(fromEmail)) { alert("Can't block this sender — they're on a protected domain (team/lender notifications)."); return; }
+      const fromDomain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
+      const senderDisplay = (email.from || "").replace(/<[^>]+>/g, "").trim();
+      if (!confirm(`Block ${senderDisplay}?\n\nThis will:\n• Add to Dan's blocklist (auto-read future emails)\n• Trash this email`)) return;
+      // Add sender to Dan's triage blocklist
+      const blockPattern = fromDomain && !["gmail.com","yahoo.com","hotmail.com","outlook.com","aol.com","icloud.com"].includes(fromDomain.toLowerCase())
+        ? fromDomain : fromEmail;
+      await fetch("/api/email-triage-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addBlocklist: blockPattern }),
+      });
+      // Also add to Dan's email filter (for briefings)
+      await fetch("/api/dan-email-filter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromEmail, fromDomain, from: senderDisplay,
+          reason: "Blocked by user from email UI",
+          filterType: "block", createdAt: new Date().toISOString(),
+        }),
+      });
+      // Trash the email
+      await deleteEmail(emailId);
+    }
+
+    async function reportSpam(emailId) {
+      const email = folderEmails.find(e => e.id === emailId) || inboxEmails.find(e => e.id === emailId);
+      if (!email) return;
+      const fromEmail = email.fromEmail || email.from || "";
+      if (isProtectedSender(fromEmail)) { alert("Can't report this sender as spam — they're on a protected domain (team/lender notifications)."); return; }
+      if (!confirm("Report as spam and block sender?")) return;
+      const ue = undefined; // session handles auth
+      // Move to spam via Gmail API (add SPAM label, remove INBOX)
+      await fetch("/api/gmail-label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: emailId, addLabels: ["SPAM"], removeLabels: ["INBOX"] }),
+      });
+      // Also block the sender
+      const fromEmail = email.fromEmail || email.from || "";
+      const fromDomain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
+      const blockPattern = fromDomain && !["gmail.com","yahoo.com","hotmail.com","outlook.com","aol.com","icloud.com"].includes(fromDomain.toLowerCase())
+        ? fromDomain : fromEmail;
+      await fetch("/api/email-triage-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addBlocklist: blockPattern }),
+      });
+      // Remove from UI
+      locallyDismissedIds.add(emailId);
+      folderEmails = folderEmails.filter(e => e.id !== emailId);
+      inboxEmails = inboxEmails.filter(e => e.id !== emailId);
+      if (selectedEmailId === emailId) selectedEmailId = folderEmails.length ? folderEmails[0].id : null;
+      renderEmailList();
+      updateEmailTabBadge();
+      if (selectedEmailId) {
+        const e = folderEmails.find(e => e.id === selectedEmailId);
+        if (e) selectEmail(selectedEmailId, e.threadId);
+      } else {
+        const detailEl = document.getElementById("email-detail-pane");
+        if (detailEl) detailEl.innerHTML = `<div class="email-empty" style="height:100%;"><div class="email-empty-icon">✉</div><div class="email-empty-text">Select an email to read</div></div>`;
+      }
+    }
+
+    /* ── Dan's Email Rules (Triage Rules Panel) ──────────────── */
+    async function openTriageRulesPanel() {
+      const detailEl = document.getElementById("email-detail-pane");
+      if (!detailEl) return;
+      detailEl.innerHTML = `<div style="padding:24px 32px;max-width:700px;"><div class="email-body-loading">Loading Dan's email rules...</div></div>`;
+      let rules = { blocklist: [], allowlist: [], autoReadEnabled: true };
+      try {
+        const res = await fetch("/api/email-triage-rules");
+        rules = await res.json();
+      } catch {}
+      const blockHtml = (rules.blocklist || []).map((b, i) =>
+        `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+          <span style="font-size:13px;color:var(--text-secondary);flex:1;">${esc(b)}</span>
+          <button onclick="removeTriageRule('blocklist','${esc(b)}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;">Remove</button>
+        </div>`
+      ).join("") || '<div style="font-size:12px;color:var(--text-faint);padding:4px 0;">No blocklist rules yet</div>';
+      const allowHtml = (rules.allowlist || []).map((a, i) =>
+        `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+          <span style="font-size:13px;color:var(--text-secondary);flex:1;">${esc(a)}</span>
+          <button onclick="removeTriageRule('allowlist','${esc(a)}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;">Remove</button>
+        </div>`
+      ).join("") || '<div style="font-size:12px;color:var(--text-faint);padding:4px 0;">No allowlist rules yet</div>';
+      detailEl.innerHTML = `
+        <div style="padding:24px 32px;max-width:700px;overflow-y:auto;max-height:100%;">
+          <h2 style="color:var(--text-heading);font-size:18px;margin:0 0 4px;">Dan's Email Rules</h2>
+          <p style="color:var(--text-secondary);font-size:12px;margin:0 0 20px;">Control how Dan triages and auto-reads your email.</p>
+
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;margin-bottom:20px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-secondary);">
+              <input type="checkbox" id="auto-read-toggle" ${rules.autoReadEnabled !== false ? "checked" : ""} onchange="toggleAutoRead(this.checked)" style="width:16px;height:16px;cursor:pointer;">
+              Auto-read noise emails (Dan marks blocklisted senders as read automatically)
+            </label>
+          </div>
+
+          <div style="margin-bottom:24px;">
+            <h3 style="color:var(--text-heading);font-size:14px;margin:0 0 8px;">Blocklist <span style="font-size:11px;color:var(--text-faint);font-weight:400;">— Dan auto-reads emails from these senders</span></h3>
+            <div id="triage-blocklist">${blockHtml}</div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <input id="add-blocklist-input" placeholder="email or domain (e.g. noreply@example.com)" style="flex:1;padding:6px 10px;border:1px solid var(--border-default);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:12px;font-family:inherit;" onkeydown="if(event.key==='Enter')addTriageRule('blocklist')">
+              <button onclick="addTriageRule('blocklist')" style="padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);">Add</button>
+            </div>
+          </div>
+
+          <div>
+            <h3 style="color:var(--text-heading);font-size:14px;margin:0 0 8px;">Allowlist <span style="font-size:11px;color:var(--text-faint);font-weight:400;">— Dan never auto-reads these (team, lenders, etc.)</span></h3>
+            <div id="triage-allowlist">${allowHtml}</div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <input id="add-allowlist-input" placeholder="email or domain" style="flex:1;padding:6px 10px;border:1px solid var(--border-default);border-radius:6px;background:var(--input-bg);color:var(--text-primary);font-size:12px;font-family:inherit;" onkeydown="if(event.key==='Enter')addTriageRule('allowlist')">
+              <button onclick="addTriageRule('allowlist')" style="padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);">Add</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function addTriageRule(listType) {
+      const input = document.getElementById(`add-${listType}-input`);
+      const value = input?.value.trim();
+      if (!value) return;
+      const body = listType === "blocklist" ? { addBlocklist: value } : { addAllowlist: value };
+      await fetch("/api/email-triage-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      openTriageRulesPanel(); // refresh
+    }
+
+    async function removeTriageRule(listType, value) {
+      const body = listType === "blocklist" ? { removeBlocklist: value } : { removeAllowlist: value };
+      await fetch("/api/email-triage-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      openTriageRulesPanel(); // refresh
+    }
+
+    async function toggleAutoRead(enabled) {
+      await fetch("/api/email-triage-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoReadEnabled: enabled }),
+      });
+    }
+
+    /* ── Scheduled Emails Panel ───────────────────────────────── */
+    async function openScheduledEmailsPanel() {
+      const detailEl = document.getElementById("email-detail-pane");
+      if (!detailEl) return;
+      detailEl.innerHTML = `<div style="padding:24px 32px;max-width:700px;"><div class="email-body-loading">Loading scheduled emails...</div></div>`;
+      let scheduled = [];
+      try {
+        const res = await fetch("/api/anchor-dan", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: "list my scheduled emails", history: [] }),
+        });
+        const data = await res.json();
+        detailEl.innerHTML = `
+          <div style="padding:24px 32px;max-width:700px;overflow-y:auto;max-height:100%;">
+            <h2 style="color:var(--text-heading);font-size:18px;margin:0 0 4px;">Scheduled Emails</h2>
+            <p style="color:var(--text-secondary);font-size:12px;margin:0 0 20px;">Recurring emails Dan sends on your behalf. Manage via Dan chat.</p>
+            <div style="padding:16px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;">${esc(data.response || "No scheduled emails found. Ask Dan to set one up: \"Send a monthly rent invoice to landlord@example.com on the 1st\"")}</div>
+            <div style="margin-top:16px;">
+              <button onclick="if(!danOpen)toggleDan();setTimeout(()=>{const i=document.getElementById('dan-input');if(i){i.value='list my scheduled emails with details';askDan();}},150);" class="compose-send-btn" style="font-size:12px;">Ask Dan to manage</button>
+            </div>
+          </div>`;
+      } catch {
+        detailEl.innerHTML = `<div style="padding:24px 32px;"><div class="email-empty-text">Failed to load scheduled emails</div></div>`;
+      }
+    }
+
+    /* ── Triage Log Panel ─────────────────────────────────────── */
+    async function openTriageLogPanel() {
+      const detailEl = document.getElementById("email-detail-pane");
+      if (!detailEl) return;
+      detailEl.innerHTML = `<div style="padding:24px 32px;max-width:700px;"><div class="email-body-loading">Loading triage log...</div></div>`;
+      try {
+        const res = await fetch("/api/email-triage-log?days=7");
+        const data = await res.json();
+        const entries = data.entries || [];
+        let html = `
+          <div style="padding:24px 32px;max-width:700px;overflow-y:auto;max-height:100%;">
+            <h2 style="color:var(--text-heading);font-size:18px;margin:0 0 4px;">Auto-Read Log</h2>
+            <p style="color:var(--text-secondary);font-size:12px;margin:0 0 20px;">Emails Dan auto-marked as read in the last 7 days (${entries.length} total).</p>`;
+        if (!entries.length) {
+          html += `<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:13px;">No auto-reads in the last 7 days.</div>`;
+        } else {
+          // Group by date
+          const byDate = {};
+          entries.forEach(e => {
+            const day = new Date(e.timestamp).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+            if (!byDate[day]) byDate[day] = [];
+            byDate[day].push(e);
+          });
+          for (const [day, dayEntries] of Object.entries(byDate)) {
+            html += `<div style="font-size:12px;font-weight:700;color:var(--text-heading);padding:10px 0 4px;border-bottom:1px solid var(--border-default);margin-bottom:4px;">${day} <span style="font-weight:400;color:var(--text-faint);">(${dayEntries.length})</span></div>`;
+            for (const e of dayEntries.slice(0, 20)) {
+              const fromName = (e.from || "").replace(/<[^>]+>/g, "").replace(/"/g, "").trim();
+              const time = new Date(e.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+              html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">
+                <span style="color:var(--text-faint);min-width:60px;">${time}</span>
+                <span style="color:var(--text-secondary);font-weight:600;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(fromName)}</span>
+                <span style="color:var(--text-faint);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.subject || "")}</span>
+                <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(99,102,241,0.1);color:#6366f1;">${esc(e.reason || "")}</span>
+              </div>`;
+            }
+            if (dayEntries.length > 20) {
+              html += `<div style="padding:4px 0;font-size:11px;color:var(--text-faint);">+${dayEntries.length - 20} more</div>`;
+            }
+          }
+        }
+        html += `</div>`;
+        detailEl.innerHTML = html;
+      } catch {
+        detailEl.innerHTML = `<div style="padding:24px 32px;"><div class="email-empty-text">Failed to load triage log</div></div>`;
       }
     }
 
