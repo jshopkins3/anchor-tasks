@@ -2288,7 +2288,7 @@ const server = http.createServer(async (req, res) => {
       if (!accessToken) return json(res, 200, { error: "Drive not connected" });
       try {
         // First get file metadata to determine type
-        const metaResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,size&supportsAllDrives=true`, {
+        const metaResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,size,webViewLink&supportsAllDrives=true`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!metaResp.ok) return json(res, 200, { error: `File not found: ${metaResp.status}` });
@@ -2317,7 +2317,19 @@ const server = http.createServer(async (req, res) => {
           if (expResp.ok) content = await expResp.text();
           else content = `Export failed: ${expResp.status}`;
         } else if (meta.mimeType === "application/pdf") {
-          content = "[PDF file - cannot read content directly. Use the link to view.]";
+          // Download PDF binary and return as base64 so Dan can read it with Claude vision
+          const sizeBytes = parseInt(meta.size || "0");
+          const MAX_PDF_BYTES = 10 * 1024 * 1024; // 10MB
+          if (sizeBytes > MAX_PDF_BYTES) {
+            return json(res, 200, { name: meta.name, mimeType: meta.mimeType, content: `[PDF too large to read (${Math.round(sizeBytes / 1024 / 1024)}MB). Max 10MB. Use the link to view.]` });
+          }
+          const dlResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (!dlResp.ok) return json(res, 200, { error: `PDF download failed: ${dlResp.status}` });
+          const pdfBuffer = Buffer.from(await dlResp.arrayBuffer());
+          const base64 = pdfBuffer.toString("base64");
+          return json(res, 200, { name: meta.name, mimeType: "application/pdf", base64, sizeKB: Math.round(pdfBuffer.length / 1024), isPdf: true });
         } else if (meta.mimeType?.startsWith("text/") || meta.mimeType === "application/json") {
           // Plain text files → download directly
           const dlResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
