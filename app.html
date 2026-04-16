@@ -8463,7 +8463,7 @@
        ═══════════════════════════════════════════════════════════════════ */
     const COMMAND_API = ""; // Use local proxy to avoid cross-domain cookie issues
     let danOpen = false;
-    let danMessages = [];
+    let danMessages = (() => { try { return JSON.parse(localStorage.getItem("tasks_dan_messages") || "[]"); } catch { return []; } })();
     let danLoading = false;
 
     function createDanPanel() {
@@ -8504,7 +8504,8 @@
             • Conditions and tasks for any borrower<br>
             • TRID compliance questions<br>
             • Process and SOP guidance<br>
-            • Revenue and P&L questions<br><br>
+            • Revenue and P&L questions<br>
+            • Reading PDFs and documents (📎 attach below)<br><br>
             Ask me anything!
           </div>
         </div>
@@ -8522,11 +8523,29 @@
       document.body.appendChild(panel);
     }
 
+    function renderDanHistory() {
+      if (!danMessages.length) return;
+      const msgsEl = document.getElementById("dan-messages");
+      if (!msgsEl) return;
+      danMessages.forEach(m => {
+        if (m.role === "user") {
+          msgsEl.innerHTML += `<div style="padding:10px 14px;background:rgba(99,102,241,0.15);border-radius:12px 12px 4px 12px;font-size:13px;color:#c7d2fe;align-self:flex-end;max-width:85%;line-height:1.4;">${escapeHTML(m.text)}</div>`;
+        } else {
+          msgsEl.innerHTML += `<div style="padding:12px 16px;background:rgba(45,122,154,0.15);border-radius:12px 12px 12px 4px;font-size:13px;color:var(--blue);line-height:1.5;max-width:90%;white-space:pre-wrap;">${escapeHTML(m.text)}</div>`;
+        }
+      });
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+
     function toggleDan() {
       danOpen = !danOpen;
       const panel = document.getElementById("dan-panel");
       panel.style.display = danOpen ? "flex" : "none";
       if (danOpen) {
+        if (!panel._historyRestored) {
+          panel._historyRestored = true;
+          renderDanHistory();
+        }
         document.getElementById("dan-input").focus();
         // Save size on resize
         if (!panel._resizeObserver) {
@@ -8577,16 +8596,21 @@
       }
     }
 
+    function saveDanMessages() {
+      try { localStorage.setItem("tasks_dan_messages", JSON.stringify(danMessages.slice(-60))); } catch {}
+    }
+
     async function askDan() {
       const input = document.getElementById("dan-input");
       const question = input.value.trim();
-      if (!question || danLoading) return;
+      if ((!question && !danPendingFiles.length) || danLoading) return;
       input.value = "";
 
       // Track conversation history for continuous context
       const attNames = danPendingFiles.map(f => f.name);
-      const msgText = attNames.length > 0 ? `${question}\n📎 ${attNames.join(", ")}` : question;
+      const msgText = attNames.length > 0 ? (question ? `${question}\n📎 ${attNames.join(", ")}` : `📎 ${attNames.join(", ")}`) : question;
       danMessages.push({ role: "user", text: msgText });
+      saveDanMessages();
 
       // Add user message
       const msgsEl = document.getElementById("dan-messages");
@@ -8623,6 +8647,7 @@
         // Add response and track in history
         const answer = data.response || data.error || "No response";
         danMessages.push({ role: "assistant", text: answer });
+        saveDanMessages();
         msgsEl.innerHTML += `<div style="padding:12px 16px;background:rgba(45,122,154,0.15);border-radius:12px 12px 12px 4px;font-size:13px;color:var(--blue);line-height:1.5;max-width:90%;white-space:pre-wrap;">${escapeHTML(answer)}</div>`;
       } catch (e) {
         const loadEl = document.getElementById(loadingId);
