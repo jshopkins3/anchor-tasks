@@ -4508,8 +4508,9 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
           return json(res, 500, { error: "MCP SDK not available: " + sdkErr.message });
         }
 
-        // Strategy: fetch from Command's /api/loans-json (same normalized data used by the mortgage app)
-        // This ensures both apps show identical loan data including closing dates
+        // Strategy: fetch from Command's /api/loans (live-data.json — detail-enriched, same source as the mortgage app UI)
+        // /api/loans-json bypasses live-data.json and hits Arive list directly (no keyDates fields → no closing dates)
+        // /api/loans serves the Arive-synced file which includes per-loan detail data (keyDates_closingContingency etc.)
         const COMMAND_URL = process.env.COMMAND_API_URL || "https://anchor-mortgage-app-production.up.railway.app";
 
         let normalized = [];
@@ -4517,29 +4518,31 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
 
         try {
           const COMMAND_KEY = process.env.COMMAND_API_KEY || "";
-          const commandResp = await fetch(`${COMMAND_URL}/api/loans-json`, {
-            headers: COMMAND_KEY ? { "x-api-key": COMMAND_KEY } : {},
+          const commandResp = await fetch(`${COMMAND_URL}/api/loans`, {
+            headers: COMMAND_KEY ? { "x-api-key": COMMAND_KEY, "Cookie": "" } : {},
             timeout: 15000,
           });
           if (commandResp.ok) {
             const commandData = await commandResp.json();
             const commandLoans = commandData.loans || [];
+            // live-data.json uses baseline display-name keys ("Stage Name", "Primary Borrower", etc.)
+            // as well as normalized camelCase keys — handle both
             normalized = commandLoans.map(l => ({
-              id: String(l.ariveId || l.id || ""),
-              displayId: String(l.ariveId || ""),
-              borrowerFirst: (l.borrower || "").split(" ")[0] || "",
-              borrowerLast: (l.borrower || "").split(" ").slice(1).join(" ") || "",
-              borrowerName: l.borrower || "",
-              loanAmount: parseFloat(l.loanAmount || l.baseLoanAmount || 0),
-              loanPurpose: l.purpose || l.loanPurpose || "",
-              loanStatus: l.stage || l.loanStatus || "",
-              propertyAddress: l.propertyAddress || l.subjectProperty || "",
+              id: String(l.ariveId || l["ARIVE Loan Id"] || l.id || ""),
+              displayId: String(l.ariveId || l["ARIVE Loan Id"] || ""),
+              borrowerFirst: (l.borrower || l["Primary Borrower"] || "").split(" ")[0] || "",
+              borrowerLast: (l.borrower || l["Primary Borrower"] || "").split(" ").slice(1).join(" ") || "",
+              borrowerName: l.borrower || l["Primary Borrower"] || "",
+              loanAmount: parseFloat(l.loanAmount || l["Total Loan Amount"] || l.baseLoanAmount || 0),
+              loanPurpose: l.purpose || l["Loan Purpose"] || l.loanPurpose || "",
+              loanStatus: l.stage || l["Stage Name"] || l.loanStatus || "",
+              propertyAddress: l.propertyAddress || l.subjectProperty || l["Subject Property"] || "",
               propertyCity: l.propertyCity || "",
               propertyState: l.propertyState || "",
-              loanProgram: l.loanType || l.mortgageType || "",
-              loanOfficer: l.loanOfficer || "",
-              lastStatusChange: l.dateUpdated || l.currentLoanStatus_date || "",
-              closingDate: l.estClosing || l.firmCloseDate || l.closingContingency || l.keyDates_closingContingency || l.keyDates_estimatedFundingDate || l["Estimated Closing Date"] || l["Firm Closing Date"] || "",
+              loanProgram: l.loanType || l["Mortgage Type"] || l.mortgageType || "",
+              loanOfficer: l.loanOfficer || l["Primary Loan Officer Name"] || "",
+              lastStatusChange: l.dateUpdated || l["Date Updated"] || l.currentLoanStatus_date || "",
+              closingDate: l.estClosing || l.firmCloseDate || l["Estimated Closing Date"] || l["Firm Closing Date"] || l.closingContingency || l.keyDates_closingContingency || l.keyDates_estimatedFundingDate || "",
               deepLinkURL: l.deepLinkURL || l.ariveDeepLink || "",
             }));
           } else {
