@@ -4568,8 +4568,8 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
               arguments: {
                 instructions: "Get the loan list with all fields including key dates.",
                 output_hint: "Return every row with original API field names exactly as-is, including all keyDates fields.",
-                limit: "100",
-                offset: String(page * 100),
+                limit: 100,
+                offset: page * 100,
               },
             });
 
