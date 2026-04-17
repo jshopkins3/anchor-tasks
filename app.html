@@ -2817,7 +2817,6 @@
         <!-- View tabs -->
         <div style="display:flex;gap:2px;margin-bottom:16px;background:var(--input-bg);border-radius:8px;padding:3px;width:fit-content;">
           <button class="content-view-btn active" onclick="switchContentView('briefing')" data-view="briefing" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:var(--navy);color:var(--gold);">Today's Briefing</button>
-          <button class="content-view-btn" onclick="switchContentView('calendar')" data-view="calendar" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Content Calendar</button>
           <button class="content-view-btn" onclick="switchContentView('feed')" data-view="feed" style="padding:6px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text-secondary);">Intel Feed</button>
         </div>
 
@@ -2869,17 +2868,6 @@
           <div style="margin-top:8px;">
             <button onclick="document.getElementById('briefing-history-panel').style.display=document.getElementById('briefing-history-panel').style.display==='none'?'block':'none'" style="font-size:12px;color:var(--text-secondary);background:none;border:none;cursor:pointer;text-decoration:underline;">Past Briefings</button>
             <div id="briefing-history-panel" style="display:none;margin-top:8px;"></div>
-          </div>
-        </div>
-
-        <!-- ═══ CONTENT CALENDAR VIEW ═══ -->
-        <div id="content-calendar-view" style="display:none;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="font-size:16px;font-weight:600;color:var(--text-heading);margin:0;">Content Calendar</h3>
-            <button onclick="generateContentPlan()" id="content-gen-btn" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Generate 2-Week Plan</button>
-          </div>
-          <div id="content-calendar-grid" style="display:flex;flex-direction:column;gap:10px;">
-            <div style="text-align:center;padding:40px;color:var(--text-secondary);">Click "Generate 2-Week Plan" to create your content calendar.</div>
           </div>
         </div>
 
@@ -10345,9 +10333,7 @@
       const activeBtn = document.querySelector(`.content-view-btn[data-view="${view}"]`);
       if (activeBtn) { activeBtn.style.background = "var(--navy)"; activeBtn.style.color = "var(--gold)"; }
       document.getElementById("content-briefing-view").style.display = view === "briefing" ? "block" : "none";
-      document.getElementById("content-calendar-view").style.display = view === "calendar" ? "block" : "none";
       document.getElementById("content-feed-view").style.display = view === "feed" ? "block" : "none";
-      if (view === "calendar") loadContentCalendar();
       if (view === "feed") loadReactorFeed();
     }
 
@@ -10577,7 +10563,8 @@
     let contentPosts = [];
 
     /* ── Reactor Feed (Content Intelligence) ───────────────── */
-    let reactorTriggers = [];
+    let reactorSources = [];
+    let reactorThemes = [];
     let reactorFilter = "new";
     const REACTOR_SOURCE_COLORS = { HW: "#1a73e8", SG: "#e65100", MBA: "#2e7d32", MPA: "#7b1fa2", GS: "#c62828", LI: "#0077b5", ZAP: "#ff6d00" };
 
@@ -10595,9 +10582,10 @@
     async function loadReactorFeed() {
       try {
         const statusQ = reactorFilter === "all" ? "all" : reactorFilter;
-        const resp = await fetch(`/api/content-feed?status=${statusQ}&limit=30`, { credentials: "include" });
+        const resp = await fetch(`/api/content-feed?grouped=1&status=${statusQ}&limit=30`, { credentials: "include" });
         const data = await resp.json();
-        reactorTriggers = data.triggers || [];
+        reactorSources = data.sources || [];
+        reactorThemes = data.themes || [];
         const pollEl = document.getElementById("reactor-last-poll");
         if (data.lastPoll) {
           const ago = Math.floor((Date.now() - new Date(data.lastPoll).getTime()) / 60000);
@@ -10616,18 +10604,24 @@
       } catch (e) { console.error("[reactor] Poll error:", e); }
     }
 
+    function findTriggerById(id) {
+      for (const src of reactorSources) {
+        const t = (src.items || []).find(x => x.id === id);
+        if (t) return t;
+      }
+      return null;
+    }
+
     async function dismissTrigger(id) {
       try {
         await fetch("/api/content-feed/update", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status: "dismissed" }) });
-        reactorTriggers = reactorTriggers.filter(t => t.id !== id);
+        reactorSources = reactorSources.map(src => ({ ...src, items: (src.items || []).filter(t => t.id !== id) })).filter(src => (src.items || []).length > 0);
         renderReactorFeed();
       } catch (e) { console.error("[reactor] Dismiss error:", e); }
     }
 
     function reactToTrigger(trigger) {
-      // Switch to a draft generation flow using the trigger as context
       const instructions = `React to this industry content and draft a social media post in my voice:\n\nHeadline: "${trigger.title}"\nSource: ${trigger.source}\n${trigger.summary ? "Summary: " + trigger.summary : ""}\n\nUse my content framework. Education-first, no em dashes. Short punchy paragraphs. End with engagement hook.`;
-      // Generate a single post with the trigger as instruction
       generateReactPost(trigger, instructions);
     }
 
@@ -10640,13 +10634,14 @@
         });
         const data = await resp.json();
         if (data.ok && data.post) {
-          // Mark trigger as reacted
           await fetch("/api/content-feed/update", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: trigger.id, status: "reacted", reactedContent: data.post.text }) });
-          reactorTriggers = reactorTriggers.map(t => t.id === trigger.id ? { ...t, status: "reacted", reactedContent: data.post.text } : t);
+          // Update trigger in place within grouped structure
+          reactorSources = reactorSources.map(src => ({
+            ...src,
+            items: (src.items || []).map(t => t.id === trigger.id ? { ...t, status: "reacted", reactedContent: data.post.text } : t),
+          }));
           renderReactorFeed();
-          // Also refresh content calendar to show the new post
-          loadContentCalendar();
-          alert("Post drafted! Check the Content Calendar below.");
+          alert("Post drafted! Review it in Today's Briefing or expand the item in the feed.");
         } else {
           alert("Error generating post: " + (data.error || "Unknown"));
         }
@@ -10654,8 +10649,35 @@
     }
 
     function renderReactorFeed() {
+      const themesEl = document.getElementById("reactor-themes");
       const list = document.getElementById("reactor-feed-list");
-      if (!reactorTriggers.length) {
+
+      // Themes section
+      if (reactorThemes.length > 0) {
+        themesEl.style.display = "block";
+        themesEl.innerHTML = `
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:var(--text-secondary);margin-bottom:8px;">EMERGING THEMES</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;">
+            ${reactorThemes.map(th => `
+              <div style="background:linear-gradient(135deg, var(--navy) 0%, #1e3a5f 100%);border-radius:10px;padding:12px 14px;color:#fff;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <span style="font-size:18px;">${th.emoji || "📊"}</span>
+                  <span style="font-size:13px;font-weight:700;color:var(--gold);">${th.theme || ""}</span>
+                  ${th.count ? `<span style="margin-left:auto;font-size:10px;opacity:0.7;">${th.count} stories</span>` : ""}
+                </div>
+                <div style="font-size:12px;line-height:1.4;opacity:0.9;">${th.why || ""}</div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      } else {
+        themesEl.style.display = "none";
+        themesEl.innerHTML = "";
+      }
+
+      // Empty state
+      const totalItems = reactorSources.reduce((n, s) => n + (s.items || []).length, 0);
+      if (totalItems === 0) {
         list.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-secondary);background:var(--bg-card);border-radius:10px;border:1px solid var(--border-default);">
           <div style="font-size:24px;margin-bottom:6px;">&#9781;</div>
           <div style="font-size:13px;font-weight:600;">No ${reactorFilter === "all" ? "" : reactorFilter + " "}triggers</div>
@@ -10664,39 +10686,55 @@
         return;
       }
 
-      list.innerHTML = reactorTriggers.map(t => {
-        const srcColor = REACTOR_SOURCE_COLORS[t.sourceIcon] || "#3b82f6";
-        const timeAgo = (() => {
-          if (!t.pubDate) return "";
-          const diff = Date.now() - new Date(t.pubDate).getTime();
-          const hrs = Math.floor(diff / 3600000);
-          if (hrs < 1) return Math.floor(diff / 60000) + "m ago";
-          if (hrs < 24) return hrs + "h ago";
-          return Math.floor(hrs / 24) + "d ago";
-        })();
-        const statusBadge = t.status !== "new" ? `<span style="font-size:10px;font-weight:600;color:${t.status === "reacted" ? "var(--green)" : "var(--text-secondary)"};text-transform:uppercase;margin-left:6px;">${t.status}</span>` : "";
-
-        return `<div style="background:var(--bg-card);border:${t.status === "new" ? "1px solid var(--gold)" : "1px solid var(--border-default)"};border-radius:10px;padding:12px 14px;border-left:3px solid ${srcColor};">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-            <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
-                <span style="background:${srcColor}22;color:${srcColor};padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.05em;">${t.sourceIcon}</span>
-                <span style="font-size:11px;color:var(--text-secondary);">${t.source}</span>
-                <span style="font-size:10px;color:var(--text-secondary);">${timeAgo}</span>
-                ${statusBadge}
-              </div>
-              <div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">${t.title}</div>
-              <div style="display:none;font-size:12px;color:var(--text-secondary);margin-top:5px;line-height:1.5;">${t.summary || ""}</div>
-              ${t.reactedContent ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap;">${t.reactedContent.substring(0, 300)}${t.reactedContent.length > 300 ? "..." : ""}</div>` : ""}
+      // Grouped by source
+      list.innerHTML = reactorSources.map(src => {
+        const items = src.items || [];
+        if (items.length === 0) return "";
+        const srcColor = REACTOR_SOURCE_COLORS[src.sourceIcon] || "#3b82f6";
+        return `
+          <div style="margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 2px;margin-bottom:6px;border-bottom:1px solid var(--border-default);">
+              <span style="background:${srcColor}22;color:${srcColor};padding:2px 9px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:0.05em;">${src.sourceIcon || ""}</span>
+              <span style="font-size:13px;font-weight:600;color:var(--text-heading);">${src.source}</span>
+              <span style="font-size:11px;color:var(--text-secondary);">${items.length} ${items.length === 1 ? "story" : "stories"}</span>
             </div>
-            <div style="display:flex;gap:5px;flex-shrink:0;">
-              ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-strong);color:var(--text-secondary);text-decoration:none;cursor:pointer;">Open</a>` : ""}
-              ${t.status === "new" ? `<button onclick="reactToTrigger(reactorTriggers.find(x=>x.id==='${t.id}'))" style="padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;background:var(--blue-bg);border:1px solid var(--blue);color:var(--blue);cursor:pointer;">React</button>` : ""}
-              ${t.status === "new" ? `<button onclick="dismissTrigger('${t.id}')" style="padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-strong);color:var(--text-secondary);cursor:pointer;" title="Dismiss">&#x2715;</button>` : ""}
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              ${items.map(t => renderReactorItem(t, srcColor)).join("")}
             </div>
           </div>
-        </div>`;
+        `;
       }).join("");
+    }
+
+    function renderReactorItem(t, srcColor) {
+      const timeAgo = (() => {
+        if (!t.pubDate) return "";
+        const diff = Date.now() - new Date(t.pubDate).getTime();
+        const hrs = Math.floor(diff / 3600000);
+        if (hrs < 1) return Math.floor(diff / 60000) + "m ago";
+        if (hrs < 24) return hrs + "h ago";
+        return Math.floor(hrs / 24) + "d ago";
+      })();
+      const statusBadge = t.status !== "new" ? `<span style="font-size:10px;font-weight:600;color:${t.status === "reacted" ? "var(--green)" : "var(--text-secondary)"};text-transform:uppercase;margin-left:6px;">${t.status}</span>` : "";
+
+      return `<div style="background:var(--bg-card);border:${t.status === "new" ? "1px solid var(--gold)" : "1px solid var(--border-default)"};border-radius:10px;padding:10px 12px;border-left:3px solid ${srcColor};">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+              <span style="font-size:10px;color:var(--text-secondary);">${timeAgo}</span>
+              ${statusBadge}
+            </div>
+            <div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">${t.title}</div>
+            <div style="display:none;font-size:12px;color:var(--text-secondary);margin-top:5px;line-height:1.5;">${t.summary || ""}</div>
+            ${t.reactedContent ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap;">${t.reactedContent.substring(0, 300)}${t.reactedContent.length > 300 ? "..." : ""}</div>` : ""}
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0;">
+            ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-strong);color:var(--text-secondary);text-decoration:none;cursor:pointer;">Open</a>` : ""}
+            ${t.status === "new" ? `<button onclick="reactToTrigger(findTriggerById('${t.id}'))" style="padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;background:var(--blue-bg);border:1px solid var(--blue);color:var(--blue);cursor:pointer;">React</button>` : ""}
+            ${t.status === "new" ? `<button onclick="dismissTrigger('${t.id}')" style="padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-strong);color:var(--text-secondary);cursor:pointer;" title="Dismiss">&#x2715;</button>` : ""}
+          </div>
+        </div>
+      </div>`;
     }
 
     async function loadContentCalendar() {
