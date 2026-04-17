@@ -4215,11 +4215,16 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
     }
 
     // POST /api/content-trigger — webhook receiver (Zapier LinkedIn alerts, etc.)
-    // Bypasses session auth — open endpoint for webhooks
+    // Bypasses session auth — open endpoint for webhooks.
+    // Accepts both flat payloads AND Zapier's nested-data style where fields
+    // arrive under a "data" wrapper object.
     if (urlPath === "/api/content-trigger" && req.method === "POST") {
       try {
-        const body = JSON.parse(await readBody(req));
-        if (!body.title) return json(res, 400, { error: "title is required" });
+        const raw = JSON.parse(await readBody(req));
+        // Unwrap: if fields nested under .data (Zapier Webhooks default), use that;
+        // otherwise use the top-level body.
+        const body = (raw && typeof raw.data === "object" && raw.data.title) ? raw.data : raw;
+        if (!body.title) return json(res, 400, { error: "title is required", hint: "Send title/summary/link/author/source at top level or nested under a 'data' object." });
         const cw = require("./content-watcher");
         const trigger = cw.addWebhookTrigger(body);
         return json(res, 200, { ok: true, id: trigger.id });
