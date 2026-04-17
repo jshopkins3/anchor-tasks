@@ -92,6 +92,54 @@ async function fetchPipelineContext() {
   }
 }
 
+// ─── Emerging Themes (Claude-extracted patterns across RSS triggers) ────
+// Same extraction the /api/content-feed?grouped=1 endpoint does — pulled here
+// so the briefing can reason from PATTERNS not individual headlines. Cached
+// module-level for 1 hour to avoid re-running per request.
+
+let themesCache = { themes: [], computedAt: 0, triggerIds: "" };
+const THEMES_CACHE_MS = 60 * 60 * 1000; // 1 hour
+
+async function extractThemes(triggers) {
+  const key = process.env.ANTHROPIC_API_KEY || "";
+  if (!key || !triggers || triggers.length < 3) return [];
+
+  // Cache key based on trigger IDs — if the feed hasn't changed, skip re-extraction
+  const triggerIds = triggers.slice(0, 25).map(t => t.id).sort().join(",");
+  if (themesCache.triggerIds === triggerIds && Date.now() - themesCache.computedAt < THEMES_CACHE_MS) {
+    return themesCache.themes;
+  }
+
+  const headlines = triggers.slice(0, 25).map(t => `[${t.source}] ${t.title}`).join("\n");
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 512,
+        messages: [{ role: "user", content: `You are analyzing mortgage industry news headlines for a loan officer. Identify 2-4 emerging THEMES from these headlines. Each theme should be a short phrase (3-6 words) with a 1-sentence explanation of why it matters to a mortgage broker. Return ONLY valid JSON, no markdown.
+
+Headlines:
+${headlines}
+
+Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","count":N,"emoji":"relevant emoji"}]}` }],
+      }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const text = (data.content || []).find(c => c.type === "text")?.text || "{}";
+    const parsed = JSON.parse(text.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
+    const themes = parsed.themes || [];
+    themesCache = { themes, computedAt: Date.now(), triggerIds };
+    return themes;
+  } catch (e) {
+    console.error("[market-data] Theme extraction error:", e.message);
+    return [];
+  }
+}
+
 // ─── Content Performance / Feedback ────────────────────────────────
 
 function getContentFeedback() {
@@ -131,6 +179,10 @@ async function gatherMarketIntelligence() {
     Promise.resolve(getContentFeedback()),
   ]);
 
+  // Extract emerging themes — this is the primary industry signal for the
+  // briefing. Gary and Alex reason from patterns first, headlines as backup.
+  const emergingThemes = await extractThemes(rssTriggers);
+
   const today = new Date();
   const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
   const dayOfWeek = dayNames[today.getDay()];
@@ -143,7 +195,10 @@ async function gatherMarketIntelligence() {
     // Market data
     rates: mbsData || { note: "MBS data unavailable — BM_API_KEY not configured" },
 
-    // Industry news from RSS
+    // Emerging themes — top-level signal for briefing reasoning
+    emergingThemes,
+
+    // Industry news from RSS (supporting evidence)
     industryNews: rssTriggers.map(t => ({
       title: t.title,
       source: t.source,
@@ -184,6 +239,7 @@ module.exports = {
   fetchBMTemplates,
   fetchBMVideos,
   fetchPipelineContext,
+  extractThemes,
   getRecentTriggers,
   getRecentPosts,
   getContentFeedback,

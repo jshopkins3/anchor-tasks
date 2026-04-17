@@ -4184,33 +4184,10 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
       }
       const sources = Object.values(bySource).sort((a, b) => b.items.length - a.items.length);
 
-      // Extract themes with Claude (cached per hour)
-      let themes = [];
-      const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
-      if (ANTHROPIC_KEY && triggers.length >= 3) {
-        try {
-          const headlines = triggers.slice(0, 25).map(t => `[${t.source}] ${t.title}`).join("\n");
-          const themeResp = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-20250514", max_tokens: 512,
-              messages: [{ role: "user", content: `You are analyzing mortgage industry news headlines for a loan officer. Identify 2-4 emerging THEMES from these headlines. Each theme should be a short phrase (3-6 words) with a 1-sentence explanation of why it matters to a mortgage broker. Return ONLY valid JSON, no markdown.
-
-Headlines:
-${headlines}
-
-Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","count":N,"emoji":"relevant emoji"}]}` }],
-            }),
-          });
-          if (themeResp.ok) {
-            const td = await themeResp.json();
-            const text = (td.content || []).find(c => c.type === "text")?.text || "{}";
-            const parsed = JSON.parse(text.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
-            themes = parsed.themes || [];
-          }
-        } catch (e) { console.error("[content-feed] Theme extraction error:", e.message); }
-      }
+      // Extract themes via shared market-data helper (same logic the briefing uses,
+      // cached per-hour). Single source of truth for theme extraction.
+      const md = require("./market-data");
+      const themes = await md.extractThemes(triggers);
 
       return json(res, 200, { sources, themes, total: triggers.length, lastPoll: result.lastPoll });
     }

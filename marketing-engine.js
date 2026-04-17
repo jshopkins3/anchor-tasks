@@ -173,8 +173,13 @@ TODAY'S MARKET INTELLIGENCE:
 RATES & MBS:
 ${intelligence.rates && intelligence.rates.bps_change ? JSON.stringify(intelligence.rates, null, 2) : "MBS data not available today."}
 
-INDUSTRY NEWS (last 48 hours):
-${intelligence.industryNews.length > 0 ? intelligence.industryNews.map((n, i) => `${i + 1}. [${n.source}] ${n.title}\n   ${n.summary || ""}\n   ${n.url || ""}`).join("\n") : "No new industry news."}
+EMERGING THEMES — THE PRIMARY INDUSTRY SIGNAL (HEAVILY WEIGHTED):
+${(intelligence.emergingThemes || []).length > 0 ? intelligence.emergingThemes.map((t, i) => `${i + 1}. ${t.emoji || ""} ${t.theme} (${t.count || "?"} stories)\n   WHY IT MATTERS: ${t.why}`).join("\n\n") : "No themes extracted — fall back to individual headlines below."}
+
+These themes are what's actually emerging in the industry right now — patterns across multiple sources, not one-off headlines. When choosing content angles, lead with what the themes suggest John should be talking about. If a theme aligns with John's specialties (VA, manual UW, self-employed, complex cases), that's an especially strong content signal. Reference themes by name in the personaDebate and danNote/garyNote/alexNote fields when they drove your thinking.
+
+INDUSTRY NEWS (supporting evidence — last 48 hours):
+${intelligence.industryNews.length > 0 ? intelligence.industryNews.slice(0, 15).map((n, i) => `${i + 1}. [${n.source}] ${n.title}\n   ${n.summary || ""}\n   ${n.url || ""}`).join("\n") : "No new industry news."}
 
 PIPELINE CONTEXT (structured — these are raw facts, not a narrative):
 ${formatPipelineContext(intelligence.pipelineContext)}
