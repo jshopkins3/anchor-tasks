@@ -5087,6 +5087,15 @@ NMLS #2283684`;
       }
     }
 
+    // Favicon — serve icon.svg (no physical .ico file in repo)
+    if (urlPath === "/favicon.ico") {
+      const svgPath = path.join(BASE, "icon.svg");
+      if (fs.existsSync(svgPath)) {
+        res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" });
+        return res.end(fs.readFileSync(svgPath));
+      }
+    }
+
     // Serve static file
     let filePath = path.join(BASE, urlPath === "/" ? "app.html" : urlPath);
     filePath = path.normalize(filePath);
