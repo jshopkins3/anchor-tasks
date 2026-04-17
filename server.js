@@ -4427,6 +4427,29 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
       }
     }
 
+    // POST /api/personas/meeting — three-way meeting: user + Gary + Alex
+    // Body: { messages: [{role, persona?, content}], date?, recId?, order? }
+    if (urlPath === "/api/personas/meeting" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const body = JSON.parse(await readBody(req));
+        if (!body.messages) return json(res, 400, { error: "messages required" });
+        const p = require("./personas");
+        const me = require("./marketing-engine");
+        const briefing = body.date ? me.loadBriefing(body.date) : me.getLatestBriefing();
+        const result = await p.runMeetingTurn({
+          messages: body.messages,
+          briefingContext: briefing || null,
+          recId: body.recId || null,
+          order: body.order || "auto",
+        });
+        return json(res, 200, result);
+      } catch (e) {
+        console.error("[personas] meeting error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
     // POST /api/personas/revise — have a persona rewrite a specific recommendation
     // Body: { persona, date, recId, instruction? }
     if (urlPath === "/api/personas/revise" && req.method === "POST") {

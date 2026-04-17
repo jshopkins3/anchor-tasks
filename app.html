@@ -2865,6 +2865,19 @@
             <div id="briefing-debate-text" style="font-size:13px;color:var(--text-primary);font-style:italic;"></div>
           </div>
 
+          <!-- Join the Meeting CTA -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#0a1628 100%);border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div style="display:flex;gap:-6px;">
+              <div style="width:36px;height:36px;border-radius:50%;background:rgba(245,158,11,0.25);display:flex;align-items:center;justify-content:center;font-size:18px;border:2px solid var(--bg-card);">📣</div>
+              <div style="width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,0.25);display:flex;align-items:center;justify-content:center;font-size:18px;border:2px solid var(--bg-card);margin-left:-10px;">🎯</div>
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <div style="font-size:13px;font-weight:700;color:var(--gold);">Gary + Alex are in the room</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px;">Both strategists. One meeting. Ask anything.</div>
+            </div>
+            <button onclick="joinMeeting()" style="background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;">Join the Meeting</button>
+          </div>
+
           <!-- Briefing history -->
           <div style="margin-top:8px;">
             <button onclick="document.getElementById('briefing-history-panel').style.display=document.getElementById('briefing-history-panel').style.display==='none'?'block':'none'" style="font-size:12px;color:var(--text-secondary);background:none;border:none;cursor:pointer;text-decoration:underline;">Past Briefings</button>
@@ -2894,6 +2907,38 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ── Meeting Modal (Gary + Alex together) ──────────────── -->
+    <div id="meeting-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+      <div style="background:var(--bg-card);border-radius:14px;width:min(780px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border-default);">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border-default);display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#1e3a5f 0%,#0a1628 100%);">
+          <div style="display:flex;">
+            <div style="width:32px;height:32px;border-radius:50%;background:rgba(245,158,11,0.25);display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid var(--bg-card);">📣</div>
+            <div style="width:32px;height:32px;border-radius:50%;background:rgba(16,185,129,0.25);display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid var(--bg-card);margin-left:-8px;">🎯</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:700;color:var(--gold);">Marketing Meeting</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.7);">Gary Vee lens + Hormozi lens — both weighing in</div>
+          </div>
+          <button onclick="closeMeeting()" style="background:transparent;border:none;color:rgba(255,255,255,0.7);font-size:22px;cursor:pointer;line-height:1;">&times;</button>
+        </div>
+        <div id="meeting-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg-main);"></div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border-default);background:var(--bg-card);">
+          <div style="display:flex;gap:6px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);align-items:center;flex-wrap:wrap;">
+            <span>Order:</span>
+            <button class="meeting-order-btn" data-order="auto" onclick="setMeetingOrder('auto')" style="padding:3px 10px;border-radius:99px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--gold);background:var(--gold-dim);color:var(--gold);">Auto</button>
+            <button class="meeting-order-btn" data-order="gary-first" onclick="setMeetingOrder('gary-first')" style="padding:3px 10px;border-radius:99px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--input-border);background:transparent;color:var(--text-secondary);">Gary first</button>
+            <button class="meeting-order-btn" data-order="alex-first" onclick="setMeetingOrder('alex-first')" style="padding:3px 10px;border-radius:99px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--input-border);background:transparent;color:var(--text-secondary);">Alex first</button>
+            <button class="meeting-order-btn" data-order="gary-only" onclick="setMeetingOrder('gary-only')" style="padding:3px 10px;border-radius:99px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--input-border);background:transparent;color:var(--text-secondary);">Gary only</button>
+            <button class="meeting-order-btn" data-order="alex-only" onclick="setMeetingOrder('alex-only')" style="padding:3px 10px;border-radius:99px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--input-border);background:transparent;color:var(--text-secondary);">Alex only</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end;">
+            <textarea id="meeting-input" placeholder="Ask the room anything..." rows="2" style="flex:1;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-family:inherit;font-size:13px;resize:none;"></textarea>
+            <button id="meeting-send" onclick="sendMeetingMessage()" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;">Send</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -10652,6 +10697,124 @@
       }
       await loadBriefing();
     }
+
+    /* ── Meeting (Gary + Alex together) ───────────────────────── */
+    let meetingState = { messages: [], order: "auto", date: null, recId: null };
+
+    function joinMeeting() {
+      meetingState = {
+        messages: [],
+        order: "auto",
+        date: currentBriefing?.date || null,
+        recId: null,
+      };
+      const greeting = currentBriefing
+        ? `<div style="text-align:center;color:var(--text-secondary);font-size:12px;padding:16px;line-height:1.5;">
+            Gary and Alex both have today's briefing loaded.<br>
+            Ask them anything about the content, the market, or the strategy.<br>
+            <span style="font-size:10px;opacity:0.7;">Try: "Which rec is strongest and why?" or "What are we missing this week?"</span>
+          </div>`
+        : `<div style="text-align:center;color:var(--text-secondary);font-size:12px;padding:16px;">
+            No briefing loaded yet. Gary and Alex will answer based on general strategy.
+          </div>`;
+      document.getElementById("meeting-messages").innerHTML = greeting;
+      document.getElementById("meeting-input").value = "";
+      document.getElementById("meeting-modal").style.display = "flex";
+      setTimeout(() => document.getElementById("meeting-input").focus(), 50);
+    }
+
+    function closeMeeting() {
+      document.getElementById("meeting-modal").style.display = "none";
+    }
+
+    function setMeetingOrder(order) {
+      meetingState.order = order;
+      document.querySelectorAll(".meeting-order-btn").forEach(btn => {
+        const active = btn.dataset.order === order;
+        btn.style.border = active ? "1px solid var(--gold)" : "1px solid var(--input-border)";
+        btn.style.background = active ? "var(--gold-dim)" : "transparent";
+        btn.style.color = active ? "var(--gold)" : "var(--text-secondary)";
+      });
+    }
+
+    function renderMeetingMessages() {
+      const el = document.getElementById("meeting-messages");
+      el.innerHTML = meetingState.messages.map(m => {
+        if (m.role === "user") {
+          return `<div style="align-self:flex-end;max-width:80%;background:var(--navy);color:#fff;border-radius:12px 12px 2px 12px;padding:10px 14px;font-size:13px;line-height:1.4;">${esc(m.content)}</div>`;
+        }
+        const meta = PERSONA_META[m.persona] || { name: "?", emoji: "?", color: "var(--text-secondary)" };
+        return `<div style="align-self:flex-start;max-width:85%;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+            <span style="font-size:14px;">${meta.emoji}</span>
+            <span style="font-size:11px;font-weight:700;color:${meta.color};">${meta.name.toUpperCase()}</span>
+          </div>
+          <div style="background:var(--bg-card);border:1px solid var(--border-default);border-left:3px solid ${meta.color};border-radius:12px 12px 12px 2px;padding:10px 14px;font-size:13px;line-height:1.5;color:var(--text-primary);white-space:pre-wrap;">${esc(m.content)}</div>
+        </div>`;
+      }).join("");
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function sendMeetingMessage() {
+      const input = document.getElementById("meeting-input");
+      const sendBtn = document.getElementById("meeting-send");
+      const text = input.value.trim();
+      if (!text) return;
+      meetingState.messages.push({ role: "user", content: text });
+      input.value = "";
+      sendBtn.disabled = true;
+      sendBtn.textContent = "...";
+
+      // Show a thinking indicator
+      const indicatorId = "mtg-thinking-" + Date.now();
+      renderMeetingMessages();
+      const msgsEl = document.getElementById("meeting-messages");
+      msgsEl.insertAdjacentHTML("beforeend", `<div id="${indicatorId}" style="align-self:flex-start;color:var(--text-secondary);font-size:12px;font-style:italic;padding:6px 14px;">the room is thinking...</div>`);
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+
+      try {
+        const resp = await fetch("/api/personas/meeting", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: meetingState.messages,
+            date: meetingState.date,
+            recId: meetingState.recId,
+            order: meetingState.order,
+          }),
+        });
+        const data = await resp.json();
+        if (data.responses && Array.isArray(data.responses)) {
+          for (const r of data.responses) {
+            meetingState.messages.push({ role: "assistant", persona: r.persona, content: r.content });
+          }
+        } else {
+          meetingState.messages.push({ role: "assistant", persona: "gary", content: "(meeting error: " + (data.error || "unknown") + ")" });
+        }
+      } catch (e) {
+        meetingState.messages.push({ role: "assistant", persona: "gary", content: "(network error: " + e.message + ")" });
+      }
+
+      const ind = document.getElementById(indicatorId);
+      if (ind) ind.remove();
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Send";
+      renderMeetingMessages();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const mtgInput = document.getElementById("meeting-input");
+      if (mtgInput) {
+        mtgInput.addEventListener("keydown", e => {
+          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMeetingMessage(); }
+        });
+      }
+      const mtgModal = document.getElementById("meeting-modal");
+      if (mtgModal) {
+        mtgModal.addEventListener("click", e => { if (e.target === mtgModal) closeMeeting(); });
+      }
+    });
 
     /* ── Persona Chat (Gary + Alex) ───────────────────────────── */
     const PERSONA_META = {

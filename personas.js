@@ -262,9 +262,130 @@ Only include platforms that were in the original.`;
   }
 }
 
+// Meeting — user + Gary + Alex, sequential responses.
+// Both personas see each other's prior messages and can react, agree, debate.
+// Takes the full conversation history and generates each persona's response
+// with the OTHER persona's contributions visible as prior assistant messages.
+//
+// Options:
+//  - order: "auto" | "gary-first" | "alex-first" | "gary-only" | "alex-only"
+//  - auto picks based on question content (distribution → gary, value → alex)
+async function runMeetingTurn({ messages, briefingContext, recId, order = "auto" }) {
+  const key = ANTHROPIC_API_KEY();
+  if (!key) throw new Error("ANTHROPIC_API_KEY not set");
+
+  // Determine which personas respond and in what order
+  const userMsg = messages[messages.length - 1]?.content || "";
+  let turnOrder = [];
+  if (order === "gary-only") turnOrder = ["gary"];
+  else if (order === "alex-only") turnOrder = ["alex"];
+  else if (order === "gary-first") turnOrder = ["gary", "alex"];
+  else if (order === "alex-first") turnOrder = ["alex", "gary"];
+  else {
+    // Auto: who should go first?
+    const lower = userMsg.toLowerCase();
+    const garyKeywords = ["platform", "attention", "scroll", "distribution", "audience", "repurpose", "format", "video", "reach", "virality", "visibility", "engagement"];
+    const alexKeywords = ["value", "teach", "education", "lesson", "offer", "worth", "save", "depth", "substack", "framework", "why it matters"];
+    const garyScore = garyKeywords.filter(k => lower.includes(k)).length;
+    const alexScore = alexKeywords.filter(k => lower.includes(k)).length;
+    if (garyScore > alexScore) turnOrder = ["gary", "alex"];
+    else if (alexScore > garyScore) turnOrder = ["alex", "gary"];
+    else turnOrder = ["gary", "alex"]; // tie → gary first (he's the hypeman, opens the meeting)
+  }
+
+  // Build briefing-aware context once (reused for each persona)
+  const buildSystem = (persona) => {
+    let sys = PERSONA_SYSTEMS[persona];
+    sys += `\n\nYOU ARE IN A MEETING with John and the other persona (${persona === "gary" ? "Alex" : "Gary"}). Treat the other persona's messages as a real colleague you can agree with, build on, or respectfully push back against. Do NOT ignore what they said. Reference their take by name when you're reacting to it. Keep it collegial — you're partners, not rivals.`;
+    if (briefingContext) {
+      sys += `\n\nCURRENT BRIEFING CONTEXT:
+Date: ${briefingContext.date}
+Summary: ${briefingContext.briefingSummary || ""}
+Recommendations: ${(briefingContext.contentRecommendations || []).length}
+${(briefingContext.contentRecommendations || []).map((r, i) => `  ${i + 1}. [${r.id}] ${r.topic}`).join("\n")}
+${recId ? `\nDISCUSSION FOCUS: recommendation ${recId}` : ""}`;
+    }
+    return sys;
+  };
+
+  // Transform generic messages (user + turn-based assistants) into the
+  // shape each persona needs. When it's Gary's turn, Alex's messages
+  // appear as "user" messages prefixed with "Alex said:" so Gary can
+  // respond to them. Vice versa for Alex. This way each persona sees
+  // the real conversation flow even though only one speaks per API call.
+  const buildMessagesForPersona = (me, convoSoFar) => {
+    const other = me === "gary" ? "alex" : "gary";
+    const otherName = me === "gary" ? "Alex" : "Gary";
+    const out = [];
+    for (const m of convoSoFar) {
+      if (m.role === "user") {
+        out.push({ role: "user", content: m.content });
+      } else if (m.persona === me) {
+        out.push({ role: "assistant", content: m.content });
+      } else if (m.persona === other) {
+        // Inject the other persona's messages as user messages so
+        // the current persona can see and react to them.
+        out.push({ role: "user", content: `[${otherName}]: ${m.content}` });
+      }
+    }
+    return out;
+  };
+
+  const responses = [];
+  const workingConvo = [...messages]; // running copy we add to as each persona responds
+
+  for (const persona of turnOrder) {
+    const system = buildSystem(persona);
+    const msgsForApi = buildMessagesForPersona(persona, workingConvo);
+
+    const body = JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1200,
+      system,
+      messages: msgsForApi,
+    });
+
+    let text = "";
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const req = https.request({
+            hostname: "api.anthropic.com", path: "/v1/messages", method: "POST",
+            headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+          }, res => {
+            let d = "";
+            res.on("data", c => d += c);
+            res.on("end", () => { try { resolve(JSON.parse(d)); } catch (e) { reject(e); } });
+          });
+          req.on("error", reject);
+          req.write(body);
+          req.end();
+        });
+        if (result.error?.type === "overloaded_error" && attempt < 3) {
+          await new Promise(r => setTimeout(r, Math.min(2000 * Math.pow(2, attempt), 15000)));
+          continue;
+        }
+        if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
+        text = (result.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+        break;
+      } catch (e) {
+        if (attempt >= 3) { text = `(${persona} had an error: ${e.message})`; break; }
+        await new Promise(r => setTimeout(r, Math.min(2000 * Math.pow(2, attempt), 15000)));
+      }
+    }
+
+    const response = { role: "assistant", persona, content: text };
+    responses.push(response);
+    workingConvo.push(response);
+  }
+
+  return { responses, order: turnOrder };
+}
+
 module.exports = {
   PERSONAS,
   PERSONA_SYSTEMS,
   chatWithPersona,
   reviseWithPersona,
+  runMeetingTurn,
 };
