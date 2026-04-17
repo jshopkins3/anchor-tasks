@@ -4525,6 +4525,48 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
           if (commandResp.ok) {
             const commandData = await commandResp.json();
             const commandLoans = commandData.loans || [];
+
+            // Command returns mixed stage formats — some loans have code names
+            // (PREAPPROVED, BROKER_CHECK_RECEIVED) and others display names
+            // (Pre-Approved, Approved w/ Conditions, Re-Submittal). Normalize
+            // to codes so the client's activeStages Set filter works.
+            const normalizeStageCode = (s) => {
+              if (!s) return "";
+              const up = String(s).toUpperCase().replace(/[\s\/]/g, "_").replace(/[^A-Z_]/g, "").replace(/_+/g, "_");
+              const map = {
+                "APP_INTAKE": "APPLICATION_INTAKE",
+                "APPLICATIONINTAKE": "APPLICATION_INTAKE",
+                "PREAPPROVED": "PREAPPROVED",
+                "PRE_APPROVED": "PREAPPROVED",
+                "DISCLOSED": "DISCLOSURE_SENT",
+                "DISCLOSURESENT": "DISCLOSURE_SENT",
+                "APPROVED_W_CONDITIONS": "APPROVED_WITH_CONDITION",
+                "APPROVED_WITH_CONDITIONS": "APPROVED_WITH_CONDITION",
+                "RESUBMITTAL": "RE_SUBMITTAL",
+                "RE_SUBMITTAL": "RE_SUBMITTAL",
+                "LOAN_SETUP": "LOAN_SETUP",
+                "LOANSETUP": "LOAN_SETUP",
+                "CLEAR_TO_CLOSE": "CLEAR_TO_CLOSE",
+                "CLEARTOCLOSE": "CLEAR_TO_CLOSE",
+                "DOCS_OUT": "DOCS_OUT",
+                "DOCSOUT": "DOCS_OUT",
+                "DOCS_SIGNED": "DOCS_SIGNED",
+                "DOCSSIGNED": "DOCS_SIGNED",
+                "LOAN_FUNDED": "LOAN_FUNDED",
+                "LOANFUNDED": "LOAN_FUNDED",
+                "BROKER_CHECK_RECEIVED": "BROKER_CHECK_RECEIVED",
+                "BROKERCHECKRECEIVED": "BROKER_CHECK_RECEIVED",
+                "COMMISSION_PAID": "COMMISSION_PAID",
+                "COMMISSIONPAID": "COMMISSION_PAID",
+                "ADVERSE": "ADVERSE",
+                "SUSPENDED": "SUSPENDED",
+                "QUALIFICATION": "QUALIFICATION",
+                "UNDERWRITING_SUBMITTED": "UNDERWRITING_SUBMITTED",
+                "UNDERWRITINGSUBMITTED": "UNDERWRITING_SUBMITTED",
+              };
+              return map[up] || up;
+            };
+
             // live-data.json uses baseline display-name keys ("Stage Name", "Primary Borrower", etc.)
             // as well as normalized camelCase keys — handle both
             normalized = commandLoans.map(l => ({
@@ -4535,7 +4577,7 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
               borrowerName: l.borrower || l["Primary Borrower"] || "",
               loanAmount: parseFloat(l.loanAmount || l["Total Loan Amount"] || l.baseLoanAmount || 0),
               loanPurpose: l.purpose || l["Loan Purpose"] || l.loanPurpose || "",
-              loanStatus: l.stage || l["Stage Name"] || l.loanStatus || "",
+              loanStatus: normalizeStageCode(l.stage || l["Stage Name"] || l.loanStatus || ""),
               propertyAddress: l.propertyAddress || l.subjectProperty || l["Subject Property"] || "",
               propertyCity: l.propertyCity || "",
               propertyState: l.propertyState || "",
