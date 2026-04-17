@@ -2897,6 +2897,27 @@
       </div>
     </div>
 
+    <!-- ── Persona Chat Modal (Gary / Alex) ───────────────────── -->
+    <div id="persona-chat-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+      <div style="background:var(--bg-card);border-radius:14px;width:min(680px,92vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border-default);">
+        <div id="persona-chat-header" style="padding:14px 18px;border-bottom:1px solid var(--border-default);display:flex;align-items:center;gap:10px;">
+          <div id="persona-chat-avatar" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;"></div>
+          <div style="flex:1;">
+            <div id="persona-chat-name" style="font-size:15px;font-weight:700;color:var(--text-heading);"></div>
+            <div id="persona-chat-tagline" style="font-size:11px;color:var(--text-secondary);"></div>
+          </div>
+          <button onclick="closePersonaChat()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;line-height:1;">&times;</button>
+        </div>
+        <div id="persona-chat-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;"></div>
+        <div style="padding:12px 14px;border-top:1px solid var(--border-default);">
+          <div style="display:flex;gap:8px;align-items:flex-end;">
+            <textarea id="persona-chat-input" placeholder="Ask..." rows="2" style="flex:1;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-family:inherit;font-size:13px;resize:none;"></textarea>
+            <button id="persona-chat-send" onclick="sendPersonaMessage()" style="background:var(--navy);color:var(--gold);border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Project Detail section ─────────────────────────────── -->
     <div class="section" id="sec-detail">
       <button class="detail-back" onclick="closeDetail()">&larr; Back to Projects</button>
@@ -10489,6 +10510,37 @@
                 </div>
               </details>
 
+              <!-- Persona dialogue actions -->
+              <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+                <button onclick="openPersonaChat('gary','${b.date}','${rec.id}')" title="Ask Gary about this recommendation" style="background:transparent;color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">&#128226; Ask Gary</button>
+                <button onclick="openPersonaChat('alex','${b.date}','${rec.id}')" title="Ask Alex about this recommendation" style="background:transparent;color:#10b981;border:1px solid rgba(16,185,129,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">&#127919; Ask Alex</button>
+                <button onclick="reviseWithPersona('gary','${b.date}','${rec.id}')" title="Gary rewrites this content" style="background:transparent;color:var(--text-secondary);border:1px solid var(--input-border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">Revise w/ Gary</button>
+                <button onclick="reviseWithPersona('alex','${b.date}','${rec.id}')" title="Alex rewrites this content" style="background:transparent;color:var(--text-secondary);border:1px solid var(--input-border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">Revise w/ Alex</button>
+              </div>
+
+              ${(rec.revisions || []).length > 0 ? `
+                <details style="margin-bottom:10px;background:var(--input-bg);border-radius:8px;padding:10px;">
+                  <summary style="font-size:11px;font-weight:600;color:var(--gold);cursor:pointer;">${(rec.revisions || []).length} revision${(rec.revisions || []).length === 1 ? '' : 's'} available</summary>
+                  <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">
+                    ${(rec.revisions || []).map(rv => `
+                      <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:6px;padding:10px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                          <span style="font-size:11px;font-weight:700;color:${rv.persona === 'gary' ? '#f59e0b' : '#10b981'};">${rv.persona.toUpperCase()}</span>
+                          <button onclick="applyRevision('${b.date}','${rec.id}','${rv.id}')" style="font-size:10px;padding:3px 10px;border-radius:5px;background:var(--navy);color:var(--gold);border:none;font-weight:600;cursor:pointer;">Apply</button>
+                        </div>
+                        <div style="font-size:11px;color:var(--text-secondary);font-style:italic;margin-bottom:6px;">${rv.reasoning || ''}</div>
+                        ${Object.entries(rv.platforms || {}).map(([p, d]) => `
+                          <div style="margin-top:4px;">
+                            <div style="font-size:10px;font-weight:600;color:var(--text-secondary);">${p.toUpperCase()}</div>
+                            <div style="font-size:12px;color:var(--text-primary);white-space:pre-wrap;padding:6px;background:var(--input-bg);border-radius:4px;margin-top:2px;">${d.text || ''}</div>
+                          </div>
+                        `).join('')}
+                      </div>
+                    `).join('')}
+                  </div>
+                </details>
+              ` : ''}
+
               <!-- Actions -->
               ${rec.status === 'pending' ? `
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -10592,6 +10644,143 @@
       }
       await loadBriefing();
     }
+
+    /* ── Persona Chat (Gary + Alex) ───────────────────────────── */
+    const PERSONA_META = {
+      gary: { name: "Gary", tagline: "Distribution + attention", emoji: "📣", bg: "rgba(245,158,11,0.15)", color: "#f59e0b" },
+      alex: { name: "Alex", tagline: "Value + education",       emoji: "🎯", bg: "rgba(16,185,129,0.15)", color: "#10b981" },
+    };
+    let personaChatState = { persona: null, date: null, recId: null, messages: [] };
+
+    function openPersonaChat(persona, date, recId) {
+      personaChatState = { persona, date, recId, messages: [] };
+      const meta = PERSONA_META[persona];
+      document.getElementById("persona-chat-avatar").style.background = meta.bg;
+      document.getElementById("persona-chat-avatar").style.color = meta.color;
+      document.getElementById("persona-chat-avatar").textContent = meta.emoji;
+      document.getElementById("persona-chat-name").textContent = meta.name;
+      document.getElementById("persona-chat-tagline").textContent = meta.tagline;
+      document.getElementById("persona-chat-messages").innerHTML = `<div style="text-align:center;color:var(--text-secondary);font-size:12px;padding:20px;">Ask ${meta.name} about this recommendation. He has the full briefing context.</div>`;
+      document.getElementById("persona-chat-input").value = "";
+      const modal = document.getElementById("persona-chat-modal");
+      modal.style.display = "flex";
+      setTimeout(() => document.getElementById("persona-chat-input").focus(), 50);
+    }
+
+    function closePersonaChat() {
+      document.getElementById("persona-chat-modal").style.display = "none";
+      personaChatState = { persona: null, date: null, recId: null, messages: [] };
+    }
+
+    function renderPersonaMessages() {
+      const el = document.getElementById("persona-chat-messages");
+      const meta = PERSONA_META[personaChatState.persona];
+      el.innerHTML = personaChatState.messages.map(m => {
+        if (m.role === "user") {
+          return `<div style="align-self:flex-end;max-width:80%;background:var(--navy);color:#fff;border-radius:12px 12px 2px 12px;padding:10px 14px;font-size:13px;line-height:1.4;">${esc(m.content)}</div>`;
+        } else {
+          return `<div style="align-self:flex-start;max-width:85%;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <span style="font-size:14px;">${meta.emoji}</span>
+              <span style="font-size:11px;font-weight:700;color:${meta.color};">${meta.name.toUpperCase()}</span>
+            </div>
+            <div style="background:var(--bg-card);border:1px solid var(--border-default);border-radius:12px 12px 12px 2px;padding:10px 14px;font-size:13px;line-height:1.5;color:var(--text-primary);white-space:pre-wrap;">${esc(m.content)}</div>
+          </div>`;
+        }
+      }).join("");
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function sendPersonaMessage() {
+      const input = document.getElementById("persona-chat-input");
+      const sendBtn = document.getElementById("persona-chat-send");
+      const text = input.value.trim();
+      if (!text || !personaChatState.persona) return;
+      personaChatState.messages.push({ role: "user", content: text });
+      input.value = "";
+      sendBtn.disabled = true;
+      sendBtn.textContent = "...";
+      renderPersonaMessages();
+      try {
+        const resp = await fetch("/api/personas/chat", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            persona: personaChatState.persona,
+            date: personaChatState.date,
+            recId: personaChatState.recId,
+            messages: personaChatState.messages,
+          }),
+        });
+        const data = await resp.json();
+        if (data.text) {
+          personaChatState.messages.push({ role: "assistant", content: data.text });
+        } else {
+          personaChatState.messages.push({ role: "assistant", content: "(error: " + (data.error || "unknown") + ")" });
+        }
+      } catch (e) {
+        personaChatState.messages.push({ role: "assistant", content: "(network error: " + e.message + ")" });
+      }
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Send";
+      renderPersonaMessages();
+    }
+
+    async function reviseWithPersona(persona, date, recId) {
+      const instruction = prompt(`Tell ${PERSONA_META[persona].name} what to change (or leave blank for his default revision):`, "");
+      if (instruction === null) return; // user cancelled
+      try {
+        const resp = await fetch("/api/personas/revise", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ persona, date, recId, instruction }),
+        });
+        const data = await resp.json();
+        if (data.revision) {
+          await loadBriefing();
+        } else {
+          alert("Revision failed: " + (data.error || "unknown"));
+        }
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    }
+
+    async function applyRevision(date, recId, revisionId) {
+      try {
+        await fetch("/api/personas/apply-revision", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date, recId, revisionId }),
+        });
+        await loadBriefing();
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    }
+
+    // Enter-to-send in persona chat (Shift+Enter for newline)
+    document.addEventListener("DOMContentLoaded", () => {
+      const input = document.getElementById("persona-chat-input");
+      if (input) {
+        input.addEventListener("keydown", e => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendPersonaMessage();
+          }
+        });
+      }
+      // Click outside modal to close
+      const modal = document.getElementById("persona-chat-modal");
+      if (modal) {
+        modal.addEventListener("click", e => {
+          if (e.target === modal) closePersonaChat();
+        });
+      }
+    });
 
     /* ── Content Calendar (legacy) ────────────────────────────── */
     let contentPosts = [];

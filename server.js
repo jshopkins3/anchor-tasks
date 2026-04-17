@@ -4395,6 +4395,103 @@ Return: {"themes":[{"theme":"short phrase","why":"1 sentence why it matters","co
       }
     }
 
+    // ─── Persona dialogue (Gary + Alex) ─────────────────────────────
+    // GET /api/personas — list available personas for UI
+    if (urlPath === "/api/personas" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const p = require("./personas");
+      return json(res, 200, { personas: p.PERSONAS });
+    }
+
+    // POST /api/personas/chat — dialogue with a persona, grounded in today's briefing
+    // Body: { persona: "gary"|"alex", messages: [{role, content}], recId?: string, date?: string }
+    if (urlPath === "/api/personas/chat" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const body = JSON.parse(await readBody(req));
+        if (!body.persona || !body.messages) return json(res, 400, { error: "persona and messages required" });
+        const p = require("./personas");
+        const me = require("./marketing-engine");
+        // Load briefing context (today's or specific date)
+        const briefing = body.date ? me.loadBriefing(body.date) : me.getLatestBriefing();
+        const result = await p.chatWithPersona({
+          persona: body.persona,
+          messages: body.messages,
+          briefingContext: briefing || null,
+          recId: body.recId || null,
+        });
+        return json(res, 200, result);
+      } catch (e) {
+        console.error("[personas] chat error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // POST /api/personas/revise — have a persona rewrite a specific recommendation
+    // Body: { persona, date, recId, instruction? }
+    if (urlPath === "/api/personas/revise" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const body = JSON.parse(await readBody(req));
+        if (!body.persona || !body.date || !body.recId) return json(res, 400, { error: "persona, date, recId required" });
+        const p = require("./personas");
+        const me = require("./marketing-engine");
+        const briefing = me.loadBriefing(body.date);
+        if (!briefing) return json(res, 404, { error: "Briefing not found" });
+        const rec = (briefing.contentRecommendations || []).find(r => r.id === body.recId);
+        if (!rec) return json(res, 404, { error: "Recommendation not found" });
+        const revision = await p.reviseWithPersona({
+          persona: body.persona,
+          rec,
+          instruction: body.instruction || "",
+        });
+        // Save revision alongside the rec so it's retrievable
+        if (!rec.revisions) rec.revisions = [];
+        rec.revisions.push({
+          id: `rev-${Date.now().toString(36)}`,
+          persona: body.persona,
+          instruction: body.instruction || "",
+          reasoning: revision.reasoning,
+          platforms: revision.platforms,
+          createdAt: new Date().toISOString(),
+        });
+        me.saveBriefing(briefing);
+        return json(res, 200, { revision, rec });
+      } catch (e) {
+        console.error("[personas] revise error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
+    // POST /api/personas/apply-revision — replace a rec's platform content with a revision
+    // Body: { date, recId, revisionId }
+    if (urlPath === "/api/personas/apply-revision" && req.method === "POST") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      try {
+        const body = JSON.parse(await readBody(req));
+        if (!body.date || !body.recId || !body.revisionId) return json(res, 400, { error: "date, recId, revisionId required" });
+        const me = require("./marketing-engine");
+        const briefing = me.loadBriefing(body.date);
+        if (!briefing) return json(res, 404, { error: "Briefing not found" });
+        const rec = (briefing.contentRecommendations || []).find(r => r.id === body.recId);
+        if (!rec) return json(res, 404, { error: "Recommendation not found" });
+        const revision = (rec.revisions || []).find(r => r.id === body.revisionId);
+        if (!revision) return json(res, 404, { error: "Revision not found" });
+        // Apply revision platforms back to the rec
+        for (const [plat, data] of Object.entries(revision.platforms || {})) {
+          if (rec.platforms && rec.platforms[plat]) {
+            rec.platforms[plat].text = data.text;
+          }
+        }
+        rec.appliedRevision = { persona: revision.persona, revisionId: body.revisionId, appliedAt: new Date().toISOString() };
+        me.saveBriefing(briefing);
+        return json(res, 200, { rec });
+      } catch (e) {
+        console.error("[personas] apply-revision error:", e.message);
+        return json(res, 500, { error: e.message });
+      }
+    }
+
     // Reject a recommendation
     if (urlPath === "/api/briefing/reject" && req.method === "POST") {
       if (!req.session) return json(res, 401, { error: "Not authenticated" });
