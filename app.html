@@ -4331,7 +4331,15 @@
         pipelineFetchFailed = true;
         console.warn("[hub] Pipeline fetch failed:", pipeResult.status, pipeResult.error || "");
       }
-      const activeStages = new Set(["APPLICATION_INTAKE","QUALIFICATION","PREAPPROVED","DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+      // Active Pipeline = Stage 2 (Open Water) + Stage 3 (Safe Harbor).
+      // Stage 1 (Intake/Qual/Preapproved) lives elsewhere — those are shopping,
+      // not actively being worked.
+      const activeStages = new Set([
+        // Stage 2 — Open Water
+        "LOAN_SETUP","DISCLOSURE_SENT","UNDERWRITING_SUBMITTED","APPROVED_WITH_CONDITION","RE_SUBMITTAL",
+        // Stage 3 — Safe Harbor
+        "CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED",
+      ]);
       const activeLoans = pipelineLoans.filter(l => activeStages.has(l.loanStatus));
 
       // Pipeline stats
@@ -4377,9 +4385,9 @@
       // Pipeline panel
       const pipeList = document.getElementById("hub-pipeline-list");
       if (pipeList) {
-        const stageColors = { APPLICATION_INTAKE:"#6366f1", QUALIFICATION:"#8b5cf6", PREAPPROVED:"#3b82f6", DISCLOSURE_SENT:"#0ea5e9", APPROVED_WITH_CONDITION:"#f59e0b", CLEAR_TO_CLOSE:"#10b981", DOCS_OUT:"#14b8a6", DOCS_SIGNED:"#06b6d4" };
-        const stageLabelsShort = { APPLICATION_INTAKE:"Intake", QUALIFICATION:"Qual", PREAPPROVED:"Pre-Appr", DISCLOSURE_SENT:"Disclosed", APPROVED_WITH_CONDITION:"Cond Appr", CLEAR_TO_CLOSE:"CTC", DOCS_OUT:"Docs Out", DOCS_SIGNED:"Docs Signed" };
-        const inProcessSet = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+        const stageColors = { LOAN_SETUP:"#6366f1", DISCLOSURE_SENT:"#0ea5e9", UNDERWRITING_SUBMITTED:"#8b5cf6", APPROVED_WITH_CONDITION:"#f59e0b", RE_SUBMITTAL:"#ef4444", CLEAR_TO_CLOSE:"#10b981", DOCS_OUT:"#14b8a6", DOCS_SIGNED:"#06b6d4" };
+        const stageLabelsShort = { LOAN_SETUP:"Setup", DISCLOSURE_SENT:"Disclosed", UNDERWRITING_SUBMITTED:"UW Sub", APPROVED_WITH_CONDITION:"Cond Appr", RE_SUBMITTAL:"Resub", CLEAR_TO_CLOSE:"CTC", DOCS_OUT:"Docs Out", DOCS_SIGNED:"Docs Signed" };
+        const inProcessSet = new Set(["DISCLOSURE_SENT","UNDERWRITING_SUBMITTED","APPROVED_WITH_CONDITION","RE_SUBMITTAL","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
         const sorted = [...activeLoans].sort((a, b) => { const ap = inProcessSet.has(a.loanStatus) ? 0 : 1; const bp = inProcessSet.has(b.loanStatus) ? 0 : 1; return ap !== bp ? ap - bp : (b.loanAmount || 0) - (a.loanAmount || 0); });
         if (pipelineFetchFailed && activeLoans.length === 0) {
           pipeList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">
