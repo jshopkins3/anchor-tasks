@@ -4224,6 +4224,13 @@
       setTimeout(() => { selectEmail(emailId, threadId); }, 150);
     }
 
+    // Retry pipeline fetch from the hub (used when SW returned offline fallback during a deploy)
+    async function retryPipeline() {
+      pipelineLoaded = false;
+      pipelineLoans = [];
+      await updateHubView();
+    }
+
     async function updateHubView() {
       // Greeting — instant
       const hour = new Date().getHours();
@@ -4238,9 +4245,18 @@
       }
 
       // ── Kick off ALL network fetches in parallel immediately ──
+      // Pipeline fetch returns { ok, data } so we can distinguish fetch-failed
+      // from genuinely-empty pipeline. Critical when service worker is serving
+      // offline-fallback responses during Railway redeploys.
       const pipelinePromise = (!pipelineLoaded || pipelineLoans.length === 0)
-        ? fetch("/api/pipeline/loans").then(r => r.ok ? r.json() : null).catch(() => null)
-        : Promise.resolve(null); // already cached
+        ? fetch("/api/pipeline/loans")
+            .then(async r => {
+              if (!r.ok) return { ok: false, status: r.status };
+              try { const data = await r.json(); return data.error ? { ok: false, status: 0, error: data.error } : { ok: true, data }; }
+              catch { return { ok: false, status: 0, error: "parse" }; }
+            })
+            .catch(e => ({ ok: false, status: 0, error: e.message || "network" }))
+        : Promise.resolve({ ok: true, cached: true });
       const mbsPromise = fetch("/api/mbs").then(r => r.ok ? r.json() : null).catch(() => null);
       const contentPromise = fetch("/api/briefing").then(r => r.ok ? r.json() : null).catch(() => null);
 
@@ -4285,17 +4301,27 @@
       // ── PHASE 2: Await network data and render pipeline/MBS/content ──
 
       // Pipeline
-      const pipeData = await pipelinePromise;
-      if (pipeData) { pipelineLoans = pipeData.loans || []; pipelineLoaded = true; }
+      const pipeResult = await pipelinePromise;
+      let pipelineFetchFailed = false;
+      if (pipeResult && pipeResult.ok && !pipeResult.cached) {
+        pipelineLoans = pipeResult.data.loans || [];
+        pipelineLoaded = true;
+      } else if (pipeResult && !pipeResult.ok) {
+        pipelineFetchFailed = true;
+        console.warn("[hub] Pipeline fetch failed:", pipeResult.status, pipeResult.error || "");
+      }
       const activeStages = new Set(["APPLICATION_INTAKE","QUALIFICATION","PREAPPROVED","DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
       const activeLoans = pipelineLoans.filter(l => activeStages.has(l.loanStatus));
 
       // Pipeline stats
       const pipeCount = document.getElementById("hub-pipeline-count");
       const pipeVol = document.getElementById("hub-pipeline-vol");
-      if (pipeCount) pipeCount.textContent = activeLoans.length;
+      if (pipeCount) pipeCount.textContent = pipelineFetchFailed ? "?" : activeLoans.length;
       const totalVol = activeLoans.reduce((s, l) => s + (l.loanAmount || 0), 0);
-      if (pipeVol) pipeVol.textContent = totalVol > 0 ? `$${(totalVol / 1000000).toFixed(1)}M volume` : "No active loans";
+      if (pipeVol) {
+        if (pipelineFetchFailed) pipeVol.textContent = "Load failed — click to retry";
+        else pipeVol.textContent = totalVol > 0 ? `$${(totalVol / 1000000).toFixed(1)}M volume` : "No active loans";
+      }
 
       const endOfWeek = new Date(now); endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
       const closingThisWeek = activeLoans.filter(l => { if (!l.closingDate) return false; const cd = new Date(l.closingDate); return cd >= now && cd <= endOfWeek; });
@@ -4334,6 +4360,12 @@
         const stageLabelsShort = { APPLICATION_INTAKE:"Intake", QUALIFICATION:"Qual", PREAPPROVED:"Pre-Appr", DISCLOSURE_SENT:"Disclosed", APPROVED_WITH_CONDITION:"Cond Appr", CLEAR_TO_CLOSE:"CTC", DOCS_OUT:"Docs Out", DOCS_SIGNED:"Docs Signed" };
         const inProcessSet = new Set(["DISCLOSURE_SENT","APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
         const sorted = [...activeLoans].sort((a, b) => { const ap = inProcessSet.has(a.loanStatus) ? 0 : 1; const bp = inProcessSet.has(b.loanStatus) ? 0 : 1; return ap !== bp ? ap - bp : (b.loanAmount || 0) - (a.loanAmount || 0); });
+        if (pipelineFetchFailed && activeLoans.length === 0) {
+          pipeList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">
+            <div style="margin-bottom:8px;">Couldn't reach pipeline</div>
+            <button onclick="retryPipeline()" style="padding:6px 14px;border-radius:6px;background:var(--navy);color:var(--gold);border:none;font-size:12px;font-weight:600;cursor:pointer;">Retry</button>
+          </div>`;
+        } else {
         pipeList.innerHTML = sorted.length === 0
           ? '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:12px;">No active loans</div>'
           : sorted.map(loan => {
@@ -4346,6 +4378,7 @@
                 <div style="padding:3px 8px;border-radius:99px;font-size:10px;font-weight:600;background:${color}18;color:${color};white-space:nowrap;">${stageLabelsShort[loan.loanStatus] || loan.loanStatus}</div>
               </div>`;
             }).join("");
+        }
       }
 
       // MBS ticker (from parallel promise — lightweight /api/mbs)

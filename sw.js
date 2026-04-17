@@ -1,5 +1,5 @@
 // Service Worker — Anchor Tasks PWA
-const CACHE_NAME = "anchor-tasks-v1";
+const CACHE_NAME = "anchor-tasks-v2";
 const PRECACHE = ["/", "/app.html"];
 
 // Install: cache core files
@@ -22,9 +22,13 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
 
-  // Never cache API calls
+  // Never cache API calls. On network failure return 503 so client r.ok === false.
   if (url.pathname.startsWith("/api/")) {
-    e.respondWith(fetch(e.request).catch(() => new Response('{"error":"offline"}', { headers: { "Content-Type": "application/json" } })));
+    e.respondWith(fetch(e.request).catch(() => new Response('{"error":"offline"}', {
+      status: 503,
+      statusText: "Service Unavailable",
+      headers: { "Content-Type": "application/json" },
+    })));
     return;
   }
 
