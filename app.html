@@ -2829,6 +2829,10 @@
             <div style="font-size:11px;font-weight:600;letter-spacing:0.05em;color:var(--gold);margin-bottom:8px;">YOUR MORNING BRIEFING</div>
             <div id="briefing-summary" style="font-size:15px;line-height:1.5;margin-bottom:12px;opacity:0.95;">No briefing yet. Click <strong>Run Meeting</strong> to generate today's briefing.</div>
             <div id="briefing-market-context" style="font-size:13px;opacity:0.8;margin-bottom:12px;"></div>
+            <div id="briefing-rate-context" style="display:none;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:12px;margin-bottom:10px;">
+              <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:4px;letter-spacing:0.05em;">📊 RATE CONTEXT</div>
+              <div id="briefing-rate-text" style="font-size:13px;line-height:1.5;"></div>
+            </div>
             <div id="briefing-key-insight" style="display:none;background:rgba(255,255,255,0.1);border-radius:8px;padding:12px;margin-bottom:10px;">
               <div style="font-size:10px;font-weight:600;color:var(--gold);margin-bottom:4px;">KEY INSIGHT</div>
               <div id="briefing-insight-text" style="font-size:13px;line-height:1.4;"></div>
@@ -10511,6 +10515,17 @@
         const pb = b.personalBriefing;
         document.getElementById("briefing-market-context").innerHTML = pb.marketContext || "";
 
+        // Rate context — shown prominently if we have it
+        const rateCtxEl = document.getElementById("briefing-rate-context");
+        const rateTextEl = document.getElementById("briefing-rate-text");
+        if (b.sourceData?.rateContext || b.rateContext) {
+          const rc = b.rateContext || b.sourceData?.rateContext;
+          rateCtxEl.style.display = "block";
+          rateTextEl.textContent = rc;
+        } else {
+          rateCtxEl.style.display = "none";
+        }
+
         if (pb.keyInsight) {
           document.getElementById("briefing-key-insight").style.display = "block";
           document.getElementById("briefing-insight-text").innerHTML = pb.keyInsight;
@@ -11016,7 +11031,7 @@
     let reactorSources = [];
     let reactorThemes = [];
     let reactorFilter = "new";
-    const REACTOR_SOURCE_COLORS = { HW: "#1a73e8", SG: "#e65100", MBA: "#2e7d32", MPA: "#7b1fa2", GS: "#c62828", LI: "#0077b5", ZAP: "#ff6d00" };
+    const REACTOR_SOURCE_COLORS = { HW: "#1a73e8", SG: "#e65100", MBA: "#2e7d32", MPA: "#7b1fa2", GS: "#c62828", LI: "#0077b5", ZAP: "#ff6d00", RM: "#ff4500", FTH: "#ff4500", RE: "#ff4500" };
 
     function setReactorFilter(status) {
       reactorFilter = status;

@@ -92,6 +92,74 @@ async function fetchPipelineContext() {
   }
 }
 
+// ─── Rate Context (Claude narrates WHY MBS/Treasury moved) ──────────
+// Takes raw MBS numbers + today's macro headlines, returns a 2-3 sentence
+// narrative about what's driving the move and what it means for borrowers.
+// Cached per-day — rates settle once a day, no need to recompute hourly.
+
+let rateContextCache = { context: null, forDate: "", computedAt: 0 };
+const RATE_CONTEXT_CACHE_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+async function deriveRateContext(mbsData, industryNews) {
+  const key = process.env.ANTHROPIC_API_KEY || "";
+  if (!key || !mbsData) return null;
+
+  const today = new Date().toISOString().substring(0, 10);
+  if (rateContextCache.forDate === today && rateContextCache.context && Date.now() - rateContextCache.computedAt < RATE_CONTEXT_CACHE_MS) {
+    return rateContextCache.context;
+  }
+
+  // Pull macro-relevant headlines — Fed, CPI, jobs, Treasury, inflation, Powell, rate cut
+  const macroKeywords = /\b(fed|fomc|powell|cpi|ppi|inflation|jobs report|payroll|treasury|yield|bond|rate cut|hike|hawkish|dovish|gdp|housing starts|existing home sales|mortgage rate)\b/i;
+  const macroHeadlines = (industryNews || [])
+    .filter(n => macroKeywords.test(`${n.title} ${n.summary || ""}`))
+    .slice(0, 10)
+    .map(n => `- [${n.source}] ${n.title}${n.summary ? " — " + n.summary.substring(0, 200) : ""}`)
+    .join("\n");
+
+  const mbsSummary = JSON.stringify(mbsData);
+  const prompt = `You are a mortgage rate analyst briefing John Hopkins, a broker. Today's rate data:
+${mbsSummary}
+
+Recent macro-relevant headlines (last 48hrs):
+${macroHeadlines || "No macro-specific headlines — use general context."}
+
+Write a 3-4 sentence RATE CONTEXT narrative that covers:
+1. What MBS/Treasury did (reference the bps change or direction)
+2. The most likely DRIVER (tie to a specific event or data print if headlines suggest one; otherwise say "no clear catalyst")
+3. What it means for BORROWERS (should floaters lock? is there a window? is this noise?)
+4. What it means for ACTIVE PIPELINE (any loans at risk of repricing if trend continues?)
+
+Rules:
+- No em dashes. Hyphens or semicolons only.
+- Speak directly to John, not third-person.
+- Be honest — if you don't know the driver, say "no clear catalyst" instead of inventing one.
+- Max 4 sentences. Dense, actionable.
+- No hedging like "it depends" or "markets are complex" — pick a read.
+
+Return ONLY the narrative text, no preamble.`;
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 400,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const text = (data.content || []).find(c => c.type === "text")?.text?.trim() || null;
+    if (text) rateContextCache = { context: text, forDate: today, computedAt: Date.now() };
+    return text;
+  } catch (e) {
+    console.error("[market-data] Rate context error:", e.message);
+    return null;
+  }
+}
+
 // ─── Emerging Themes (Claude-extracted patterns across RSS triggers) ────
 // Same extraction the /api/content-feed?grouped=1 endpoint does — pulled here
 // so the briefing can reason from PATTERNS not individual headlines. Cached
@@ -183,6 +251,12 @@ async function gatherMarketIntelligence() {
   // briefing. Gary and Alex reason from patterns first, headlines as backup.
   const emergingThemes = await extractThemes(rssTriggers);
 
+  // Derive rate context narrative — why did MBS/Treasury move, what it means
+  // for borrowers + pipeline. Feeds into briefing prompt.
+  const rateContext = await deriveRateContext(mbsData, rssTriggers.map(t => ({
+    title: t.title, source: t.source, summary: t.summary || "",
+  })));
+
   const today = new Date();
   const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
   const dayOfWeek = dayNames[today.getDay()];
@@ -194,6 +268,7 @@ async function gatherMarketIntelligence() {
 
     // Market data
     rates: mbsData || { note: "MBS data unavailable — BM_API_KEY not configured" },
+    rateContext, // AI-generated narrative on WHY rates moved + what it means
 
     // Emerging themes — top-level signal for briefing reasoning
     emergingThemes,
@@ -240,6 +315,7 @@ module.exports = {
   fetchBMVideos,
   fetchPipelineContext,
   extractThemes,
+  deriveRateContext,
   getRecentTriggers,
   getRecentPosts,
   getContentFeedback,

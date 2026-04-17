@@ -40,6 +40,27 @@ const RSS_SOURCES = [
     icon: "GS",
     category: "influencer",
   },
+  // Borrower-sentiment signal — Reddit mortgage subs surface real confusion,
+  // panic, and questions. Gold for Thursday Lesson posts ("things I keep
+  // seeing in r/FirstTimeHomeBuyer that nobody explains right").
+  {
+    name: "r/Mortgages",
+    url: "https://www.reddit.com/r/Mortgages/top.rss?t=day",
+    icon: "RM",
+    category: "borrower-sentiment",
+  },
+  {
+    name: "r/FirstTimeHomeBuyer",
+    url: "https://www.reddit.com/r/FirstTimeHomeBuyer/top.rss?t=day",
+    icon: "FTH",
+    category: "borrower-sentiment",
+  },
+  {
+    name: "r/RealEstate",
+    url: "https://www.reddit.com/r/RealEstate/top.rss?t=day",
+    icon: "RE",
+    category: "borrower-sentiment",
+  },
 ];
 
 // Simple XML tag extractor (no dependency needed)

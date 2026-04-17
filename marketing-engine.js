@@ -91,12 +91,15 @@ async function runDailyMeeting(options = {}) {
       status: "pending", // pending | approved | rejected | published
       ...r,
     })),
+    // Rate context narrative (surfaced in UI)
+    rateContext: intelligence.rateContext || null,
     // Source data summary
     sourceData: {
       newsCount: intelligence.industryNews.length,
       hasRates: !!intelligence.rates?.bps_change,
       hasPipeline: !!(intelligence.pipelineContext && !intelligence.pipelineContext.error && intelligence.pipelineContext.totalActive > 0),
       hasSearchTrends: !!intelligence.searchTrends,
+      rateContext: intelligence.rateContext || null,
     },
   };
 
@@ -170,8 +173,11 @@ ${todayTheme ? `Today is ${intelligence.dayOfWeek}: "${todayTheme.theme}" — ${
 TODAY'S MARKET INTELLIGENCE:
 ═══════════════════════════════════════════════════════════
 
-RATES & MBS:
-${intelligence.rates && intelligence.rates.bps_change ? JSON.stringify(intelligence.rates, null, 2) : "MBS data not available today."}
+RATES & MBS (numbers):
+${intelligence.rates ? JSON.stringify(intelligence.rates, null, 2) : "MBS data not available today."}
+
+RATE CONTEXT (what's driving the move + what it means for borrowers + pipeline):
+${intelligence.rateContext || "No rate context available — reason from numbers alone."}
 
 EMERGING THEMES — THE PRIMARY INDUSTRY SIGNAL (HEAVILY WEIGHTED):
 ${(intelligence.emergingThemes || []).length > 0 ? intelligence.emergingThemes.map((t, i) => `${i + 1}. ${t.emoji || ""} ${t.theme} (${t.count || "?"} stories)\n   WHY IT MATTERS: ${t.why}`).join("\n\n") : "No themes extracted — fall back to individual headlines below."}
