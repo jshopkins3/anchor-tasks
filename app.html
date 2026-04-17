@@ -2859,10 +2859,31 @@
             </div>
           </div>
 
-          <!-- Persona Debate -->
-          <div id="briefing-debate" style="display:none;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;padding:14px;margin-bottom:20px;">
-            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);letter-spacing:0.04em;margin-bottom:6px;">MEETING NOTES — WHERE GARY & ALEX DISAGREED</div>
-            <div id="briefing-debate-text" style="font-size:13px;color:var(--text-primary);font-style:italic;"></div>
+          <!-- Opening Statements: Gary + Alex -->
+          <div id="briefing-openers" style="display:none;margin-bottom:16px;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:var(--text-secondary);margin-bottom:8px;">MEETING OPENED</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div style="background:var(--bg-card);border:1px solid var(--border-default);border-left:3px solid #f59e0b;border-radius:10px;padding:12px 14px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                  <span style="font-size:16px;">📣</span>
+                  <span style="font-size:12px;font-weight:700;color:#f59e0b;">GARY</span>
+                  <span style="font-size:10px;color:var(--text-secondary);">distribution + attention</span>
+                </div>
+                <div id="briefing-gary-opener" style="font-size:13px;color:var(--text-primary);line-height:1.5;"></div>
+              </div>
+              <div style="background:var(--bg-card);border:1px solid var(--border-default);border-left:3px solid #10b981;border-radius:10px;padding:12px 14px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                  <span style="font-size:16px;">🎯</span>
+                  <span style="font-size:12px;font-weight:700;color:#10b981;">ALEX</span>
+                  <span style="font-size:10px;color:var(--text-secondary);">value + education</span>
+                </div>
+                <div id="briefing-alex-opener" style="font-size:13px;color:var(--text-primary);line-height:1.5;"></div>
+              </div>
+            </div>
+            <div id="briefing-disagreement" style="display:none;margin-top:10px;background:rgba(245,158,11,0.06);border:1px dashed rgba(245,158,11,0.3);border-radius:10px;padding:12px 14px;">
+              <div style="font-size:10px;font-weight:700;letter-spacing:0.05em;color:#f59e0b;margin-bottom:6px;">⚡ WHERE THEY PUSHED BACK</div>
+              <div id="briefing-disagreement-text" style="font-size:12px;color:var(--text-primary);line-height:1.5;white-space:pre-wrap;"></div>
+            </div>
           </div>
 
           <!-- Join the Meeting CTA -->
@@ -2872,8 +2893,8 @@
               <div style="width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,0.25);display:flex;align-items:center;justify-content:center;font-size:18px;border:2px solid var(--bg-card);margin-left:-10px;">🎯</div>
             </div>
             <div style="flex:1;min-width:200px;">
-              <div style="font-size:13px;font-weight:700;color:var(--gold);">Gary + Alex are in the room</div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px;">Both strategists. One meeting. Ask anything.</div>
+              <div style="font-size:13px;font-weight:700;color:var(--gold);">Push back or go deeper</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px;">Jump in the meeting with Gary + Alex — ask anything, watch them debate.</div>
             </div>
             <button onclick="joinMeeting()" style="background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;">Join the Meeting</button>
           </div>
@@ -10553,15 +10574,24 @@
                 }).join("")}
               </div>
 
-              <!-- Persona notes (collapsible) -->
-              <details style="margin-bottom:10px;">
-                <summary style="font-size:11px;color:var(--text-secondary);cursor:pointer;">Meeting notes</summary>
-                <div style="margin-top:6px;font-size:12px;color:var(--text-secondary);line-height:1.5;">
-                  ${rec.danNote ? `<div style="margin-bottom:4px;"><strong style="color:var(--navy);">Dan:</strong> ${rec.danNote}</div>` : ''}
-                  ${rec.garyNote ? `<div style="margin-bottom:4px;"><strong style="color:#f59e0b;">Gary:</strong> ${rec.garyNote}</div>` : ''}
-                  ${rec.alexNote ? `<div><strong style="color:#10b981;">Alex:</strong> ${rec.alexNote}</div>` : ''}
+              <!-- Persona takes (surfaced prominently) -->
+              ${rec.danNote ? `<div style="margin-bottom:8px;font-size:12px;color:var(--text-secondary);line-height:1.5;padding:6px 10px;background:rgba(10,22,40,0.04);border-left:2px solid var(--navy);border-radius:4px;"><strong style="color:var(--navy);">Dan:</strong> ${rec.danNote}</div>` : ''}
+              ${(rec.garyTake || rec.garyNote) ? `<div style="margin-bottom:8px;background:var(--bg-card);border:1px solid var(--border-default);border-left:3px solid #f59e0b;border-radius:8px;padding:10px 12px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                  <span style="font-size:13px;">📣</span>
+                  <span style="font-size:11px;font-weight:700;color:#f59e0b;">GARY</span>
+                  ${rec.garyNote ? `<span style="font-size:10px;color:var(--text-secondary);margin-left:auto;font-style:italic;">${rec.garyNote}</span>` : ''}
                 </div>
-              </details>
+                <div style="font-size:12px;color:var(--text-primary);line-height:1.5;">${rec.garyTake || rec.garyNote}</div>
+              </div>` : ''}
+              ${(rec.alexTake || rec.alexNote) ? `<div style="margin-bottom:8px;background:var(--bg-card);border:1px solid var(--border-default);border-left:3px solid #10b981;border-radius:8px;padding:10px 12px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                  <span style="font-size:13px;">🎯</span>
+                  <span style="font-size:11px;font-weight:700;color:#10b981;">ALEX</span>
+                  ${rec.alexNote ? `<span style="font-size:10px;color:var(--text-secondary);margin-left:auto;font-style:italic;">${rec.alexNote}</span>` : ''}
+                </div>
+                <div style="font-size:12px;color:var(--text-primary);line-height:1.5;">${rec.alexTake || rec.alexNote}</div>
+              </div>` : ''}
 
               <!-- Persona dialogue actions -->
               <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
@@ -10633,10 +10663,36 @@
         `;
       }
 
-      // Persona debate
-      if (b.personaDebate) {
-        document.getElementById("briefing-debate").style.display = "block";
-        document.getElementById("briefing-debate-text").textContent = b.personaDebate;
+      // Persona openers + debate. Supports both new structured object and legacy string.
+      const openersEl = document.getElementById("briefing-openers");
+      const garyOpenerEl = document.getElementById("briefing-gary-opener");
+      const alexOpenerEl = document.getElementById("briefing-alex-opener");
+      const disagreementEl = document.getElementById("briefing-disagreement");
+      const disagreementTextEl = document.getElementById("briefing-disagreement-text");
+
+      if (b.personaDebate && typeof b.personaDebate === "object") {
+        // New structured format
+        const d = b.personaDebate;
+        if (d.garyOpener || d.alexOpener) {
+          openersEl.style.display = "block";
+          if (garyOpenerEl) garyOpenerEl.textContent = d.garyOpener || "";
+          if (alexOpenerEl) alexOpenerEl.textContent = d.alexOpener || "";
+        }
+        if (d.disagreement && d.disagreement.trim()) {
+          disagreementEl.style.display = "block";
+          disagreementTextEl.textContent = d.disagreement;
+        } else {
+          disagreementEl.style.display = "none";
+        }
+      } else if (typeof b.personaDebate === "string" && b.personaDebate.trim()) {
+        // Legacy string format — show as disagreement block
+        openersEl.style.display = "block";
+        if (garyOpenerEl) garyOpenerEl.textContent = "(meeting notes below)";
+        if (alexOpenerEl) alexOpenerEl.textContent = "(meeting notes below)";
+        disagreementEl.style.display = "block";
+        disagreementTextEl.textContent = b.personaDebate;
+      } else {
+        openersEl.style.display = "none";
       }
     }
 

@@ -226,9 +226,11 @@ Return a single JSON object with this exact schema:
       "videoCandidate": false,
       "visualNeeded": false,
       "visualDescription": null,
-      "danNote": "Why this matters right now",
-      "garyNote": "Distribution strategy for this piece",
-      "alexNote": "The value this provides to the reader"
+      "danNote": "Why this matters right now — 1 short sentence",
+      "garyTake": "Gary's actual take on this rec in his own voice — 3-5 sentences. Attention angle, platform fit, distribution play, what will stop the scroll. Speak as Gary would. Reference themes by name if they drove your thinking. Can include a line he'd push back on Alex about.",
+      "garyNote": "1-line distribution strategy tag for this piece",
+      "alexTake": "Alex's actual take on this rec in his own voice — 3-5 sentences. Value angle, what it teaches, who saves it, whether it passes the Value Equation filter. Speak as Alex would. Reference themes by name if they drove your thinking. Can include a line he'd push back on Gary about.",
+      "alexNote": "1-line value/education tag for this piece"
     }
   ],
 
@@ -243,7 +245,12 @@ Return a single JSON object with this exact schema:
     "scriptNeeded": true
   },
 
-  "personaDebate": "2-3 sentence narrative of where Gary and Alex disagreed and why — this adds transparency to the decision-making"
+  "personaDebate": {
+    "summary": "2-3 sentence narrative of the overall meeting energy — where Gary and Alex aligned, where they pushed back",
+    "garyOpener": "Gary's opening statement for today's meeting in his voice — 2-3 sentences. What's the biggest attention signal he sees today?",
+    "alexOpener": "Alex's opening statement for today's meeting in his voice — 2-3 sentences. What's the strongest value or education angle today?",
+    "disagreement": "Optional: the specific point where Gary and Alex pushed back on each other, captured as a short back-and-forth exchange. Include only if real tension existed. Format as: 'Gary: ...  Alex: ...  Gary: ...' — keep each line short."
+  }
 }
 
 RULES:
