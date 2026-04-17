@@ -95,7 +95,7 @@ async function runDailyMeeting(options = {}) {
     sourceData: {
       newsCount: intelligence.industryNews.length,
       hasRates: !!intelligence.rates?.bps_change,
-      hasPipeline: intelligence.pipelineContext !== "No pipeline data available.",
+      hasPipeline: !!(intelligence.pipelineContext && !intelligence.pipelineContext.error && intelligence.pipelineContext.totalActive > 0),
       hasSearchTrends: !!intelligence.searchTrends,
     },
   };
@@ -176,8 +176,8 @@ ${intelligence.rates && intelligence.rates.bps_change ? JSON.stringify(intellige
 INDUSTRY NEWS (last 48 hours):
 ${intelligence.industryNews.length > 0 ? intelligence.industryNews.map((n, i) => `${i + 1}. [${n.source}] ${n.title}\n   ${n.summary || ""}\n   ${n.url || ""}`).join("\n") : "No new industry news."}
 
-PIPELINE CONTEXT:
-${intelligence.pipelineContext}
+PIPELINE CONTEXT (structured — these are raw facts, not a narrative):
+${formatPipelineContext(intelligence.pipelineContext)}
 
 RECENT CONTENT POSTED (avoid repeating):
 ${intelligence.recentContent.length > 0 ? intelligence.recentContent.map(p => `${p.date} (${p.theme}): "${p.text}"`).join("\n") : "No recent posts."}
@@ -251,7 +251,73 @@ RULES:
 - visualNeeded = true only when a graphic/infographic adds something the text can't convey alone.
 - weeklyVideoUpdate only populated on Mondays.
 - personalBriefing.studyRecommendations: max 2 items. Only flag things genuinely worth John's time.
-- All content text must pass the "7am text to Jordan" test. If it sounds like a mortgage company wrote it, rewrite.`;
+- All content text must pass the "7am text to Jordan" test. If it sounds like a mortgage company wrote it, rewrite.
+
+NAME RULES (CRITICAL — enforce strictly):
+- briefingSummary: NO borrower first names, last names, or initials. Use patterns ("two closings next week totaling ~$2M", "a VA deal hitting conditions", "a $775K refi").
+- contentRecommendations.*.text (any platform): NO borrower/agent names. Ever. Use "a client", "a family", "a veteran".
+- newsletterIdeas: NO names. Abstract topics only.
+- personaDebate: NO names. Discuss categories/patterns only.
+- personalBriefing.pipelineImplications: names ARE allowed here. This section is John's internal actionable intel — be specific.
+- personalBriefing.marketContext and keyInsight: NO names. General market/strategy only.
+
+ACCURACY RULES:
+- Only reference pipeline facts that are in the structured PIPELINE CONTEXT above. Do not invent amounts, dates, stages, or loan types.
+- Day of week in close dates: compute from the ISO date, do not guess.
+- "Closing this week" = loans in closeReadyStages (APPROVED_WITH_CONDITION/CTC/DOCS_OUT/DOCS_SIGNED) with estClose in next 7 days. Nothing else counts as closing soon — a loan in LOAN_SETUP or RE_SUBMITTAL is NOT closing next week regardless of date fields.
+- If closingThisWeek is empty, say the pipeline is quiet this week. Do not force a closing narrative.`;
+}
+
+// Format structured pipeline context into readable facts for the prompt.
+// Input: { asOf, totalActive, totalPipelineVolume, closingThisWeek, recentFundings, vaSummary, complexDeals, stageCounts }
+function formatPipelineContext(ctx) {
+  if (!ctx || typeof ctx !== "object") return "No pipeline data available.";
+  if (ctx.error) return `Pipeline fetch failed: ${ctx.error}`;
+
+  const lines = [];
+  lines.push(`As of: ${ctx.asOf}`);
+  lines.push(`Total active pipeline: ${ctx.totalActive} loans, $${(ctx.totalPipelineVolume || 0).toLocaleString()} volume`);
+  lines.push("");
+
+  if ((ctx.closingThisWeek || []).length > 0) {
+    lines.push("CLOSING IN NEXT 7 DAYS (close-ready stages only):");
+    for (const l of ctx.closingThisWeek) {
+      lines.push(`  - ${l.borrower}: $${l.amount.toLocaleString()} ${l.type} ${l.purpose} — ${l.stage} — closes ${l.closeDate} (${l.dayOfWeek}, ${l.daysUntil}d from now)`);
+    }
+  } else {
+    lines.push("CLOSING IN NEXT 7 DAYS: None. Pipeline is quiet this week for hard closes.");
+  }
+  lines.push("");
+
+  if ((ctx.recentFundings || []).length > 0) {
+    lines.push("RECENTLY FUNDED (last 7 days):");
+    for (const l of ctx.recentFundings) {
+      lines.push(`  - ${l.borrower}: $${l.amount.toLocaleString()} ${l.type} — funded ${l.closeDate}`);
+    }
+    lines.push("");
+  }
+
+  if (ctx.vaSummary && ctx.vaSummary.count > 0) {
+    lines.push(`VA LOANS IN PIPELINE: ${ctx.vaSummary.count} active, $${(ctx.vaSummary.totalVolume || 0).toLocaleString()} volume (${ctx.vaSummary.inProcess} in close-ready stages)`);
+    lines.push("");
+  }
+
+  if ((ctx.complexDeals || []).length > 0) {
+    lines.push("LARGE / COMPLEX DEALS IN ACTIVE PIPELINE:");
+    for (const l of ctx.complexDeals) {
+      lines.push(`  - ${l.borrower}: $${l.amount.toLocaleString()} ${l.type} — ${l.stage}`);
+    }
+    lines.push("");
+  }
+
+  if (ctx.stageCounts && Object.keys(ctx.stageCounts).length > 0) {
+    lines.push("STAGE DISTRIBUTION:");
+    for (const [stage, count] of Object.entries(ctx.stageCounts).sort((a,b) => b[1] - a[1])) {
+      lines.push(`  ${stage}: ${count}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 // ─── Claude API Call ───────────────────────────────────────────────

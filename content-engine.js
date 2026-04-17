@@ -205,34 +205,128 @@ function deletePost(postId) {
 
 // ─── Pipeline Data Fetching ─────────────────────────────────────────
 
+// Fetch structured pipeline data directly from Command's /api/loans (live-data.json).
+// Returns categorized facts — no AI summarization layer, no confabulation.
+// Downstream consumer (briefing Claude) reasons from raw facts.
 async function fetchPipelineContext() {
   const COMMAND_URL = process.env.COMMAND_API_URL || "https://anchorcommand.myanchormortgage.com";
   const API_KEY = process.env.COMMAND_API_KEY || "";
 
   try {
-    const resp = await fetch(`${COMMAND_URL}/api/tasks/for-user?user=john@myanchormortgage.com`, {
-      headers: { "X-API-Key": API_KEY, "X-Proxy-User": "content-engine" },
+    const resp = await fetch(`${COMMAND_URL}/api/loans`, {
+      headers: API_KEY ? { "x-api-key": API_KEY } : {},
     });
-    // This gives us tasks, but we need loan data. Use Dan's endpoint.
-  } catch (e) {}
+    if (!resp.ok) throw new Error(`Command /api/loans ${resp.status}`);
+    const data = await resp.json();
+    const rawLoans = data.loans || [];
 
-  // Try to get pipeline summary from Command
-  try {
-    const body = JSON.stringify({ question: "Give me a brief pipeline summary for content: loans closing this week, any recent wins, VA loans in progress, any complex/rescued deals. Be concise, just facts.", history: [] });
-    const resp = await fetch(`${COMMAND_URL}/api/ai-context`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": API_KEY, "X-Proxy-User": "content-engine" },
-      body,
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      return data.response || "";
+    // Normalize from live-data.json shape to clean objects
+    const loans = rawLoans.map(l => {
+      const borrower = l["Primary Borrower"] || l.borrower || "";
+      const firstName = borrower.split(" ")[0] || "";
+      const lastName = borrower.split(" ").slice(1).join(" ") || "";
+      const amount = parseFloat(l["Total Loan Amount"] || l.loanAmount || 0);
+      const stage = l["Stage Name"] || l.stage || "";
+      const type = (l["Mortgage Type"] || l.loanType || "").toUpperCase();
+      const purpose = l["Loan Purpose"] || l.loanPurpose || "";
+      // Est close is the reliable one; firm close can be stale default data
+      const estClose = l["Estimated Closing Date"] || l.estClosing || "";
+      const firmClose = l["Firm Closing Date"] || l.firmCloseDate || "";
+      const closeDate = estClose || firmClose || "";
+      const lo = l["Primary Loan Officer Name"] || l.loanOfficer || "";
+      return { borrower, firstName, lastName, amount, stage, type, purpose, estClose, firmClose, closeDate, lo };
+    }).filter(l => l.borrower); // drop empty rows
+
+    // Stage categorization
+    const activeStages = ["APPLICATION_INTAKE","QUALIFICATION","PREAPPROVED","LOAN_SETUP","DISCLOSURE_SENT","UNDERWRITING_SUBMITTED","APPROVED_WITH_CONDITION","RE_SUBMITTAL","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"];
+    const closingTrackStages = ["CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"];
+    const fundedStages = ["LOAN_FUNDED","BROKER_CHECK_RECEIVED","COMMISSION_PAID"];
+
+    // Stage name variants (Arive display names vs codes)
+    const normalizeStage = (s) => {
+      const up = (s || "").toUpperCase().replace(/[\s\/]/g, "_").replace(/[^A-Z_]/g, "").replace(/_+/g, "_");
+      const map = {
+        "APPROVED_W_CONDITIONS": "APPROVED_WITH_CONDITION",
+        "APPROVED_WITH_CONDITIONS": "APPROVED_WITH_CONDITION",
+        "RESUBMITTAL": "RE_SUBMITTAL",
+      };
+      return map[up] || up;
+    };
+    loans.forEach(l => { l.stageCode = normalizeStage(l.stage); });
+
+    // Date math
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysFromNow = new Date(today); sevenDaysFromNow.setDate(today.getDate() + 7);
+    const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 7);
+    const parseDate = (s) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d; };
+    const daysBetween = (a, b) => Math.floor((a - b) / 86400000);
+
+    // Closings in next 7 days (est close, stage must actually be close-plausible)
+    const closeReadyStages = new Set(["APPROVED_WITH_CONDITION","CLEAR_TO_CLOSE","DOCS_OUT","DOCS_SIGNED"]);
+    const closingThisWeek = loans
+      .filter(l => {
+        const cd = parseDate(l.estClose);
+        if (!cd) return false;
+        return cd >= today && cd <= sevenDaysFromNow && closeReadyStages.has(l.stageCode);
+      })
+      .map(l => {
+        const cd = parseDate(l.estClose);
+        return {
+          borrower: l.borrower,
+          firstName: l.firstName,
+          amount: l.amount,
+          type: l.type,
+          purpose: l.purpose,
+          stage: l.stageCode,
+          closeDate: l.estClose,
+          dayOfWeek: cd ? ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][cd.getDay()] : "",
+          daysUntil: cd ? daysBetween(cd, today) : null,
+        };
+      })
+      .sort((a, b) => (a.daysUntil || 999) - (b.daysUntil || 999));
+
+    // Recent closings (last 7 days — funded)
+    const recentFundings = loans
+      .filter(l => fundedStages.includes(l.stageCode) && parseDate(l.closeDate) && parseDate(l.closeDate) >= sevenDaysAgo)
+      .map(l => ({ borrower: l.borrower, firstName: l.firstName, amount: l.amount, type: l.type, closeDate: l.closeDate }));
+
+    // VA loans in active pipeline
+    const vaActive = loans.filter(l => l.type === "VA" && activeStages.includes(l.stageCode));
+    const vaSummary = {
+      count: vaActive.length,
+      totalVolume: vaActive.reduce((s, l) => s + l.amount, 0),
+      inProcess: vaActive.filter(l => closeReadyStages.has(l.stageCode)).length,
+    };
+
+    // Complex / complex deals (large, VA, or specific stages)
+    const complex = loans
+      .filter(l => activeStages.includes(l.stageCode) && (l.amount >= 700000 || (l.type === "VA" && closeReadyStages.has(l.stageCode))))
+      .map(l => ({ borrower: l.borrower, firstName: l.firstName, amount: l.amount, type: l.type, stage: l.stageCode }));
+
+    // Stage distribution
+    const stageCounts = {};
+    for (const l of loans) {
+      if (activeStages.includes(l.stageCode)) stageCounts[l.stageCode] = (stageCounts[l.stageCode] || 0) + 1;
     }
+
+    const activeLoans = loans.filter(l => activeStages.includes(l.stageCode));
+    const totalPipelineVolume = activeLoans.reduce((s, l) => s + l.amount, 0);
+
+    return {
+      asOf: today.toISOString().substring(0, 10),
+      totalActive: activeLoans.length,
+      totalPipelineVolume,
+      closingThisWeek,
+      recentFundings,
+      vaSummary,
+      complexDeals: complex,
+      stageCounts,
+    };
   } catch (e) {
     console.error("[content-engine] Pipeline fetch error:", e.message);
+    return { error: e.message, asOf: new Date().toISOString().substring(0, 10) };
   }
-
-  return "No pipeline data available. Generate content based on general themes.";
 }
 
 // ─── Content Generation ─────────────────────────────────────────────
