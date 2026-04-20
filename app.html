@@ -7342,6 +7342,18 @@
             renderEmailBodyInContainer(bodyEl, data.body, msgId, data.inlineImages);
             bodyEl.dataset.loaded = "1";
           }
+          // Render attachments — previously dropped on the floor here
+          if (data.attachments?.length && !msgEl.querySelector(".email-attachments")) {
+            const attachHtml = `<div class="email-attachments" style="padding:0 20px 12px;">${data.attachments.map(a => {
+              const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
+              const dlUrl = `/api/gmail-message/${msgId}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
+              const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
+              return `<a class="email-attachment" href="${dlUrl}" download="${esc(a.name)}"><span class="email-attachment-icon">${icon}</span><span class="email-attachment-info"><span class="email-attachment-name">${esc(a.name)}</span>${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}</span></a>`;
+            }).join("")}</div>`;
+            const tmp = document.createElement("div");
+            tmp.innerHTML = attachHtml;
+            bodyEl.parentNode.insertBefore(tmp.firstChild, bodyEl);
+          }
           // Update header to show to/cc
           const headerInfo = msgEl.querySelector(".email-thread-msg-info");
           if (headerInfo && data.to) {
