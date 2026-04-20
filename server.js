@@ -1665,7 +1665,9 @@ const server = http.createServer(async (req, res) => {
             const contentId = (p.headers || []).find(h => h.name.toLowerCase() === "content-id");
             const isInline = (contentDisp && /^\s*inline/i.test(contentDisp.value)) || (contentId && /^image\//i.test(p.mimeType));
             attachments.push({
-              name: p.filename, attachmentId: p.body.attachmentId,
+              name: p.filename, filename: p.filename, // both for compatibility
+              messageId: msg.id,                      // needed for forwardedAttachments
+              attachmentId: p.body.attachmentId,
               mimeType: p.mimeType, size: p.body.size || 0,
               inline: isInline, contentId: contentId ? contentId.value.replace(/[<>]/g, "") : null,
             });
