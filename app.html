@@ -3901,8 +3901,7 @@
       document.getElementById("sec-email").classList.add("active");
       loadEmailLabels();
       selectedEmailId = msgId;
-      if (threadId) renderThreadView(threadId, msgId);
-      else renderSingleEmailDetail(msgId);
+      renderSingleEmailDetail(msgId);
     }
 
     async function addDoc() {
@@ -7121,15 +7120,11 @@
       }
     });
 
-    /* ── Email selection → Thread view ────────────────────────── */
+    /* ── Email selection → always show individual message (no thread grouping) ── */
     async function selectEmail(id, threadId) {
       selectedEmailId = id;
       renderEmailList();
-      if (threadId) {
-        await renderThreadView(threadId, id);
-      } else {
-        await renderSingleEmailDetail(id);
-      }
+      await renderSingleEmailDetail(id);
       showMobileEmailDetail();
       const email = folderEmails.find(e => e.id === id);
       if (email && email.unread) {
