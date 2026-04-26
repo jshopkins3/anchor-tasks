@@ -109,6 +109,84 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BObEhtMss78OTAVIU_2bq7
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "Ru4ias01IaUsTeo-o7xtftzEnIi5gMJwg3e06aOxOM4";
 webpush.setVapidDetails("mailto:john.hopkins@mychomeloans.com", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
+/* ─── Messaging realtime hub (SSE + push) ──────────────────────────── */
+// In-memory map of email → Set<sseRes>. Multiple tabs/devices per user.
+// Reset on every server restart — clients reconnect on EventSource error.
+const messagingSubscribers = new Map();
+
+function addMessagingSubscriber(email, res) {
+  if (!email || !res) return;
+  if (!messagingSubscribers.has(email)) messagingSubscribers.set(email, new Set());
+  messagingSubscribers.get(email).add(res);
+}
+
+function removeMessagingSubscriber(email, res) {
+  const set = messagingSubscribers.get(email);
+  if (!set) return;
+  set.delete(res);
+  if (set.size === 0) messagingSubscribers.delete(email);
+}
+
+async function sendPushToUser(email, payload) {
+  if (!email) return;
+  const subs = loadPushSubscriptions(email);
+  const failed = [];
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(sub, JSON.stringify(payload));
+    } catch (err) {
+      if (err.statusCode === 410 || err.statusCode === 404) failed.push(sub.endpoint);
+    }
+  }
+  if (failed.length) {
+    const remaining = subs.filter((s) => !failed.includes(s.endpoint));
+    savePushSubscriptions(remaining, email);
+  }
+}
+
+// Broadcast a posted message to all participants. Authors don't get notified.
+// Online recipients (have at least one open SSE connection) get an SSE event.
+// Offline recipients get a web-push.
+async function broadcastMessage(threadId, message) {
+  try {
+    const messaging = require("./messaging");
+    const thread = messaging.getThread(threadId);
+    const participants = messaging.getParticipantEmails(threadId);
+    const payload = `event: message\ndata: ${JSON.stringify({ thread_id: threadId, message, thread })}\n\n`;
+
+    for (const email of participants) {
+      if (email === message.author) continue;
+      const subs = messagingSubscribers.get(email);
+      if (subs && subs.size > 0) {
+        for (const res of subs) {
+          try { res.write(payload); } catch {}
+        }
+      } else {
+        // Offline — web push
+        const title = thread?.title || thread?.context_id || "New message";
+        const bodyPreview = `${message.author}: ${String(message.body || "").slice(0, 100)}`;
+        sendPushToUser(email, {
+          title: `Anchor: ${title}`,
+          body: bodyPreview,
+          url: `/?tab=messaging&thread=${threadId}`,
+          tag: `msg-${threadId}`, // collapses repeated push for same thread
+        }).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.error("[messaging] broadcast error:", e.message);
+  }
+}
+
+// Seed default team channels at startup. Idempotent.
+try {
+  const messagingMod = require("./messaging");
+  messagingMod.seedChannels();
+  console.log("[messaging] team channels seeded");
+} catch (e) {
+  console.error("[messaging] seed error:", e.message);
+}
+
 // Google Calendar config
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const GCAL_CALENDAR_ID = process.env.GCAL_CALENDAR_ID || "primary";
@@ -1560,7 +1638,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     /* ── Auth wall — everything below requires a valid session ──────── */
-    if (!PUBLIC_PATHS.includes(urlPath) && urlPath.startsWith("/api/") && !urlPath.startsWith("/api/dan/")) {
+    // /api/dan/* and /api/messaging/* handle their own API-key auth inside.
+    if (!PUBLIC_PATHS.includes(urlPath) && urlPath.startsWith("/api/") && !urlPath.startsWith("/api/dan/") && !urlPath.startsWith("/api/messaging/")) {
       const session = getSession(req);
       if (!session) return json(res, 401, { error: "Not authenticated" });
       // Attach session to req for downstream handlers
@@ -1910,6 +1989,166 @@ const server = http.createServer(async (req, res) => {
         projects: projects.map(p => ({ id: p.id, name: p.name, status: p.status, color: p.color })),
         goals: goals.map(g => ({ id: g.id, title: g.title, targetDate: g.targetDate, progress: g.progress, category: g.category })),
       });
+    }
+
+    /* ── Messaging (live chat — JSON-backed; will port to MCM Supabase) ── */
+    // Auth: session OR X-API-Key. Workflow engine in anchor-mortgage-app uses
+    // the API key path; the Dan UI tab uses the session path.
+    if (urlPath.startsWith("/api/messaging/") || urlPath === "/api/messaging/post") {
+      // SSE stream needs special handling — it never returns JSON, never closes
+      // until the client disconnects, and must respond with text/event-stream
+      // headers immediately. Handle BEFORE the standard auth block so we can
+      // write the headers right away on auth fail too.
+      if (urlPath === "/api/messaging/stream" && req.method === "GET") {
+        // Session OR (X-API-Key + X-Proxy-User) — supports both Tasks-direct
+        // browsers and Command's messaging proxy.
+        let session = getSession(req);
+        if (!session && isDanApiKey() && req.headers["x-proxy-user"]) {
+          session = { email: String(req.headers["x-proxy-user"]).toLowerCase() };
+        }
+        if (!session) return json(res, 401, { error: "Not authenticated" });
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "X-Accel-Buffering": "no", // disable proxy buffering (Railway/nginx)
+        });
+        res.write("event: hello\ndata: {\"ok\":true}\n\n");
+        addMessagingSubscriber(session.email, res);
+        // Heartbeat every 25s to keep the connection alive through proxies
+        const heartbeat = setInterval(() => {
+          try { res.write(": heartbeat\n\n"); } catch { clearInterval(heartbeat); }
+        }, 25000);
+        req.on("close", () => {
+          clearInterval(heartbeat);
+          removeMessagingSubscriber(session.email, res);
+        });
+        return; // stream stays open
+      }
+
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      // If the call is server-to-server with X-API-Key + X-Proxy-User, treat
+      // it as the proxied user (used by anchor-mortgage-app's messaging proxy).
+      if (!req.session && isDanApiKey() && req.headers["x-proxy-user"]) {
+        req.session = { email: String(req.headers["x-proxy-user"]).toLowerCase() };
+      }
+      const messaging = require("./messaging");
+
+      // POST /api/messaging/post — server-to-server entry used by workflow engine
+      // Body: { thread: {type, context_id, title?}, author, body, metadata? }
+      if (urlPath === "/api/messaging/post" && req.method === "POST") {
+        try {
+          const body = JSON.parse(await readBody(req));
+          if (!body.thread || !body.author || !body.body) {
+            return json(res, 400, { error: "thread, author, body required" });
+          }
+          const result = messaging.postMessage(body);
+          broadcastMessage(result.thread.id, result.message).catch(() => {});
+          return json(res, 201, result);
+        } catch (e) {
+          return json(res, 500, { error: e.message });
+        }
+      }
+
+      // GET /api/messaging/threads?type=&limit=
+      if (urlPath === "/api/messaging/threads" && req.method === "GET") {
+        const u = new URL(req.url, "http://localhost");
+        return json(res, 200, {
+          threads: messaging.listThreads({
+            type: u.searchParams.get("type") || undefined,
+            limit: u.searchParams.get("limit") || 100,
+          }),
+        });
+      }
+
+      // POST /api/messaging/threads — upsert {type, context_id, title?, participants?}
+      if (urlPath === "/api/messaging/threads" && req.method === "POST") {
+        try {
+          const body = JSON.parse(await readBody(req));
+          if (!body.type || !body.context_id) return json(res, 400, { error: "type and context_id required" });
+          const t = messaging.ensureThread(body);
+          return json(res, 200, { thread: t });
+        } catch (e) {
+          return json(res, 500, { error: e.message });
+        }
+      }
+
+      // GET /api/messaging/channels — list pre-created team channels
+      if (urlPath === "/api/messaging/channels" && req.method === "GET") {
+        return json(res, 200, { channels: messaging.listChannels() });
+      }
+
+      // POST /api/messaging/dm — start (or fetch) a DM with another user.
+      // Body: { with: "email@..." }. Requires session.
+      if (urlPath === "/api/messaging/dm" && req.method === "POST") {
+        const email = (req.session && req.session.email);
+        if (!email) return json(res, 400, { error: "session required" });
+        try {
+          const body = JSON.parse(await readBody(req));
+          if (!body.with) return json(res, 400, { error: "with required" });
+          if (body.with.toLowerCase() === email.toLowerCase()) {
+            return json(res, 400, { error: "cannot DM yourself" });
+          }
+          const t = messaging.ensureDM(email, body.with);
+          return json(res, 200, { thread: t });
+        } catch (e) {
+          return json(res, 500, { error: e.message });
+        }
+      }
+
+      // GET /api/messaging/team — list team members for compose UI
+      if (urlPath === "/api/messaging/team" && req.method === "GET") {
+        return json(res, 200, { team: messaging.ANCHOR_TEAM });
+      }
+
+      // GET /api/messaging/threads/:id/messages
+      let m = urlPath.match(/^\/api\/messaging\/threads\/([^\/]+)\/messages$/);
+      if (m && req.method === "GET") {
+        const u = new URL(req.url, "http://localhost");
+        return json(res, 200, {
+          messages: messaging.listMessages(m[1], {
+            limit: u.searchParams.get("limit") || 200,
+            before: u.searchParams.get("before") || undefined,
+          }),
+        });
+      }
+
+      // POST /api/messaging/threads/:id/messages — body: {body, metadata?}
+      if (m && req.method === "POST") {
+        try {
+          const body = JSON.parse(await readBody(req));
+          if (!body.body) return json(res, 400, { error: "body required" });
+          const author = (req.session && req.session.email) || body.author;
+          if (!author) return json(res, 400, { error: "author required (no session)" });
+          const result = messaging.postMessage({
+            thread: { id: m[1] },
+            author,
+            body: body.body,
+            metadata: body.metadata || null,
+          });
+          broadcastMessage(result.thread.id, result.message).catch(() => {});
+          return json(res, 201, result);
+        } catch (e) {
+          return json(res, 500, { error: e.message });
+        }
+      }
+
+      // POST /api/messaging/threads/:id/read
+      m = urlPath.match(/^\/api\/messaging\/threads\/([^\/]+)\/read$/);
+      if (m && req.method === "POST") {
+        const email = (req.session && req.session.email);
+        if (!email) return json(res, 400, { error: "session required" });
+        return json(res, 200, { ok: true, participant: messaging.markRead(m[1], email) });
+      }
+
+      // GET /api/messaging/inbox — threads where the current user is a participant
+      if (urlPath === "/api/messaging/inbox" && req.method === "GET") {
+        const email = (req.session && req.session.email);
+        if (!email) return json(res, 400, { error: "session required" });
+        return json(res, 200, { inbox: messaging.inboxFor(email) });
+      }
+
+      return json(res, 404, { error: "messaging endpoint not found" });
     }
 
     if (urlPath === "/api/dan/tasks-create" && req.method === "POST") {

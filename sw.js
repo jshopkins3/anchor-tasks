@@ -61,6 +61,10 @@ self.addEventListener("push", e => {
     vibrate: [100, 50, 100],
     data: { url: data.url || "/" },
     actions: data.actions || [],
+    // tag collapses repeat pushes for the same context (e.g. msg-<threadId>)
+    // so multiple messages in the same thread don't pile up notifications.
+    tag: data.tag || undefined,
+    renotify: !!data.tag, // re-alert even when tag matches
   };
   e.waitUntil(self.registration.showNotification(title, options));
 });

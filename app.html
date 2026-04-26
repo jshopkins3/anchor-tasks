@@ -2080,6 +2080,7 @@
       <div class="tab" data-tab="finance">Finance</div>
       <div class="tab" data-tab="content">Content</div>
       <div class="tab" data-tab="taglines">Taglines</div>
+      <div class="tab" data-tab="messaging" id="tab-messaging" style="display:none">Inbox <span id="messaging-tab-badge" style="display:none;background:#ad1cd5;color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:16px;text-align:center;margin-left:4px;"></span></div>
       <div class="tab" data-tab="detail" id="tab-detail" style="display:none">Project Details</div>
     </div>
     <div class="quick-links">
@@ -2992,6 +2993,37 @@
     <div class="section" id="sec-detail">
       <button class="detail-back" onclick="closeDetail()">&larr; Back to Projects</button>
       <div id="detail-content"></div>
+    </div>
+
+    <!-- ─── Messaging (live chat) ─────────────────────────────────────── -->
+    <div class="section" id="sec-messaging">
+      <div style="display:grid;grid-template-columns:260px 1fr;gap:14px;min-height:70vh;">
+        <!-- LEFT: sidebar with channels + DMs + threads -->
+        <div style="background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;">
+          <div style="padding:10px 14px;border-bottom:1px solid var(--border,#e5e7eb);font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;">
+            <span>Messages <span id="msg-conn-dot" title="Connection" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ccc;margin-left:6px;vertical-align:middle;"></span></span>
+            <button onclick="document.getElementById('msg-dm-modal').style.display='flex'" title="New DM" style="background:none;border:none;cursor:pointer;color:var(--text-secondary,#888);font-size:16px;">＋</button>
+          </div>
+          <div id="msg-thread-list" style="overflow-y:auto;flex:1;">
+            <div style="padding:24px;color:var(--text-secondary,#888);text-align:center;font-size:13px;">Loading…</div>
+          </div>
+        </div>
+        <!-- RIGHT: active thread -->
+        <div id="msg-thread-pane" style="background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:10px;display:flex;flex-direction:column;">
+          <div style="padding:30px;color:var(--text-secondary,#888);text-align:center;">Pick a channel or DM to start.</div>
+        </div>
+      </div>
+
+      <!-- DM compose modal -->
+      <div id="msg-dm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+        <div style="background:var(--card-bg,#fff);border-radius:10px;padding:20px 24px;width:360px;max-width:90vw;">
+          <h3 style="margin:0 0 12px 0;font-size:16px;">New direct message</h3>
+          <div id="msg-dm-team" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;">
+            <button onclick="document.getElementById('msg-dm-modal').style.display='none'" style="padding:6px 14px;border:1px solid var(--border,#ccc);border-radius:6px;background:transparent;cursor:pointer;">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -4569,6 +4601,9 @@
             if (!currentJournalDate) newJournalEntry();
             else { renderJournalSidebar(); renderJournalEditor(); }
           }
+          if (tab.dataset.tab === "messaging") {
+            loadMessagingInbox();
+          }
           if (tab.dataset.tab === "email") {
             const el = document.getElementById("email-list-items");
             if (el) el.innerHTML = `<div class="today-empty" style="padding:32px 16px;">Loading...</div>`;
@@ -5212,6 +5247,310 @@
       else calCursor.setHours(0,0,0,0);
       calSelectedDate = calDateStr(new Date());
       await renderCalendarView();
+    }
+
+    /* ── Messaging (live chat) ───────────────────────────────── */
+    // Open to the team (Brenda, Corey, Kat, John). SSE for realtime.
+    // Web push handles offline notifications.
+    const MSG_STATE = {
+      inbox: [],
+      channels: [],
+      activeThreadId: null,
+      messages: [],
+      sse: null,
+      myEmail: null,
+      team: [],
+    };
+
+    function msgEsc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+    }
+    function msgNl2br(s) { return msgEsc(s).replace(/\n/g, "<br>"); }
+    function msgRelTime(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      const diff = Date.now() - d.getTime();
+      if (diff < 60_000) return "now";
+      if (diff < 3_600_000) return Math.floor(diff / 60_000) + "m";
+      if (diff < 86_400_000) return Math.floor(diff / 3_600_000) + "h";
+      if (diff < 604_800_000) return Math.floor(diff / 86_400_000) + "d";
+      return d.toLocaleDateString();
+    }
+
+    function setMsgConnDot(state) {
+      const el = document.getElementById("msg-conn-dot");
+      if (!el) return;
+      el.style.background = state === "open" ? "#42b832" : state === "connecting" ? "#fbbf24" : "#ef4444";
+      el.title = "Connection: " + state;
+    }
+
+    async function loadMessagingInbox() {
+      try {
+        const [inboxR, channelsR] = await Promise.all([
+          fetch("/api/messaging/inbox").then(r => r.json()).catch(() => ({ inbox: [] })),
+          fetch("/api/messaging/channels").then(r => r.json()).catch(() => ({ channels: [] })),
+        ]);
+        MSG_STATE.inbox = inboxR.inbox || [];
+        MSG_STATE.channels = channelsR.channels || [];
+        renderMessagingSidebar();
+        const badge = document.getElementById("messaging-tab-badge");
+        if (badge) {
+          const unread = MSG_STATE.inbox.filter(t => t.unread).length;
+          if (unread > 0) { badge.textContent = String(unread); badge.style.display = "inline-block"; }
+          else badge.style.display = "none";
+        }
+      } catch (e) {
+        console.error("[messaging] inbox load:", e.message);
+      }
+    }
+
+    function renderMessagingSidebar() {
+      const el = document.getElementById("msg-thread-list");
+      if (!el) return;
+
+      // Group by type: channels, DMs, loans, other
+      const inbox = MSG_STATE.inbox;
+      const channels = MSG_STATE.channels;
+      const dms = inbox.filter(t => t.type === "dm");
+      const loans = inbox.filter(t => t.type === "loan");
+      const tasks = inbox.filter(t => t.type === "task");
+      const systemOrOther = inbox.filter(t => t.type === "system");
+
+      const renderRow = (t, opts = {}) => {
+        const last = t.last_message;
+        const time = last ? msgRelTime(last.created_at) : msgRelTime(t.created_at);
+        const snippet = last ? `${last.author === MSG_STATE.myEmail ? "you" : last.author.split("@")[0]}: ${last.body}`.slice(0, 60) : "—";
+        const isActive = t.id === MSG_STATE.activeThreadId;
+        const unread = t.unread;
+        const bg = isActive ? "background:var(--hover-bg,#f3f4f6);border-left:3px solid var(--navy);" : "";
+        const titleText = opts.title || t.title || t.context_id;
+        return `
+          <div class="msg-thread-row" data-id="${t.id}" style="padding:10px 14px;border-bottom:1px solid var(--border,#eee);cursor:pointer;${bg}">
+            <div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline;">
+              <span style="font-size:13px;color:var(--text,#222);font-weight:${unread ? '700' : '500'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${msgEsc(titleText)}</span>
+              <span style="font-size:10px;color:var(--text-secondary,#888);flex-shrink:0;">${msgEsc(time)}</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-secondary,#888);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${unread ? 'font-weight:600;color:var(--text,#222);' : ''}">${msgEsc(snippet)}</div>
+          </div>`;
+      };
+
+      const sectionLabel = (t) => `<div style="padding:8px 14px 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-secondary,#888);font-weight:700;background:var(--card-bg,#fafafa);">${t}</div>`;
+
+      let html = "";
+      if (channels.length) {
+        html += sectionLabel("Channels");
+        for (const c of channels) {
+          const inboxRow = inbox.find(t => t.id === c.id);
+          html += renderRow(inboxRow || { ...c, last_message: null, unread: false }, { title: "# " + (c.title || c.context_id) });
+        }
+      }
+      if (dms.length) {
+        html += sectionLabel("Direct Messages");
+        for (const t of dms) {
+          // Title for DMs = the OTHER participant's email (since title is the pair)
+          const otherEmail = (t.title || "").split(" ↔ ").find(e => e && e !== MSG_STATE.myEmail) || t.title || t.context_id;
+          html += renderRow(t, { title: otherEmail.split("@")[0] });
+        }
+      }
+      if (loans.length) {
+        html += sectionLabel("Loans");
+        for (const t of loans) html += renderRow(t);
+      }
+      if (tasks.length) {
+        html += sectionLabel("Tasks");
+        for (const t of tasks) html += renderRow(t);
+      }
+      if (systemOrOther.length) {
+        html += sectionLabel("System");
+        for (const t of systemOrOther) html += renderRow(t);
+      }
+      if (!html) {
+        html = '<div style="padding:24px;color:var(--text-secondary,#888);text-align:center;font-size:13px;">No threads yet.<br><br>Pick a channel or start a DM.</div>';
+      }
+      el.innerHTML = html;
+      el.querySelectorAll(".msg-thread-row").forEach(row => {
+        row.addEventListener("click", () => openMessagingThread(row.dataset.id));
+      });
+    }
+
+    async function openMessagingThread(id) {
+      MSG_STATE.activeThreadId = id;
+      renderMessagingSidebar();
+      await loadMessagingMessages(id);
+      try { await fetch(`/api/messaging/threads/${id}/read`, { method: "POST" }); } catch {}
+      // Reduce unread count immediately
+      const t = MSG_STATE.inbox.find(x => x.id === id);
+      if (t) t.unread = false;
+      renderMessagingSidebar();
+      renderMessagingThreadPane(getThreadById(id));
+    }
+
+    function getThreadById(id) {
+      return MSG_STATE.inbox.find(x => x.id === id) || MSG_STATE.channels.find(x => x.id === id);
+    }
+
+    async function loadMessagingMessages(id) {
+      const r = await fetch(`/api/messaging/threads/${id}/messages?limit=200`).then(r => r.json()).catch(() => ({ messages: [] }));
+      MSG_STATE.messages = r.messages || [];
+    }
+
+    function renderMessagingThreadPane(thread) {
+      const el = document.getElementById("msg-thread-pane");
+      if (!el) return;
+      if (!thread) {
+        el.innerHTML = '<div style="padding:30px;color:var(--text-secondary,#888);text-align:center;">Pick a channel or DM to start.</div>';
+        return;
+      }
+      const headerTitle = thread.type === "team" ? "# " + (thread.title || thread.context_id)
+        : thread.type === "dm" ? (thread.title || "").split(" ↔ ").find(e => e && e !== MSG_STATE.myEmail) || (thread.title || thread.context_id)
+        : (thread.title || thread.context_id);
+      const msgs = MSG_STATE.messages.map(m => {
+        let authorColor = "var(--text-secondary,#888)";
+        let authorLabel = m.author;
+        if (m.author === "system") { authorColor = "var(--navy)"; authorLabel = "System"; }
+        else if (m.author && m.author.startsWith("workflow:")) { authorColor = "#ad1cd5"; authorLabel = m.author.replace("workflow:", "Rule "); }
+        else if (m.author === "dan") { authorColor = "var(--navy)"; authorLabel = "Dan"; }
+        else { authorLabel = m.author === MSG_STATE.myEmail ? "You" : m.author.split("@")[0]; }
+        return `
+          <div style="padding:8px 0;border-bottom:1px dashed var(--border,#f0f0f0);">
+            <div style="font-size:11px;color:${authorColor};margin-bottom:3px;font-weight:600;">${msgEsc(authorLabel)} <span style="color:var(--text-secondary,#888);font-weight:400;">${msgEsc(msgRelTime(m.created_at))}</span></div>
+            <div style="font-size:14px;color:var(--text,#222);line-height:1.5;">${msgNl2br(m.body)}</div>
+          </div>`;
+      }).join("") || '<div style="padding:24px;color:var(--text-secondary,#888);text-align:center;">No messages yet. Be the first.</div>';
+
+      el.innerHTML = `
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border,#eee);">
+          <h3 style="margin:0;font-size:15px;color:var(--text,#222);">${msgEsc(headerTitle)}</h3>
+          <div style="font-size:11px;color:var(--text-secondary,#888);margin-top:4px;">${msgEsc(thread.type)} · ${msgEsc(thread.context_id)}</div>
+        </div>
+        <div id="msg-msgs-scroll" style="flex:1;padding:14px 18px;overflow-y:auto;max-height:55vh;">${msgs}</div>
+        <div style="padding:12px 18px;border-top:1px solid var(--border,#eee);display:flex;gap:8px;">
+          <textarea id="msg-compose" placeholder="Message…" rows="2" style="flex:1;border:1px solid var(--border,#ccc);border-radius:6px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical;"></textarea>
+          <button onclick="sendMessagingReply()" style="background:var(--navy);color:var(--gold);border:none;border-radius:6px;padding:8px 16px;font-weight:600;cursor:pointer;align-self:flex-end;">Send</button>
+        </div>`;
+
+      // Cmd/Ctrl+Enter sends
+      const ta = document.getElementById("msg-compose");
+      if (ta) {
+        ta.focus();
+        ta.addEventListener("keydown", e => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            sendMessagingReply();
+          }
+        });
+      }
+      // Scroll to bottom
+      const scroll = document.getElementById("msg-msgs-scroll");
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
+    }
+
+    async function sendMessagingReply() {
+      const ta = document.getElementById("msg-compose");
+      if (!ta) return;
+      const body = ta.value.trim();
+      if (!body || !MSG_STATE.activeThreadId) return;
+      try {
+        const r = await fetch(`/api/messaging/threads/${MSG_STATE.activeThreadId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+        }).then(r => r.json());
+        if (r.error) { alert("Send failed: " + r.error); return; }
+        ta.value = "";
+        // Optimistic local append — SSE won't echo to author, so we add it ourselves
+        if (r.message) {
+          MSG_STATE.messages.push(r.message);
+          renderMessagingThreadPane(getThreadById(MSG_STATE.activeThreadId));
+        }
+      } catch (e) {
+        alert("Send error: " + e.message);
+      }
+    }
+
+    // ─── SSE realtime stream ─────────────────────────────────
+    function startMessagingStream() {
+      if (MSG_STATE.sse) try { MSG_STATE.sse.close(); } catch {}
+      setMsgConnDot("connecting");
+      const sse = new EventSource("/api/messaging/stream");
+      MSG_STATE.sse = sse;
+      sse.addEventListener("hello", () => setMsgConnDot("open"));
+      sse.addEventListener("message", e => {
+        try {
+          const data = JSON.parse(e.data);
+          if (!data || !data.message) return;
+          // If it's the active thread, append in place
+          if (data.thread_id === MSG_STATE.activeThreadId) {
+            MSG_STATE.messages.push(data.message);
+            renderMessagingThreadPane(getThreadById(MSG_STATE.activeThreadId));
+            // Mark as read since it's open
+            fetch(`/api/messaging/threads/${data.thread_id}/read`, { method: "POST" }).catch(() => {});
+          }
+          // Refresh inbox so unread state + last message snippet update
+          loadMessagingInbox();
+        } catch {}
+      });
+      sse.onerror = () => {
+        setMsgConnDot("closed");
+        // Auto-reconnect with backoff. EventSource handles reconnect natively but
+        // gets stuck in some proxy cases — manual restart on hard error.
+        setTimeout(startMessagingStream, 4000);
+      };
+    }
+
+    // ─── DM compose modal ────────────────────────────────────
+    async function loadDmTeam() {
+      const t = await fetch("/api/messaging/team").then(r => r.json()).catch(() => ({ team: [] }));
+      MSG_STATE.team = t.team || [];
+      const el = document.getElementById("msg-dm-team");
+      if (!el) return;
+      const others = MSG_STATE.team.filter(e => e !== MSG_STATE.myEmail);
+      el.innerHTML = others.map(e => `
+        <button data-email="${msgEsc(e)}" style="padding:10px 12px;border:1px solid var(--border,#eee);border-radius:6px;background:var(--card-bg,#fff);cursor:pointer;text-align:left;font-size:14px;">
+          ${msgEsc(e.split("@")[0])} <span style="color:var(--text-secondary,#888);font-size:11px;">${msgEsc(e)}</span>
+        </button>`).join("");
+      el.querySelectorAll("button[data-email]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const r = await fetch("/api/messaging/dm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ with: btn.dataset.email }),
+          }).then(r => r.json());
+          if (r.thread) {
+            document.getElementById("msg-dm-modal").style.display = "none";
+            await loadMessagingInbox();
+            openMessagingThread(r.thread.id);
+          } else if (r.error) {
+            alert("DM failed: " + r.error);
+          }
+        });
+      });
+    }
+
+    // ─── Init ────────────────────────────────────────────────
+    async function initMessaging() {
+      try {
+        const me = await fetch("/api/me").then(r => r.json()).catch(() => ({}));
+        const email = (me.email || "").toLowerCase();
+        if (!email) return; // not authed yet
+        MSG_STATE.myEmail = email;
+
+        // Open to all Anchor team members (john, brenda, corey, kat).
+        const allowed = ["john@myanchormortgage.com", "brenda@mychomeloans.com", "corey@myanchormortgage.com", "kat@myanchormortgage.com"];
+        if (!allowed.includes(email)) return;
+
+        const tabEl = document.getElementById("tab-messaging");
+        if (tabEl) tabEl.style.display = "";
+
+        await loadMessagingInbox();
+        await loadDmTeam();
+        startMessagingStream();
+      } catch {}
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initMessaging);
+    } else {
+      initMessaging();
     }
 
     /* ── Email Triage (Dan-powered dashboard widget) ─────────── */
