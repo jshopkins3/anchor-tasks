@@ -1196,7 +1196,11 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
     const plainBody = body || "";
     let signature = "";
     try {
-      const sigData = JSON.parse(fs.readFileSync(EMAIL_SIGNATURE_FILE, "utf8"));
+      // Prefer per-user signature; fall back to global (legacy single-user store)
+      // so John's existing signature keeps working without migration.
+      const perUserPath = userEmail ? userEmailSignatureFile(userEmail) : null;
+      const sigPath = (perUserPath && fs.existsSync(perUserPath)) ? perUserPath : EMAIL_SIGNATURE_FILE;
+      const sigData = JSON.parse(fs.readFileSync(sigPath, "utf8"));
       signature = sigData.html || "";
     } catch {}
     const rawLines = [];
@@ -3918,7 +3922,12 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
 
     if (urlPath === "/api/gmail-signature" && req.method === "GET") {
       try {
-        const sig = JSON.parse(fs.readFileSync(EMAIL_SIGNATURE_FILE, "utf8"));
+        // Per-user file with fallback to global (legacy) so John's existing
+        // signature keeps working until each user saves their own.
+        const userEmail = req.session?.email;
+        const perUserPath = userEmail ? userEmailSignatureFile(userEmail) : null;
+        const sigPath = (perUserPath && fs.existsSync(perUserPath)) ? perUserPath : EMAIL_SIGNATURE_FILE;
+        const sig = JSON.parse(fs.readFileSync(sigPath, "utf8"));
         return json(res, 200, sig);
       } catch { return json(res, 200, { html: "", text: "" }); }
     }
@@ -3927,9 +3936,15 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
       try {
         const body = JSON.parse(await readBody(req));
         const html = body.html || "";
-        console.log("[signature] Saving signature, length:", html.length);
-        fs.writeFileSync(EMAIL_SIGNATURE_FILE, JSON.stringify({ html, text: body.text || "" }), "utf8");
-        return json(res, 200, { ok: true });
+        const userEmail = req.session?.email;
+        // Always write to the per-user file. Each team member owns their
+        // own signature; we never overwrite the legacy global file.
+        const targetPath = userEmail ? userEmailSignatureFile(userEmail) : EMAIL_SIGNATURE_FILE;
+        const targetDir = path.dirname(targetPath);
+        if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+        console.log(`[signature] ${userEmail || "(no-session)"} saving signature, length: ${html.length}`);
+        fs.writeFileSync(targetPath, JSON.stringify({ html, text: body.text || "" }), "utf8");
+        return json(res, 200, { ok: true, perUser: !!userEmail });
       } catch (e) {
         console.error("[signature] Save failed:", e.message);
         return json(res, 500, { error: e.message });
