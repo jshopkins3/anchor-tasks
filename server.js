@@ -2026,6 +2026,9 @@ const server = http.createServer(async (req, res) => {
         return; // stream stays open
       }
 
+      // Messaging is exempt from the global auth wall (so SSE can handle its own
+      // headers), so req.session is not yet set for browser calls — pull it now.
+      if (!req.session) req.session = getSession(req);
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       // If the call is server-to-server with X-API-Key + X-Proxy-User, treat
       // it as the proxied user (used by anchor-mortgage-app's messaging proxy).
