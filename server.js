@@ -1210,6 +1210,15 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
       const sigData = JSON.parse(fs.readFileSync(sigPath, "utf8"));
       signature = sigData.html || "";
     } catch {}
+    // Railway's filesystem is ephemeral — every redeploy wipes the per-user
+    // signature file in data/users/{email}/. If the local file is empty or
+    // missing, fall back to the user's native Gmail signature pulled from
+    // the settings/sendAs API. That way the signature ALWAYS shows up (as
+    // long as the user has one configured in Gmail), regardless of how many
+    // times the container was rebuilt today.
+    if (!signature && userEmail) {
+      try { signature = await gmailGetSignature(userEmail); } catch {}
+    }
     const rawLines = [];
     rawLines.push(`From: me`);
     if (to) rawLines.push(`To: ${sanitizeEmailHeader(to)}`);
@@ -4039,15 +4048,25 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
     }
 
     if (urlPath === "/api/gmail-signature" && req.method === "GET") {
+      const userEmail = req.session?.email;
+      // Per-user file first; fall back to global legacy file. If neither exists
+      // (Railway redeploys wipe the data dir), pull the user's native Gmail
+      // signature so the editor shows what they actually have configured in
+      // Gmail. They can still edit/override and re-save into the local file.
+      let local = null;
       try {
-        // Per-user file with fallback to global (legacy) so John's existing
-        // signature keeps working until each user saves their own.
-        const userEmail = req.session?.email;
         const perUserPath = userEmail ? userEmailSignatureFile(userEmail) : null;
         const sigPath = (perUserPath && fs.existsSync(perUserPath)) ? perUserPath : EMAIL_SIGNATURE_FILE;
-        const sig = JSON.parse(fs.readFileSync(sigPath, "utf8"));
-        return json(res, 200, sig);
-      } catch { return json(res, 200, { html: "", text: "" }); }
+        local = JSON.parse(fs.readFileSync(sigPath, "utf8"));
+      } catch {}
+      if (local && local.html) return json(res, 200, local);
+      if (userEmail) {
+        try {
+          const sig = await gmailGetSignature(userEmail);
+          if (sig) return json(res, 200, { html: sig, text: "", source: "gmail" });
+        } catch {}
+      }
+      return json(res, 200, { html: "", text: "" });
     }
 
     if (urlPath === "/api/gmail-signature" && req.method === "POST") {
