@@ -887,6 +887,10 @@ function shouldAutoRead(email, rules) {
   // Anchor label = forwarded from john@mychomeloans.com — always loan-related
   if (email.isAnchor) return { autoRead: false, reason: "anchor_label_loan_related" };
 
+  // MCM = anything routed through the loan-ops domain (any direction). Same
+  // protection as Anchor — never auto-read, never archive.
+  if (email.isMCM) return { autoRead: false, reason: "mcm_loan_ops_domain" };
+
   // NEVER auto-read if email contains a loan number (highest priority safety rail)
   if (rules.loanNumberPattern) {
     const loanRegex = new RegExp(rules.loanNumberPattern);
@@ -3711,7 +3715,15 @@ const server = http.createServer(async (req, res) => {
             const isCC = cc && userEmails.some(e => cc.toLowerCase().includes(e)) && !userEmails.some(e => toField.toLowerCase().includes(e));
             const labelIds = msg.labelIds || [];
             const isAnchor = !!(anchorLabelId && labelIds.includes(anchorLabelId));
-            return { id: msg.id, threadId: msg.threadId, from: getH("From"), to: toField, cc, isCC, subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "", labelIds, isAnchor };
+            // MCM = anything routed through john's loan-ops address, in either
+            // direction. Inbound (from a teammate at mychomeloans.com) and
+            // outbound (a thread he addressed there) are both loan ops by
+            // definition, so they get the same protection as the Anchor label.
+            const fromLower = (getH("From") || "").toLowerCase();
+            const toLower = (toField || "").toLowerCase();
+            const ccLower = (cc || "").toLowerCase();
+            const isMCM = fromLower.includes("@mychomeloans.com") || toLower.includes("@mychomeloans.com") || ccLower.includes("@mychomeloans.com");
+            return { id: msg.id, threadId: msg.threadId, from: getH("From"), to: toField, cc, isCC, subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "", labelIds, isAnchor, isMCM };
           } catch { return null; }
         }))).filter(Boolean);
         if (!emails.length) {
@@ -3729,7 +3741,7 @@ const server = http.createServer(async (req, res) => {
         }
         // Send up to 50 emails to Claude for AI categorization (balances speed vs coverage)
         const aiEmails = emails.slice(0, 50);
-        const emailSummaries = aiEmails.map((e, i) => `${i + 1}. ${e.isAnchor ? "[ANCHOR] " : ""}${e.isCC ? "[CC] " : ""}From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
+        const emailSummaries = aiEmails.map((e, i) => `${i + 1}. ${e.isAnchor ? "[ANCHOR] " : ""}${e.isMCM ? "[MCM] " : ""}${e.isCC ? "[CC] " : ""}From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
         const triageResp = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
@@ -3746,7 +3758,7 @@ Categories:
 - "fyi": Newsletters, automated notifications, informational, CC'd threads where user doesn't need to act (green). Emails marked [CC] should almost always be "fyi" unless they explicitly @mention or ask for the user by name.
 - "archive": Marketing spam, old threads, no action needed (gray)
 
-Special rule: Emails marked [ANCHOR] are forwarded from john@mychomeloans.com (the loan-ops address) and are ALWAYS loan-related. Categorize them as "urgent" if time-sensitive, otherwise "needs_response". NEVER use "fyi" or "archive" for [ANCHOR] emails, even if they look like a CC or notification.
+Special rule: Emails marked [ANCHOR] or [MCM] are loan-ops mail and are ALWAYS loan-related. [ANCHOR] = auto-forwarded from john@mychomeloans.com. [MCM] = either direction through the @mychomeloans.com loan-ops domain. For both: categorize as "urgent" if time-sensitive, otherwise "needs_response". NEVER use "fyi" or "archive" for [ANCHOR] or [MCM] emails, even if they look like a CC or notification.
 
 Emails:
 ${emailSummaries}
@@ -3793,10 +3805,11 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
             // Keyword-based urgency detection
             const isUrgent = /urgent|asap|immediately|critical|time.sensitive|expir|deadline|past.due|final.notice/i.test(text);
             const isMortgage = /closing|conditions|ctc|clear.to.close|funding|appraisal|title|uwm|loancare|underwriting/i.test(text);
-            if (e.isAnchor) {
-              // Anchor label = forwarded from loan-ops address — always loan-related
-              if (isUrgent) categories.urgent.push({ ...e, summary: "auto: anchor (urgent)" });
-              else categories.needs_response.push({ ...e, summary: "auto: anchor (loan)" });
+            if (e.isAnchor || e.isMCM) {
+              // Anchor label or MCM domain — both are loan-ops by construction
+              const tag = e.isAnchor ? "anchor" : "mcm";
+              if (isUrgent) categories.urgent.push({ ...e, summary: `auto: ${tag} (urgent)` });
+              else categories.needs_response.push({ ...e, summary: `auto: ${tag} (loan)` });
             }
             else if (isBlocklisted) { categories.archive.push({ ...e, summary: "auto: blocklisted sender" }); }
             else if (isUrgent) { categories.urgent.push({ ...e, summary: "auto: urgent keywords" }); }
@@ -3805,14 +3818,16 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
             else { categories.needs_response.push({ ...e, summary: "auto: uncategorized" }); }
           }
         }
-        // Safety net: any [ANCHOR] email that landed in fyi/archive gets promoted
-        // to needs_response. Loan-ops mail must never get archived or hidden as FYI.
+        // Safety net: any [ANCHOR] or [MCM] email that landed in fyi/archive
+        // gets promoted to needs_response. Loan-ops mail must never get
+        // archived or hidden as FYI.
         for (const cat of ["fyi", "archive"]) {
-          const promoted = categories[cat].filter(e => e.isAnchor);
+          const promoted = categories[cat].filter(e => e.isAnchor || e.isMCM);
           if (promoted.length) {
-            categories[cat] = categories[cat].filter(e => !e.isAnchor);
+            categories[cat] = categories[cat].filter(e => !(e.isAnchor || e.isMCM));
             for (const e of promoted) {
-              categories.needs_response.push({ ...e, summary: e.summary || "anchor: loan-related" });
+              const tag = e.isAnchor ? "anchor" : "mcm";
+              categories.needs_response.push({ ...e, summary: e.summary || `${tag}: loan-related` });
             }
           }
         }
