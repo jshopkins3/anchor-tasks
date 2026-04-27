@@ -7643,17 +7643,52 @@
       }
     }
 
+    function renderAttachmentsBlock(msgId, attachments) {
+      if (!attachments?.length) return "";
+      const downloadAllBtn = attachments.length >= 2
+        ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:0 0 6px;font-size:11px;color:var(--text-secondary);"><span>${attachments.length} attachment${attachments.length !== 1 ? "s" : ""}</span><button onclick="downloadAllAttachments('${msgId}', ${JSON.stringify(attachments).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})" class="email-action-btn" style="padding:3px 8px;font-size:10px;font-weight:600;border:1px solid var(--border-default);border-radius:4px;background:transparent;color:var(--text-primary);cursor:pointer;font-family:inherit;">⬇ Download All</button></div>`
+        : "";
+      const items = attachments.map(a => {
+        const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
+        const url = `/api/gmail-message/${msgId}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
+        const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
+        return `<a class="email-attachment" href="${url}" download="${esc(a.name)}"><span class="email-attachment-icon">${icon}</span><span class="email-attachment-info"><span class="email-attachment-name">${esc(a.name)}</span>${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}</span></a>`;
+      }).join("");
+      return `<div class="email-attachments" style="padding:0 20px 12px;">${downloadAllBtn}${items}</div>`;
+    }
+
+    // Bulk-download all attachments in an email — works regardless of whether
+    // the email is loan-linked or not. Loops through fetching each blob and
+    // triggers a browser download with a small delay so the browser doesn't
+    // throttle / block the rapid clicks.
+    async function downloadAllAttachments(msgId, attachments) {
+      const atts = (attachments || []).filter(a => a && a.attachmentId);
+      if (!atts.length) return;
+      console.log(`[email] Downloading ${atts.length} attachments from ${msgId}`);
+      for (const a of atts) {
+        try {
+          const url = `/api/gmail-message/${msgId}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const blob = await r.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = blobUrl;
+          link.download = a.name || "attachment";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobUrl);
+          await new Promise(r => setTimeout(r, 300));
+        } catch (e) {
+          console.error(`[email] Download failed for ${a.name}:`, e.message);
+        }
+      }
+    }
+
     function renderThreadMsgBody(msg) {
       // Returns HTML string for expanded message body area
-      let attachHtml = "";
-      if (msg.attachments?.length) {
-        attachHtml = `<div class="email-attachments" style="padding:0 20px 12px;">${msg.attachments.map(a => {
-          const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
-          const url = `/api/gmail-message/${msg.id}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
-          const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
-          return `<a class="email-attachment" href="${url}" download="${esc(a.name)}"><span class="email-attachment-icon">${icon}</span><span class="email-attachment-info"><span class="email-attachment-name">${esc(a.name)}</span>${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}</span></a>`;
-        }).join("")}</div>`;
-      }
+      const attachHtml = renderAttachmentsBlock(msg.id, msg.attachments);
       return `${attachHtml}<div class="email-thread-msg-body" id="thread-body-${msg.id}"></div>`;
     }
 
@@ -7678,15 +7713,10 @@
           }
           // Render attachments — previously dropped on the floor here
           if (data.attachments?.length && !msgEl.querySelector(".email-attachments")) {
-            const attachHtml = `<div class="email-attachments" style="padding:0 20px 12px;">${data.attachments.map(a => {
-              const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
-              const dlUrl = `/api/gmail-message/${msgId}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
-              const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
-              return `<a class="email-attachment" href="${dlUrl}" download="${esc(a.name)}"><span class="email-attachment-icon">${icon}</span><span class="email-attachment-info"><span class="email-attachment-name">${esc(a.name)}</span>${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}</span></a>`;
-            }).join("")}</div>`;
+            const attachHtml = renderAttachmentsBlock(msgId, data.attachments);
             const tmp = document.createElement("div");
             tmp.innerHTML = attachHtml;
-            bodyEl.parentNode.insertBefore(tmp.firstChild, bodyEl);
+            if (tmp.firstChild) bodyEl.parentNode.insertBefore(tmp.firstChild, bodyEl);
           }
           // Update header to show to/cc
           const headerInfo = msgEl.querySelector(".email-thread-msg-info");
@@ -7802,17 +7832,11 @@
         // Store data for reply/forward
         detailEl._singleMsgData = data;
 
-        // Render attachments
+        // Render attachments — share the bulk-download-aware helper so the
+        // single-message detail view also gets the "Download All" header.
         if (data.attachments?.length) {
           const attArea = document.getElementById(`email-attach-area-${id}`);
-          if (attArea) {
-            attArea.innerHTML = data.attachments.map(a => {
-              const sizeStr = a.size ? (a.size > 1048576 ? `${(a.size/1048576).toFixed(1)} MB` : `${Math.round(a.size/1024)} KB`) : "";
-              const url = `/api/gmail-message/${id}/attachment/${encodeURIComponent(a.attachmentId)}?name=${encodeURIComponent(a.name)}&mime=${encodeURIComponent(a.mimeType)}`;
-              const icon = /\.(pdf)$/i.test(a.name) ? "📄" : /\.(png|jpg|jpeg|gif|webp)$/i.test(a.name) ? "🖼" : /\.(xlsx?|csv)$/i.test(a.name) ? "📊" : /\.(docx?|txt)$/i.test(a.name) ? "📝" : "📎";
-              return `<a class="email-attachment" href="${url}" download="${esc(a.name)}"><span class="email-attachment-icon">${icon}</span><span class="email-attachment-info"><span class="email-attachment-name">${esc(a.name)}</span>${sizeStr ? `<span class="email-attachment-size">${sizeStr}</span>` : ""}</span></a>`;
-            }).join("");
-          }
+          if (attArea) attArea.outerHTML = renderAttachmentsBlock(id, data.attachments);
         }
 
         // Render body
