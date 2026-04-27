@@ -1645,9 +1645,22 @@ const server = http.createServer(async (req, res) => {
     // /api/dan/* and /api/messaging/* handle their own API-key auth inside.
     if (!PUBLIC_PATHS.includes(urlPath) && urlPath.startsWith("/api/") && !urlPath.startsWith("/api/dan/") && !urlPath.startsWith("/api/messaging/")) {
       const session = getSession(req);
-      if (!session) return json(res, 401, { error: "Not authenticated" });
-      // Attach session to req for downstream handlers
-      req.session = session;
+      if (session) {
+        req.session = session;
+      } else {
+        // Server-to-server: Command's email-proxy (and similar) call us with
+        // X-API-Key (COMMAND_API_KEY) + X-Proxy-User (the team member's email).
+        // We accept that pair as authoritative for the named user — same
+        // pattern as /api/messaging/* uses internally. Without this, every
+        // email endpoint that reads req.session.email would 401 the proxy.
+        const apiKey = req.headers["x-api-key"];
+        const proxyUser = req.headers["x-proxy-user"];
+        if (apiKey && proxyUser && process.env.COMMAND_API_KEY && apiKey === process.env.COMMAND_API_KEY) {
+          req.session = { email: String(proxyUser).toLowerCase() };
+        } else {
+          return json(res, 401, { error: "Not authenticated" });
+        }
+      }
     }
 
     /* ── DAN API: Gmail & Calendar (callable from Command via API key) ── */
