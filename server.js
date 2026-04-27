@@ -5435,6 +5435,37 @@ Be specific and actionable. Use borrower names everywhere. If a note mentions a 
       return json(res, 200, { ok: true });
     }
 
+    // ── Lead conversion auto-update ─────────────────────────────
+    // Called from Command's arive-webhook when an ARIVE loan reaches
+    // PREAPPROVED (or beyond). Per John's rule: a lead is NOT converted
+    // when the borrower fills out the application — it's converted when
+    // the loan is actually pre-approved. Match by primary borrower email.
+    // Auth: session OR X-API-Key === COMMAND_API_KEY for cross-app calls.
+    if (urlPath === "/api/pipeline/leads/mark-converted" && req.method === "POST") {
+      if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
+      const body = JSON.parse(await readBody(req));
+      const email = String(body.email || "").trim().toLowerCase();
+      const ariveLoanId = String(body.ariveLoanId || body.ariveId || "").trim();
+      const stage = String(body.stage || "").trim();
+      if (!email) return json(res, 400, { error: "Missing email" });
+      const data = loadLeadsData();
+      const lead = data.leads.find(l => (l.email || "").trim().toLowerCase() === email);
+      if (!lead) return json(res, 200, { matched: false, reason: "no lead with that email" });
+      if (lead.status === "converted") {
+        return json(res, 200, { matched: true, leadId: lead.id, alreadyConverted: true });
+      }
+      lead.status = "converted";
+      lead.updatedAt = new Date().toISOString();
+      lead.convertedAt = lead.convertedAt || new Date().toISOString();
+      if (ariveLoanId) lead.ariveLoanId = ariveLoanId;
+      if (stage) lead.convertedAtStage = stage;
+      const note = `[${new Date().toLocaleDateString()}] Auto-converted: ARIVE loan${ariveLoanId ? ` ${ariveLoanId}` : ""} reached ${stage || "PREAPPROVED"}.`;
+      lead.notes = lead.notes ? `${lead.notes}\n${note}` : note;
+      saveLeadsData(data);
+      console.log(`[leads] Auto-converted lead ${lead.id} (${email}) on ARIVE ${ariveLoanId || "?"} stage=${stage}`);
+      return json(res, 200, { matched: true, leadId: lead.id, status: "converted" });
+    }
+
     // Send application link email to a lead
     const leadEmailMatch = urlPath.match(/^\/api\/pipeline\/leads\/([^/]+)\/send-application$/);
     if (leadEmailMatch && req.method === "POST") {
