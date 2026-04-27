@@ -3389,6 +3389,60 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ── Email image proxy ─────────────────────────────────────────
+    // Inbound HTML emails embed images that often fail to load in our
+    // sandboxed iframe: Outlook Drive thumbnails want a Referer header,
+    // some hosts gate by user-agent, mixed-content rules can intervene,
+    // etc. Rewrite all <img src="https?://..."> in the email body to
+    // route through this endpoint so we fetch server-side with sensible
+    // headers and stream back. Auth required; only http(s) URLs allowed;
+    // 5MB cap so a junk email can't pin our memory.
+    if (urlPath === "/api/email-image-proxy" && req.method === "GET") {
+      if (!req.session) return json(res, 401, { error: "Not authenticated" });
+      const target = url.searchParams.get("url") || "";
+      let parsed;
+      try { parsed = new URL(target); } catch { return json(res, 400, { error: "Invalid url" }); }
+      if (!/^https?:$/.test(parsed.protocol)) return json(res, 400, { error: "Only http(s) allowed" });
+      try {
+        const upstream = await fetch(target, {
+          headers: {
+            // Some hosts (Drive thumbnails, Outlook) reject no-referer or
+            // unknown UAs. Match a reasonable browser profile.
+            "User-Agent": "Mozilla/5.0 (compatible; AnchorTasks/1.0)",
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "Referer": parsed.origin,
+          },
+          redirect: "follow",
+        });
+        if (!upstream.ok) {
+          res.writeHead(upstream.status, { "Content-Type": "text/plain" });
+          return res.end(`Upstream ${upstream.status}`);
+        }
+        const ct = upstream.headers.get("content-type") || "application/octet-stream";
+        // Reject non-image content so a malicious URL can't proxy arbitrary
+        // pages through our origin.
+        if (!/^image\//i.test(ct)) {
+          res.writeHead(415, { "Content-Type": "text/plain" });
+          return res.end("Not an image");
+        }
+        const buf = Buffer.from(await upstream.arrayBuffer());
+        if (buf.length > 5 * 1024 * 1024) {
+          res.writeHead(413, { "Content-Type": "text/plain" });
+          return res.end("Image too large");
+        }
+        res.writeHead(200, {
+          "Content-Type": ct,
+          "Content-Length": buf.length,
+          "Cache-Control": "private, max-age=86400",
+        });
+        return res.end(buf);
+      } catch (err) {
+        console.error("[email-image-proxy] fetch error:", err.message);
+        res.writeHead(502, { "Content-Type": "text/plain" });
+        return res.end("Proxy fetch failed");
+      }
+    }
+
     if (urlPath.match(/^\/api\/gmail-archive\//) && req.method === "POST") {
       const msgId = urlPath.split("/").pop();
       const ue = req.session && req.session.email;

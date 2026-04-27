@@ -7741,6 +7741,13 @@
             }
           }
         }
+        // Route external <img src="https?://..."> through our server-side
+        // proxy. Outlook/Drive embeds and other auth-gated thumbnails fail to
+        // load directly in our sandboxed iframe (no-referer, mixed-content,
+        // etc.). The proxy fetches with sensible headers and streams back.
+        // Skip cid:/data:/blob: URIs (already handled or local).
+        html = html.replace(/(<img\b[^>]*\bsrc=)(["'])(https?:\/\/[^"'>\s]+)\2/gi,
+          (_, prefix, q, url) => `${prefix}${q}/api/email-image-proxy?url=${encodeURIComponent(url)}${q}`);
         const iframe = document.createElement("iframe");
         iframe.sandbox = "allow-same-origin allow-popups allow-popups-to-escape-sandbox";
         iframe.referrerPolicy = "no-referrer";
