@@ -884,6 +884,9 @@ function shouldAutoRead(email, rules) {
   // MCM email = loan ops address — emails sent here are 90% loan-related
   const sentToMCM = to.includes("@mychomeloans.com");
 
+  // Anchor label = forwarded from john@mychomeloans.com — always loan-related
+  if (email.isAnchor) return { autoRead: false, reason: "anchor_label_loan_related" };
+
   // NEVER auto-read if email contains a loan number (highest priority safety rail)
   if (rules.loanNumberPattern) {
     const loanRegex = new RegExp(rules.loanNumberPattern);
@@ -1388,6 +1391,17 @@ async function gmailGetLabels(forceRefresh = false, userEmail) {
     console.error("[gmail] Labels error:", err.message);
     return null;
   }
+}
+
+// Resolve the user's "Anchor" Gmail label ID. The Anchor label is applied by a
+// Gmail filter to mail forwarded from john@mychomeloans.com (loan ops address),
+// so anything carrying it is always loan-related and must never be auto-read
+// or routed to fyi/archive.
+async function getAnchorLabelId(userEmail) {
+  const labels = await gmailGetLabels(false, userEmail);
+  if (!labels) return null;
+  const match = labels.find(l => (l.name || "").toLowerCase() === "anchor" && l.type === "user");
+  return match ? match.id : null;
 }
 
 /* ─── Email contacts cache ─────────────────────────────────────────────── */
@@ -3678,6 +3692,8 @@ const server = http.createServer(async (req, res) => {
           triageCache[ue || "_default"] = { result, time: Date.now() };
           return json(res, 200, result);
         }
+        // Resolve Anchor label ID once (loan-ops forward marker)
+        const anchorLabelId = await getAnchorLabelId(ue);
         // Fetch metadata for each (batch in groups of 20 to avoid rate limits)
         const emails = (await Promise.all(messages.slice(0, 100).map(async m => {
           try {
@@ -3693,7 +3709,9 @@ const server = http.createServer(async (req, res) => {
             // Detect if user is CC'd (not in To, but in Cc)
             const userEmails = ["john@myanchormortgage.com", "john.hopkins@mychomeloans.com"];
             const isCC = cc && userEmails.some(e => cc.toLowerCase().includes(e)) && !userEmails.some(e => toField.toLowerCase().includes(e));
-            return { id: msg.id, threadId: msg.threadId, from: getH("From"), to: toField, cc, isCC, subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "" };
+            const labelIds = msg.labelIds || [];
+            const isAnchor = !!(anchorLabelId && labelIds.includes(anchorLabelId));
+            return { id: msg.id, threadId: msg.threadId, from: getH("From"), to: toField, cc, isCC, subject: getH("Subject") || "(No subject)", date: getH("Date"), snippet: msg.snippet || "", labelIds, isAnchor };
           } catch { return null; }
         }))).filter(Boolean);
         if (!emails.length) {
@@ -3711,7 +3729,7 @@ const server = http.createServer(async (req, res) => {
         }
         // Send up to 50 emails to Claude for AI categorization (balances speed vs coverage)
         const aiEmails = emails.slice(0, 50);
-        const emailSummaries = aiEmails.map((e, i) => `${i + 1}. ${e.isCC ? "[CC] " : ""}From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
+        const emailSummaries = aiEmails.map((e, i) => `${i + 1}. ${e.isAnchor ? "[ANCHOR] " : ""}${e.isCC ? "[CC] " : ""}From: ${e.from} | Subject: ${e.subject} | Snippet: ${e.snippet.substring(0, 100)}`).join("\n");
         const triageResp = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
@@ -3727,6 +3745,8 @@ Categories:
 - "needs_response": Team questions, partner emails, needs the user's input but not time-critical (yellow)
 - "fyi": Newsletters, automated notifications, informational, CC'd threads where user doesn't need to act (green). Emails marked [CC] should almost always be "fyi" unless they explicitly @mention or ask for the user by name.
 - "archive": Marketing spam, old threads, no action needed (gray)
+
+Special rule: Emails marked [ANCHOR] are forwarded from john@mychomeloans.com (the loan-ops address) and are ALWAYS loan-related. Categorize them as "urgent" if time-sensitive, otherwise "needs_response". NEVER use "fyi" or "archive" for [ANCHOR] emails, even if they look like a CC or notification.
 
 Emails:
 ${emailSummaries}
@@ -3773,11 +3793,27 @@ Return JSON: {"items":[{"index":1,"category":"urgent|needs_response|fyi|archive"
             // Keyword-based urgency detection
             const isUrgent = /urgent|asap|immediately|critical|time.sensitive|expir|deadline|past.due|final.notice/i.test(text);
             const isMortgage = /closing|conditions|ctc|clear.to.close|funding|appraisal|title|uwm|loancare|underwriting/i.test(text);
-            if (isBlocklisted) { categories.archive.push({ ...e, summary: "auto: blocklisted sender" }); }
+            if (e.isAnchor) {
+              // Anchor label = forwarded from loan-ops address — always loan-related
+              if (isUrgent) categories.urgent.push({ ...e, summary: "auto: anchor (urgent)" });
+              else categories.needs_response.push({ ...e, summary: "auto: anchor (loan)" });
+            }
+            else if (isBlocklisted) { categories.archive.push({ ...e, summary: "auto: blocklisted sender" }); }
             else if (isUrgent) { categories.urgent.push({ ...e, summary: "auto: urgent keywords" }); }
             else if (isAllowlisted || isMortgage) { categories.needs_response.push({ ...e, summary: "auto: work email" }); }
             else if (/noreply|no-reply|newsletter|unsubscribe|marketing|notification/i.test(from + " " + text)) { categories.fyi.push({ ...e, summary: "auto: notification" }); }
             else { categories.needs_response.push({ ...e, summary: "auto: uncategorized" }); }
+          }
+        }
+        // Safety net: any [ANCHOR] email that landed in fyi/archive gets promoted
+        // to needs_response. Loan-ops mail must never get archived or hidden as FYI.
+        for (const cat of ["fyi", "archive"]) {
+          const promoted = categories[cat].filter(e => e.isAnchor);
+          if (promoted.length) {
+            categories[cat] = categories[cat].filter(e => !e.isAnchor);
+            for (const e of promoted) {
+              categories.needs_response.push({ ...e, summary: e.summary || "anchor: loan-related" });
+            }
           }
         }
         // Auto-read: check blocklist rules BEFORE building result
