@@ -1196,28 +1196,34 @@ function sanitizeEmailHeader(val) {
   }).join(", ");
 }
 
-async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, attachments, userEmail }) {
+async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, attachments, userEmail, skipSignature }) {
   const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return { error: "No access token" };
   try {
     const plainBody = body || "";
     let signature = "";
-    try {
-      // Prefer per-user signature; fall back to global (legacy single-user store)
-      // so John's existing signature keeps working without migration.
-      const perUserPath = userEmail ? userEmailSignatureFile(userEmail) : null;
-      const sigPath = (perUserPath && fs.existsSync(perUserPath)) ? perUserPath : EMAIL_SIGNATURE_FILE;
-      const sigData = JSON.parse(fs.readFileSync(sigPath, "utf8"));
-      signature = sigData.html || "";
-    } catch {}
-    // Railway's filesystem is ephemeral — every redeploy wipes the per-user
-    // signature file in data/users/{email}/. If the local file is empty or
-    // missing, fall back to the user's native Gmail signature pulled from
-    // the settings/sendAs API. That way the signature ALWAYS shows up (as
-    // long as the user has one configured in Gmail), regardless of how many
-    // times the container was rebuilt today.
-    if (!signature && userEmail) {
-      try { signature = await gmailGetSignature(userEmail); } catch {}
+    // skipSignature flag: caller (Command Inbox compose) prepopulated the
+    // editor with the user's signature so they could see / edit it, and
+    // the body already includes it. Don't append again here or the user
+    // gets a doubled signature on every send.
+    if (!skipSignature) {
+      try {
+        // Prefer per-user signature; fall back to global (legacy single-user store)
+        // so John's existing signature keeps working without migration.
+        const perUserPath = userEmail ? userEmailSignatureFile(userEmail) : null;
+        const sigPath = (perUserPath && fs.existsSync(perUserPath)) ? perUserPath : EMAIL_SIGNATURE_FILE;
+        const sigData = JSON.parse(fs.readFileSync(sigPath, "utf8"));
+        signature = sigData.html || "";
+      } catch {}
+      // Railway's filesystem is ephemeral — every redeploy wipes the per-user
+      // signature file in data/users/{email}/. If the local file is empty or
+      // missing, fall back to the user's native Gmail signature pulled from
+      // the settings/sendAs API. That way the signature ALWAYS shows up (as
+      // long as the user has one configured in Gmail), regardless of how many
+      // times the container was rebuilt today.
+      if (!signature && userEmail) {
+        try { signature = await gmailGetSignature(userEmail); } catch {}
+      }
     }
     const rawLines = [];
     rawLines.push(`From: me`);
@@ -3651,7 +3657,7 @@ const server = http.createServer(async (req, res) => {
           } catch {}
         }
 
-        emailPayload = { to: field("to"), cc: field("cc"), bcc: field("bcc"), subject: field("subject"), body: field("body"), threadId: field("threadId"), inReplyTo: field("inReplyTo"), references: field("references"), attachments: attachments.length > 0 ? attachments : undefined };
+        emailPayload = { to: field("to"), cc: field("cc"), bcc: field("bcc"), subject: field("subject"), body: field("body"), threadId: field("threadId"), inReplyTo: field("inReplyTo"), references: field("references"), skipSignature: field("skipSignature") === "true" || field("skipSignature") === "1", attachments: attachments.length > 0 ? attachments : undefined };
       } else {
         // Standard JSON payload (no attachments)
         emailPayload = JSON.parse(await readBody(req));
