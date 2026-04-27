@@ -1737,15 +1737,22 @@ const server = http.createServer(async (req, res) => {
       if (!req.session && !isDanApiKey()) return json(res, 401, { error: "Not authenticated" });
       const body = JSON.parse(await readBody(req));
       const query = body.query || "is:unread in:inbox";
-      const maxResults = body.maxResults || 15;
+      // Default to 100 per page (was 15). Gmail caps single-request results
+      // at 500; 100 is a balance between speed and surfacing enough history.
+      const maxResults = Math.min(Number(body.maxResults) || 100, 500);
+      const pageToken = body.pageToken || "";
       const accessToken = await getGCalAccessToken(getRequestUserEmail(body));
       if (!accessToken) return json(res, 200, { error: "Gmail not connected", emails: [] });
       try {
-        const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: query, maxResults: String(maxResults) })}`;
+        const listParams = new URLSearchParams({ q: query, maxResults: String(maxResults) });
+        if (pageToken) listParams.set("pageToken", pageToken);
+        const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${listParams.toString()}`;
         const listResp = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
         if (!listResp.ok) return json(res, 200, { error: `Gmail API: ${listResp.status}`, emails: [] });
         const listData = await listResp.json();
         const messages = listData.messages || [];
+        const nextPageToken = listData.nextPageToken || null;
+        const resultSizeEstimate = Number(listData.resultSizeEstimate) || messages.length;
         const emails = await Promise.all(messages.slice(0, maxResults).map(async m => {
           const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`, {
             headers: { Authorization: `Bearer ${accessToken}` },
@@ -1761,7 +1768,9 @@ const server = http.createServer(async (req, res) => {
             unread: (msg.labelIds || []).includes("UNREAD"),
           };
         }));
-        return json(res, 200, { emails: emails.filter(Boolean) });
+        // Return pagination info so the caller can do "Load more". Gmail's
+        // resultSizeEstimate is a hint, not exact, but useful for UI badges.
+        return json(res, 200, { emails: emails.filter(Boolean), nextPageToken, resultSizeEstimate });
       } catch (e) { return json(res, 200, { error: e.message, emails: [] }); }
     }
 
