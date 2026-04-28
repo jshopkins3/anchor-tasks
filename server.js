@@ -1089,6 +1089,49 @@ async function gmailListMessages(labelId, pageToken, maxResults = 50, query = ""
 }
 
 /* ─── Gmail: get full thread ───────────────────────────────────────────── */
+// Pull a single attachment's bytes back from Gmail, returned as the raw
+// base64url string Google sends (caller is expected to convert to standard
+// base64 before stuffing into a data: URL).
+async function gmailFetchAttachmentBytes(messageId, attachmentId, userEmail) {
+  if (!messageId || !attachmentId) return null;
+  const accessToken = await getGCalAccessToken(userEmail);
+  if (!accessToken) return null;
+  try {
+    const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.data || null;
+  } catch (err) {
+    console.error("[gmail] attachment fetch error:", messageId, attachmentId, err.message);
+    return null;
+  }
+}
+
+// Take an HTML email body + its inline-image manifest and return the body
+// with every cid: reference replaced by a data:image/...;base64,... URL.
+//
+// Why: the read-pane iframe is sandboxed without allow-same-origin, so its
+// subresource fetches (e.g. to /api/email-image-proxy or /api/loan-email-
+// attachment-inline) don't carry the SameSite=Lax session cookie and the
+// auth wall blocks every image. Pre-resolving inline images into data:
+// URLs means the iframe never has to make a subresource request for them.
+async function inlineEmbedImagesInHtml(html, messageId, inlineImages, userEmail) {
+  if (!html || !messageId || !Array.isArray(inlineImages) || inlineImages.length === 0) return html;
+  let out = html;
+  for (const im of inlineImages) {
+    if (!im || !im.cid || !im.attachmentId) continue;
+    const b64url = await gmailFetchAttachmentBytes(messageId, im.attachmentId, userEmail);
+    if (!b64url) continue;
+    const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+    const dataUrl = `data:${im.mimeType || "image/png"};base64,${b64}`;
+    const cidEsc = im.cid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`cid:${cidEsc}`, "gi"), dataUrl);
+  }
+  return out;
+}
+
 async function gmailGetThread(threadId, userEmail) {
   const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return null;
@@ -1098,7 +1141,7 @@ async function gmailGetThread(threadId, userEmail) {
     });
     if (!resp.ok) return null;
     const thread = await resp.json();
-    const messages = (thread.messages || []).map(msg => {
+    const messages = await Promise.all((thread.messages || []).map(async msg => {
       const h = msg.payload?.headers || [];
       const from = parseEmailHeader(h, "From");
       const fromMatch = from.match(/^"?([^"<]+)"?\s*<?([^>]*)>?$/);
@@ -1122,6 +1165,12 @@ async function gmailGetThread(threadId, userEmail) {
         if (p.parts) p.parts.forEach(findAttachments);
       }
       findAttachments(msg.payload);
+      // Resolve cid: refs into data: URLs server-side so the sandboxed
+      // read-pane iframe can render them without making auth-walled
+      // subresource requests.
+      if (body && body.type === "html" && body.data && inlineImages.length > 0) {
+        body.data = await inlineEmbedImagesInHtml(body.data, msg.id, inlineImages, userEmail);
+      }
       return {
         id: msg.id, threadId: msg.threadId,
         from: fromName || fromEmail, fromEmail,
@@ -1139,7 +1188,7 @@ async function gmailGetThread(threadId, userEmail) {
         starred: (msg.labelIds || []).includes("STARRED"),
         labelIds: msg.labelIds || [],
       };
-    });
+    }));
     return { id: thread.id, messages };
   } catch (err) {
     console.error("[gmail] Thread fetch error:", err.message);
@@ -1857,6 +1906,14 @@ const server = http.createServer(async (req, res) => {
           if (p.parts) p.parts.forEach(findAtts);
         }
         findAtts(msg.payload);
+        // Resolve cid: refs in the body into data: URLs (same reasoning as
+        // gmailGetThread — sandboxed iframe can't auth subresource fetches).
+        const inlineForEmbed = attachments
+          .filter(a => a && a.inline && a.contentId)
+          .map(a => ({ cid: a.contentId, attachmentId: a.attachmentId, mimeType: a.mimeType }));
+        if (bodyContent && bodyContent.type === "html" && bodyContent.data && inlineForEmbed.length > 0) {
+          bodyContent.data = await inlineEmbedImagesInHtml(bodyContent.data, msg.id, inlineForEmbed, getRequestUserEmail(body));
+        }
         const from = parseEmailHeader(h, "From");
         const fromMatch = from.match(/^"?([^"<]+)"?\s*<?([^>]*)>?$/);
         return json(res, 200, {
