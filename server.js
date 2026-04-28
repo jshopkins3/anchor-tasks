@@ -1196,6 +1196,27 @@ function sanitizeEmailHeader(val) {
   }).join(", ");
 }
 
+// Extract <img src="data:image/...;base64,..."> URLs out of HTML and convert
+// them into CID-referenced inline attachments. Gmail (and most other major
+// clients) silently strip data: URLs from outbound mail, so a signature with
+// embedded base64 logos arrives at the recipient with empty boxes. CID inline
+// parts wrapped in multipart/related are the universally-supported way to
+// embed images in HTML email.
+function extractInlineImages(html) {
+  if (!html) return { html: "", inlineImages: [] };
+  const inlineImages = [];
+  const dataUrlRe = /<img\b([^>]*?)\bsrc=(["'])(data:image\/(png|jpe?g|gif|webp);base64,([^"']+))\2([^>]*)>/gi;
+  let counter = 0;
+  const out = html.replace(dataUrlRe, (_full, pre, q, _dataUrl, ext, b64, post) => {
+    counter++;
+    const cid = `inline-${counter}-${crypto.randomBytes(6).toString("hex")}@anchor`;
+    const contentType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+    inlineImages.push({ cid, contentType, base64: b64 });
+    return `<img${pre}src=${q}cid:${cid}${q}${post}>`;
+  });
+  return { html: out, inlineImages };
+}
+
 async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo, references, threadId, attachments, userEmail, skipSignature }) {
   const accessToken = await getGCalAccessToken(userEmail);
   if (!accessToken) return { error: "No access token" };
@@ -1240,20 +1261,49 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
 
     const altBoundary = `alt_${crypto.randomBytes(12).toString("hex")}`;
     const escapedBody = plainBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
-    const htmlContent = signature
+    const rawHtmlContent = signature
       ? `<div dir="ltr"><div dir="ltr"><div style="font-family:Arial,sans-serif;font-size:14px;color:#000">${escapedBody}</div></div><br clear="all"><div><br></div>-- <br><div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature">${signature}</div></div>`
       : `<div dir="ltr">${escapedBody}</div>`;
+    // Pull base64 image data: URLs out of the HTML and into proper CID inline
+    // attachments so the recipient actually sees the logos.
+    const { html: htmlContent, inlineImages } = extractInlineImages(rawHtmlContent);
     const textPart = Buffer.from(plainBody, "utf8").toString("base64");
     const htmlPart = Buffer.from(htmlContent, "utf8").toString("base64");
 
     const hasAttachments = attachments && attachments.length > 0;
+    const hasInline = inlineImages.length > 0;
+    const relatedBoundary = hasInline ? `rel_${crypto.randomBytes(12).toString("hex")}` : null;
 
-    if (hasAttachments) {
-      // multipart/mixed wrapping multipart/alternative + attachments
-      const mixedBoundary = `mix_${crypto.randomBytes(12).toString("hex")}`;
-      rawLines.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`);
+    // Push the HTML body — either bare text/html, or wrapped in multipart/related
+    // with each inline image as its own part referenced via Content-ID.
+    function pushHtmlBody() {
+      if (!hasInline) {
+        rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
+        rawLines.push(`Content-Transfer-Encoding: base64`);
+        rawLines.push("");
+        rawLines.push(htmlPart);
+        return;
+      }
+      rawLines.push(`Content-Type: multipart/related; boundary="${relatedBoundary}"`);
       rawLines.push("");
-      rawLines.push(`--${mixedBoundary}`);
+      rawLines.push(`--${relatedBoundary}`);
+      rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
+      rawLines.push(`Content-Transfer-Encoding: base64`);
+      rawLines.push("");
+      rawLines.push(htmlPart);
+      for (const im of inlineImages) {
+        rawLines.push(`--${relatedBoundary}`);
+        rawLines.push(`Content-Type: ${im.contentType}`);
+        rawLines.push(`Content-Transfer-Encoding: base64`);
+        rawLines.push(`Content-ID: <${im.cid}>`);
+        rawLines.push(`Content-Disposition: inline`);
+        rawLines.push("");
+        rawLines.push(im.base64);
+      }
+      rawLines.push(`--${relatedBoundary}--`);
+    }
+
+    function pushAlternativeBlock() {
       rawLines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
       rawLines.push("");
       rawLines.push(`--${altBoundary}`);
@@ -1262,11 +1312,17 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
       rawLines.push("");
       rawLines.push(textPart);
       rawLines.push(`--${altBoundary}`);
-      rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
-      rawLines.push(`Content-Transfer-Encoding: base64`);
-      rawLines.push("");
-      rawLines.push(htmlPart);
+      pushHtmlBody();
       rawLines.push(`--${altBoundary}--`);
+    }
+
+    if (hasAttachments) {
+      // multipart/mixed wrapping multipart/alternative + attachments
+      const mixedBoundary = `mix_${crypto.randomBytes(12).toString("hex")}`;
+      rawLines.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`);
+      rawLines.push("");
+      rawLines.push(`--${mixedBoundary}`);
+      pushAlternativeBlock();
 
       for (const att of attachments) {
         rawLines.push(`--${mixedBoundary}`);
@@ -1278,19 +1334,7 @@ async function gmailSendEmail({ to, cc, bcc, subject, body, bodyHtml, inReplyTo,
       }
       rawLines.push(`--${mixedBoundary}--`);
     } else {
-      rawLines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
-      rawLines.push("");
-      rawLines.push(`--${altBoundary}`);
-      rawLines.push(`Content-Type: text/plain; charset="UTF-8"`);
-      rawLines.push(`Content-Transfer-Encoding: base64`);
-      rawLines.push("");
-      rawLines.push(textPart);
-      rawLines.push(`--${altBoundary}`);
-      rawLines.push(`Content-Type: text/html; charset="UTF-8"`);
-      rawLines.push(`Content-Transfer-Encoding: base64`);
-      rawLines.push("");
-      rawLines.push(htmlPart);
-      rawLines.push(`--${altBoundary}--`);
+      pushAlternativeBlock();
     }
 
     const rawEmail = rawLines.join("\r\n");
