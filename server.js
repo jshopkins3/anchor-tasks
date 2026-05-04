@@ -74,30 +74,14 @@ function resolveAssigneeEmail(assigneeName) {
   return TEAM_MAP[key] || "";
 }
 
-// Sync a task to Anchor Command so the team can see it
-function syncTaskToCommand(task) {
-  const COMMAND_URL = process.env.COMMAND_API_URL || "";
-  const COMMAND_KEY = process.env.COMMAND_API_KEY || "";
-  if (!COMMAND_URL || !COMMAND_KEY) return;
-  const assigneeName = task.assignee || "";
-  // Only sync if assigned to a known team member
-  if (!resolveAssigneeEmail(assigneeName)) return;
-  const payload = {
-    text: task.title,
-    assignedTo: assigneeName,
-    dueDate: task.due || null,
-    project: task.project || "",
-    sourceTaskId: task.id,
-    source: "anchor-tasks",
-  };
-  fetch(`${COMMAND_URL}/api/tasks/create-general`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": COMMAND_KEY },
-    body: JSON.stringify(payload),
-  }).then(r => r.json()).then(d => {
-    if (d.ok) console.log(`[task-sync] Synced "${task.title}" → Command (${assigneeName})`);
-    else console.error(`[task-sync] Failed to sync: ${d.error || "unknown"}`);
-  }).catch(e => console.error(`[task-sync] Error: ${e.message}`));
+// Retired 2026-05-03 with the Workspace migration. Tasks now live natively
+// in Command's workspace_tasks table on MCM Command Supabase, written via
+// /api/workspace/tasks. Command also dropped /api/tasks/create-general from
+// its API_KEY_ROUTES bypass list, so this call would 401 anyway. Kept as a
+// no-op so existing call sites are harmless until Anchor Tasks is fully
+// decommissioned.
+function syncTaskToCommand(_task) {
+  return;
 }
 
 // Shared file paths
