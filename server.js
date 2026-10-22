@@ -590,7 +590,7 @@ function loadGCalToken(email) {
 function saveGCalToken(token, email) {
   const file = email ? userGCalTokenFile(email) : GCAL_TOKEN_FILE;
   fs.writeFileSync(file, JSON.stringify(token, null, 2));
-  console.log("[gcal] TOKEN_FOR_ENV:", JSON.stringify(token));
+  console.log("[gcal] Credentials saved");
 }
 
 async function getGCalAccessToken(email) {
