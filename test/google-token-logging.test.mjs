@@ -27,7 +27,7 @@ for (const email of [undefined, 'fixture@example.invalid']) {
     assert.equal(writes.length, 1);
     assert.equal(writes[0][0], email ? `/fixture/${email}/token.json` : '/fixture/legacy.json');
     assert.deepEqual(JSON.parse(writes[0][1]), token);
-    assert.equal(writes[0][2], 'utf8');
+    assert.equal(writes[0].length, 2);
     const logged = JSON.stringify(logs);
     for (const value of Object.values(token)) assert.equal(logged.includes(String(value)), false);
     assert.equal(logged.includes('TOKEN_FOR_ENV'), false);
